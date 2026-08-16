@@ -39,7 +39,9 @@
                     <span>Captain's Log</span>
                 </a>
                 <a href="{{ route('demo.index') }}#demo" class="ml-auto text-sm font-semibold text-slate-500 hover:text-indigo-600 dark:text-slate-300 dark:hover:text-indigo-400">Try the live demo</a>
-                <button type="button" data-theme-toggle class="nav-link" aria-label="Toggle dark mode">Theme</button>
+                <a href="{{ route('login') }}" class="nav-link p-2" aria-label="Sign in" title="Sign in"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 7l5 5-5 5M19 12H7M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5"/></svg></a>
+                <a href="{{ route('register') }}" class="nav-link p-2" aria-label="Register" title="Register"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M8 11a4 4 0 1 0 0-8M19 8v6M22 11h-6"/></svg></a>
+                <button type="button" data-theme-toggle class="nav-link p-2" aria-label="Toggle theme" title="Toggle theme"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3a6 6 0 1 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
             </header>
 
             <main class="flex flex-1 items-center justify-center p-4 sm:p-8 lg:p-12">

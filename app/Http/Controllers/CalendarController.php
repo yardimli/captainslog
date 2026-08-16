@@ -12,10 +12,12 @@ class CalendarController extends Controller
     {
         $focus = rescue(fn () => Carbon::parse($date ?: now()), now(), false)->startOfDay();
         $view = in_array($request->query('view'), ['day', 'week', 'month'], true) ? $request->query('view') : 'week';
+        $weekStart = $request->user()->week_starts_on ?? 1;
+        $weekEnd = ($weekStart + 6) % 7;
         [$start, $end] = match ($view) {
             'day' => [$focus->copy(), $focus->copy()],
-            'month' => [$focus->copy()->startOfMonth()->startOfWeek(), $focus->copy()->endOfMonth()->endOfWeek()],
-            default => [$focus->copy()->startOfWeek(), $focus->copy()->endOfWeek()],
+            'month' => [$focus->copy()->startOfMonth()->startOfWeek($weekStart), $focus->copy()->endOfMonth()->endOfWeek($weekEnd)],
+            default => [$focus->copy()->startOfWeek($weekStart), $focus->copy()->endOfWeek($weekEnd)],
         };
         $logs = DailyLog::where('user_id', $request->user()->id)
             ->whereBetween('log_date', [$start, $end])->withCount(['blocks', 'attachments'])->get()->keyBy(fn ($log) => $log->log_date->toDateString());

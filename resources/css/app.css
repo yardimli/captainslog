@@ -38,6 +38,14 @@
     animation: panel-slide-in .3s cubic-bezier(.22,1,.36,1) both;
 }
 
+.time-wheel {
+    scrollbar-width: none;
+}
+
+.time-wheel::-webkit-scrollbar {
+    display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .panel,
     .timeline-item,

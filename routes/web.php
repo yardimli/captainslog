@@ -1,11 +1,13 @@
 <?php
 
+use App\Http\Controllers\ApiUsageController;
 use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\DayLogController;
 use App\Http\Controllers\GuestDemoController;
 use App\Http\Controllers\LogBlockController;
 use App\Http\Controllers\OpenRouterController;
+use App\Http\Controllers\PlannerVisibilityController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\TaskController;
@@ -41,6 +43,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/logs/{dailyLog}/blocks', [LogBlockController::class, 'store'])->name('blocks.store');
     Route::patch('/blocks/{block}', [LogBlockController::class, 'update'])->name('blocks.update');
     Route::delete('/blocks/{block}', [LogBlockController::class, 'destroy'])->name('blocks.destroy');
+    Route::patch('/blocks/{block}/visibility', [PlannerVisibilityController::class, 'block'])->name('blocks.visibility');
 
     Route::post('/logs/{dailyLog}/attachments', [AttachmentController::class, 'store'])->name('attachments.store');
     Route::get('/attachments/{attachment}', [AttachmentController::class, 'show'])->name('attachments.show');
@@ -55,9 +58,11 @@ Route::middleware('auth')->group(function () {
     Route::patch('/events/{event}', [TaskEventController::class, 'update'])->name('events.update');
 
     Route::get('/settings', [SettingsController::class, 'edit'])->name('settings.edit');
+    Route::get('/api-usage', [ApiUsageController::class, 'index'])->name('api-usage.index');
     Route::patch('/settings', [SettingsController::class, 'update'])->name('settings.update');
     Route::get('/openrouter/models', [OpenRouterController::class, 'models'])->name('openrouter.models');
     Route::post('/logs/{dailyLog}/chat', [OpenRouterController::class, 'chat'])->name('openrouter.chat');
+    Route::post('/chat-actions/{proposal}/confirm', [OpenRouterController::class, 'confirmChatAction'])->name('openrouter.chat-actions.confirm');
     Route::post('/logs/{dailyLog}/images', [OpenRouterController::class, 'image'])->name('openrouter.images');
     Route::post('/attachments/{attachment}/transcribe', [OpenRouterController::class, 'transcribe'])->name('openrouter.transcribe');
 });

@@ -12,14 +12,14 @@
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="font-sans antialiased text-slate-900 dark:text-slate-100">
+    <body class="font-sans antialiased text-slate-900 dark:text-slate-100" data-time-format="{{ auth()->user()->time_format ?? '24' }}">
         <div class="min-h-screen bg-slate-100 dark:bg-slate-950">
             @include('layouts.navigation')
 
             <!-- Page Heading -->
             @if (isset($header))
-                <header class="border-b border-slate-200 bg-white/90 shadow-sm dark:border-slate-800 dark:bg-slate-900/90">
-                    <div class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+                <header class="relative z-30 overflow-visible border-b border-slate-200 bg-white/90 shadow-sm dark:border-slate-800 dark:bg-slate-900/90">
+                    <div class="max-w-7xl mx-auto overflow-visible py-6 px-4 sm:px-6 lg:px-8">
                         {{ $header }}
                     </div>
                 </header>

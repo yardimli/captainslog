@@ -40,18 +40,18 @@ Captain's Log combines a calendar, block-based daily journal, private media libr
 
 ![Interactive daily log guest demo](https://raw.githubusercontent.com/yardimli/captainslog/main/docs/images/daily-log-demo.png)
 
-### Repeating tasks and event buttons
+### Repeating events and buttons
 
-- Define reusable tasks with a friendly name, custom browser-selected color, and active status.
+- Define reusable events with a friendly name, custom browser-selected color, and active status.
 - Repeat events every day, on selected weekdays, or on selected days of the month.
 - Assign one or more 24-hour time slots to the same repeating event.
-- Make frequently used tasks sticky so their buttons appear in the daily timeline at their scheduled times.
-- Access non-sticky tasks from an easy-to-reach dropdown.
-- Clicking a task commits the event and timestamp immediately and increases its daily counter.
+- Make frequently used events sticky so their buttons appear in the daily timeline at their scheduled times.
+- Access non-sticky events from an easy-to-reach dropdown.
+- Clicking an event commits its timestamp immediately and increases its daily counter.
 - Sticky buttons occupy their scheduled position in a 24-hour timeline, while completed events are placed at their actual click time.
 - Optionally add notes, photos, uploaded audio, or newly recorded audio after an event is tracked.
 - Events remain recorded even if the optional notes screen is abandoned.
-- Add required dropdown values to a task, such as a stress level from 1 to 5 or the pet receiving medication.
+- Add required dropdown values to an event, such as a stress level from 1 to 5 or the pet receiving medication.
 
 ### Images, audio, and video
 
@@ -75,7 +75,7 @@ Each user supplies their own OpenRouter API key from **Settings**. The key is en
 - Fetch available chat and image-generation models.
 - Remember fetched model catalogs and each user's selected chat and image models in local storage.
 - Record each API operation, model, status, request ID, token usage, reported cost, duration, and error details.
-- Show day-associated API usage alongside that day's captain's log.
+- Review all OpenRouter API calls, token counts, costs, and linked log days on the dedicated API usage page.
 
 The integration follows OpenRouter's APIs for [chat completions](https://openrouter.ai/docs/api/api-reference/chat/create-a-chat-completion), [image generation](https://openrouter.ai/docs/api/api-reference/images/generate-an-image), [image models](https://openrouter.ai/docs/api/api-reference/images/list-image-generation-models), [speech-to-text](https://openrouter.ai/docs/api/api-reference/stt/create-transcription), and the [model catalog](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties).
 
@@ -87,7 +87,7 @@ The landing page runs the real journal code without requiring registration.
 - Only a hash of the opaque guest token is stored in the database.
 - The demo is populated with the previous seven days plus the real current day.
 - Demo entries parody spacefaring television through the life of a yoga instructor and anger-management therapist who is trying to lose weight while caring for two medicated dogs and one insubordinate cat.
-- Guest notes, edits, deletions, task events, and counters persist across refreshes for that browser.
+- Guest notes, edits, deletions, predefined events, and counters persist across refreshes for that browser.
 
 ### Authentication and account security
 
@@ -195,7 +195,7 @@ npm run build
 php artisan view:cache
 ```
 
-The feature suite covers authentication, refreshable and user-owned logs, block CRUD authorization, immediate task-event tracking, custom task colors, private media persistence, recording controls, isolated guest workspaces, and OpenRouter response and cost logging.
+The feature suite covers authentication, refreshable and user-owned logs, block CRUD authorization, immediate event tracking, custom event colors, private media persistence, recording controls, isolated guest workspaces, and OpenRouter response and cost logging.
 
 ## Project assets
 

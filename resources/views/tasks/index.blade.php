@@ -2,7 +2,7 @@
     <x-slot name="header">
         <div>
             <p class="text-xs font-semibold uppercase tracking-wide text-indigo-600">Event schedule</p>
-            <h1 class="text-xl font-bold">Repeating tasks & event buttons</h1>
+            <h1 class="text-xl font-bold">Repeating events & buttons</h1>
         </div>
     </x-slot>
 
@@ -41,7 +41,7 @@
                     </div>
                 </fieldset>
                 <div data-recurrence-monthly class="hidden"><label class="label">Days of the month</label><input class="input" name="month_days_text" value="{{ old('month_days_text') }}" placeholder="1, 10, 15, 28"><p class="mt-1 text-xs text-slate-500">Use numbers from 1 to 31.</p></div>
-                <div><label class="label">Time slots</label><input class="input" name="scheduled_times_text" value="{{ old('scheduled_times_text') }}" placeholder="08:00, 14:30, 20:00"><p class="mt-1 text-xs text-slate-500">Use 24-hour time. Separate multiple slots with commas.</p></div>
+                <div><label class="label">Time slots</label><div data-time-slots data-name="scheduled_times[]" data-values='@json(old('scheduled_times', []))'><div class="space-y-2" data-time-slot-list></div><button type="button" class="btn-secondary mt-2 w-full" data-time-slot-add>+ Add time slot</button></div><p class="mt-1 text-xs text-slate-500">Tap a time to slide through hours and choose minutes in five-minute steps. Each slot can be removed with ×.</p></div>
                 <label class="flex gap-2 text-sm"><input type="checkbox" name="is_sticky" value="1" @checked(old('is_sticky'))><span><strong>Sticky event</strong><span class="block text-xs text-slate-500">Show its button in the timeline at every scheduled time.</span></span></label>
                 <div><label class="label">Optional values</label><textarea class="input" name="options_text" rows="3" placeholder="1, 2, 3, 4, 5">{{ old('options_text') }}</textarea><p class="mt-1 text-xs text-slate-500">When present, a value must be selected before tracking.</p></div>
                 <button class="btn w-full">Create event</button>
@@ -55,7 +55,7 @@
                     <summary class="flex cursor-pointer list-none items-start gap-3">
                         <span class="mt-0.5 h-5 w-5 shrink-0 rounded-md border border-slate-300 shadow-sm dark:border-slate-600" style="background-color:{{ $task->color_hex }}"></span>
                         <span><strong class="block">{{ $task->name }}</strong><span class="text-xs text-slate-500">{{ $task->schedule_summary }}</span></span>
-                        <span class="ml-auto rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-500 dark:bg-slate-800">{{ $task->is_sticky ? 'Sticky' : 'Dropdown' }} · {{ $task->is_active ? 'Active' : 'Archived' }}</span>
+                        <span class="ml-auto rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-500 dark:bg-slate-800">{{ $task->is_sticky ? 'Sticky' : 'Dropdown' }}</span>
                     </summary>
 
                     <form method="POST" action="{{ route('tasks.update', $task) }}" class="mt-5 grid gap-4 sm:grid-cols-2" data-recurrence-form>
@@ -65,12 +65,12 @@
                         <div class="sm:col-span-2"><label class="label">Repeats</label><select class="input" name="recurrence_type" data-recurrence-select><option value="daily" @selected($task->recurrence_type === 'daily')>Every day</option><option value="weekly" @selected($task->recurrence_type === 'weekly')>Selected weekdays</option><option value="monthly" @selected($task->recurrence_type === 'monthly')>Selected days of the month</option></select></div>
                         <fieldset data-recurrence-weekly class="hidden rounded-xl border border-slate-200 p-3 dark:border-slate-700 sm:col-span-2"><legend class="px-1 text-sm font-semibold">Weekdays</legend><div class="grid grid-cols-4 gap-2 text-sm">@foreach(['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] as $index => $weekday)<label class="flex items-center gap-1.5"><input type="checkbox" name="weekdays[]" value="{{ $index + 1 }}" @checked(in_array($index + 1, $task->recurrence_days ?? []))>{{ $weekday }}</label>@endforeach</div></fieldset>
                         <div data-recurrence-monthly class="hidden sm:col-span-2"><label class="label">Days of the month</label><input class="input" name="month_days_text" value="{{ implode(', ', $task->recurrence_days ?? []) }}" placeholder="1, 10, 15, 28"></div>
-                        <div class="sm:col-span-2"><label class="label">Time slots</label><input class="input" name="scheduled_times_text" value="{{ implode(', ', $task->scheduled_times ?? []) }}" placeholder="08:00, 14:30, 20:00"></div>
+                        <div class="sm:col-span-2"><label class="label">Time slots</label><div data-time-slots data-name="scheduled_times[]" data-values='@json($task->scheduled_times ?? [])'><div class="space-y-2" data-time-slot-list></div><button type="button" class="btn-secondary mt-2 w-full" data-time-slot-add>+ Add time slot</button></div></div>
                         <div class="sm:col-span-2"><label class="label">Optional values</label><textarea class="input" name="options_text" rows="2">{{ implode(', ', $task->options ?? []) }}</textarea></div>
                         <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_sticky" value="1" @checked($task->is_sticky)>Sticky in its time slots</label>
                         <button class="btn">Save changes</button>
                     </form>
-                    @if($task->is_active)<form method="POST" action="{{ route('tasks.destroy', $task) }}" class="mt-3 text-right">@csrf @method('DELETE')<button class="text-sm text-rose-600">Archive event</button></form>@endif
+                    <form method="POST" action="{{ route('tasks.destroy', $task) }}" class="mt-3 text-right" data-confirm-event-delete>@csrf @method('DELETE')<button class="text-sm font-semibold text-rose-600">Delete event</button><p class="mt-1 text-xs text-slate-500">Recorded entries will become editable text and keep their media.</p></form>
                 </details>
             @empty
                 <div class="panel text-sm text-slate-500">No event buttons yet.</div>

@@ -19,12 +19,13 @@ class TaskEventController extends Controller
             abort(422, 'Choose a valid value.');
         }
         $event = DB::transaction(function () use ($dailyLog, $task, $data) {
-            $block = $dailyLog->blocks()->create(['type' => 'event', 'position' => ($dailyLog->blocks()->max('position') ?? 0) + 1]);
+            $occurredAt = $dailyLog->log_date->copy()->setTime(now()->hour, now()->minute, now()->second);
+            $block = $dailyLog->blocks()->create(['type' => 'event', 'position' => ($dailyLog->blocks()->max('position') ?? 0) + 1, 'occurred_at' => $occurredAt]);
 
-            return TaskEvent::create(['daily_log_id' => $dailyLog->id, 'task_definition_id' => $task->id, 'log_block_id' => $block->id, 'task_name' => $task->name, 'selected_value' => $data['value'] ?? null, 'occurred_at' => now()]);
+            return TaskEvent::create(['daily_log_id' => $dailyLog->id, 'task_definition_id' => $task->id, 'log_block_id' => $block->id, 'task_name' => $task->name, 'selected_value' => $data['value'] ?? null, 'occurred_at' => $occurredAt]);
         });
 
-        return response()->json(['message' => "$task->name logged.", 'event' => $event, 'count' => $dailyLog->taskEvents()->where('task_definition_id', $task->id)->count(), 'notes_url' => route('events.edit', $event)], 201);
+        return response()->json(['message' => "$task->name logged.", 'event' => $event, 'count' => $dailyLog->taskEvents()->where('task_definition_id', $task->id)->count(), 'edit_url' => route('events.update', $event), 'hide_url' => route('blocks.visibility', $event->log_block_id), 'delete_url' => route('blocks.destroy', $event->log_block_id), 'block_id' => $event->log_block_id, 'time' => $event->occurred_at->format('H:i')], 201);
     }
 
     public function edit(Request $request, TaskEvent $event)
@@ -38,9 +39,23 @@ class TaskEventController extends Controller
     public function update(Request $request, TaskEvent $event)
     {
         $this->authorizeEvent($request, $event);
-        $event->block->update(['content' => $request->validate(['notes' => 'nullable|string|max:100000'])['notes'] ?? null]);
+        $data = $request->validate([
+            'notes' => 'nullable|string|max:100000',
+            'occurred_at' => 'sometimes|required|date_format:H:i',
+        ]);
+        $updates = ['content' => $data['notes'] ?? null];
+        if (isset($data['occurred_at'])) {
+            $occurredAt = $event->dailyLog->log_date->copy()->setTimeFromTimeString($data['occurred_at']);
+            $event->update(['occurred_at' => $occurredAt]);
+            $updates['occurred_at'] = $occurredAt;
+        }
+        $event->block->update($updates);
 
-        return redirect()->route('logs.show', $event->dailyLog->log_date->toDateString())->with('status', 'Event notes saved.');
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Event updated.', 'event' => $event->fresh(), 'updated_time' => $request->user()->formatTime($event->block->fresh()->updated_at)]);
+        }
+
+        return redirect()->route('logs.show', $event->dailyLog->log_date->toDateString())->with('status', 'Event updated.');
     }
 
     private function authorizeEvent(Request $request, TaskEvent $event): void

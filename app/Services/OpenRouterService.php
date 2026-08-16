@@ -21,14 +21,14 @@ class OpenRouterService
         )['data'] ?? [];
     }
 
-    public function chat(User $user, DailyLog $log, LogBlock $block, string $model, array $messages): array
+    public function chat(User $user, DailyLog $log, LogBlock $block, string $model, array $messages, array $options = [], string $operation = 'chat'): array
     {
-        return $this->request($user, 'chat', $log, $block, $model,
-            fn ($http) => $http->timeout(120)->post(self::BASE_URL.'/chat/completions', [
+        return $this->request($user, $operation, $log, $block, $model,
+            fn ($http) => $http->timeout(120)->post(self::BASE_URL.'/chat/completions', array_merge([
                 'model' => $model,
                 'messages' => $messages,
                 'max_completion_tokens' => 1200,
-            ])
+            ], $options))
         );
     }
 

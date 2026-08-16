@@ -11,7 +11,12 @@ class LogBlockController extends Controller
     public function store(Request $request, DailyLog $dailyLog)
     {
         abort_unless($dailyLog->user_id === $request->user()->id, 403);
-        $data = $request->validate(['type' => 'required|in:text', 'content' => 'required|string|max:100000']);
+        $data = $request->validate([
+            'type' => 'required|in:text',
+            'content' => 'required|string|max:100000',
+            'occurred_at' => 'nullable|date_format:H:i',
+        ]);
+        $data['occurred_at'] = $dailyLog->log_date->copy()->setTimeFromTimeString($data['occurred_at'] ?? now()->format('H:i'));
         $block = $dailyLog->blocks()->create($data + ['position' => ($dailyLog->blocks()->max('position') ?? 0) + 1]);
 
         return response()->json(['message' => 'Entry added.', 'block' => $block, 'reload' => true], 201);
@@ -20,8 +25,15 @@ class LogBlockController extends Controller
     public function update(Request $request, LogBlock $block)
     {
         $this->authorizeBlock($request, $block);
-        abort_if($block->type === 'event', 422, 'Edit event notes from the event page.');
-        $block->update($request->validate(['content' => 'nullable|string|max:100000']));
+        abort_if($block->type === 'event', 422, 'Edit event notes from the event editor.');
+        $data = $request->validate([
+            'content' => 'nullable|string|max:100000',
+            'occurred_at' => 'sometimes|required|date_format:H:i',
+        ]);
+        if (isset($data['occurred_at'])) {
+            $data['occurred_at'] = $block->dailyLog->log_date->copy()->setTimeFromTimeString($data['occurred_at']);
+        }
+        $block->update($data);
 
         return response()->json(['message' => 'Entry updated.', 'block' => $block->fresh()]);
     }

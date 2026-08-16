@@ -13,7 +13,17 @@ class SettingsController extends Controller
 
     public function update(Request $request)
     {
-        $data = $request->validate(['openrouter_api_key' => 'nullable|string|max:500']);
+        $data = $request->validate([
+            'openrouter_api_key' => 'nullable|string|max:500',
+            'time_format' => 'required|in:12,24',
+            'week_starts_on' => 'required|integer|between:0,6',
+            'default_chat_model' => 'nullable|string|max:191',
+        ]);
+        $request->user()->update([
+            'time_format' => $data['time_format'],
+            'week_starts_on' => $data['week_starts_on'],
+            'default_chat_model' => $data['default_chat_model'] ?: null,
+        ]);
         if (($data['openrouter_api_key'] ?? '') !== '') {
             $request->user()->update(['openrouter_api_key' => $data['openrouter_api_key']]);
         }
@@ -21,6 +31,6 @@ class SettingsController extends Controller
             $request->user()->update(['openrouter_api_key' => null]);
         }
 
-        return back()->with('status', 'OpenRouter settings saved.');
+        return back()->with('status', 'Account and OpenRouter settings saved.');
     }
 }

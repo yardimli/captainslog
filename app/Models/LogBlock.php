@@ -9,9 +9,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class LogBlock extends Model
 {
-    protected $fillable = ['daily_log_id', 'type', 'content', 'metadata', 'position'];
+    protected $fillable = ['daily_log_id', 'type', 'content', 'metadata', 'position', 'occurred_at', 'is_hidden'];
 
-    protected $casts = ['metadata' => 'array'];
+    protected $casts = ['metadata' => 'array', 'occurred_at' => 'datetime', 'is_hidden' => 'boolean'];
 
     public function dailyLog(): BelongsTo
     {

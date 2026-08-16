@@ -17,11 +17,15 @@ class AttachmentController extends Controller
         $data = $request->validate([
             'file' => 'required|file|max:102400|mimetypes:image/jpeg,image/png,image/gif,image/webp,audio/mpeg,audio/wav,audio/webm,audio/ogg,audio/mp4,video/mp4,video/webm,video/quicktime',
             'block_id' => 'nullable|integer',
+            'occurred_at' => 'nullable|date_format:H:i',
         ]);
         $file = $data['file'];
         $type = Str::before($file->getMimeType(), '/');
-        $block = empty($data['block_id']) ? $dailyLog->blocks()->create(['type' => 'media', 'position' => ($dailyLog->blocks()->max('position') ?? 0) + 1]) : LogBlock::findOrFail($data['block_id']);
+        $occurredAt = $dailyLog->log_date->copy()->setTimeFromTimeString($data['occurred_at'] ?? now()->format('H:i'));
+        $block = empty($data['block_id']) ? $dailyLog->blocks()->create(['type' => 'media', 'position' => ($dailyLog->blocks()->max('position') ?? 0) + 1, 'occurred_at' => $occurredAt]) : LogBlock::findOrFail($data['block_id']);
         abort_unless($block->daily_log_id === $dailyLog->id, 403);
+        $block->update(['occurred_at' => $occurredAt]);
+        $block->taskEvent?->update(['occurred_at' => $occurredAt]);
         $path = $file->store("users/{$request->user()->id}/{$dailyLog->log_date->format('Y/m/d')}");
         $attachment = Attachment::create([
             'user_id' => $request->user()->id, 'daily_log_id' => $dailyLog->id, 'log_block_id' => $block->id,

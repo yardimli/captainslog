@@ -1,8 +1,19 @@
-@php $recordedAt = $block->taskEvent?->occurred_at ?? $block->created_at; @endphp
-<article class="panel group" id="block-{{ $block->id }}">
-    <div class="mb-3 flex items-start gap-3"><span class="rounded-lg px-2 py-1 text-xs font-bold uppercase {{ $block->type === 'event' ? 'bg-emerald-100 text-emerald-800' : ($block->type === 'chat_assistant' ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-600') }}">{{ str_replace('_',' ', $block->type) }}</span><div class="ml-auto text-right text-xs text-slate-400"><time>Recorded {{ $recordedAt->format('g:i A') }}</time><p>Updated {{ $block->updated_at->format('g:i A') }}</p></div></div>
-    @if($block->taskEvent)<div class="mb-2 text-lg font-bold">{{ $block->taskEvent->task_name }} @if($block->taskEvent->selected_value)<span class="text-indigo-600">· {{ $block->taskEvent->selected_value }}</span>@endif</div>@endif
-    @if($block->content)<div class="whitespace-pre-wrap leading-relaxed">{{ $block->content }}</div>@endif
+<article class="panel group {{ $block->is_hidden ? 'ring-2 ring-amber-400' : '' }}" id="block-{{ $block->id }}">
+    @php
+        $typeLabelClass = $block->type === 'event'
+            ? 'bg-emerald-100 text-emerald-800'
+            : ($block->type === 'chat_assistant' ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-600');
+    @endphp
+    @if($block->taskEvent)
+        <div class="flex flex-wrap items-center gap-2 leading-relaxed" data-block-description><span class="inline-flex rounded-lg px-2 py-1 text-xs font-bold uppercase {{ $typeLabelClass }}" data-block-type-label>{{ str_replace('_',' ', $block->type) }}</span>@if($block->is_hidden)<span class="inline-flex rounded-lg bg-amber-100 px-2 py-1 text-xs font-bold uppercase text-amber-800">Hidden</span>@endif<span class="text-lg font-bold">{{ $block->taskEvent->task_name }} @if($block->taskEvent->selected_value)<span class="text-indigo-600">· {{ $block->taskEvent->selected_value }}</span>@endif</span></div>
+        @if($block->content)<div class="mt-2 whitespace-pre-wrap leading-relaxed">{{ $block->content }}</div>@endif
+    @elseif($block->content)
+        <div class="whitespace-pre-wrap leading-relaxed" data-block-description><span class="mr-2 inline-flex align-middle rounded-lg px-2 py-1 text-xs font-bold uppercase {{ $typeLabelClass }}" data-block-type-label>{{ str_replace('_',' ', $block->type) }}</span>@if($block->is_hidden)<span class="mr-2 inline-flex align-middle rounded-lg bg-amber-100 px-2 py-1 text-xs font-bold uppercase text-amber-800">Hidden</span>@endif{{ $block->content }}</div>
+    @elseif($block->attachments->isNotEmpty())
+        <div class="flex min-w-0 items-center gap-2 leading-relaxed" data-block-description><span class="inline-flex shrink-0 rounded-lg px-2 py-1 text-xs font-bold uppercase {{ $typeLabelClass }}" data-block-type-label>{{ str_replace('_',' ', $block->type) }}</span>@if($block->is_hidden)<span class="inline-flex shrink-0 rounded-lg bg-amber-100 px-2 py-1 text-xs font-bold uppercase text-amber-800">Hidden</span>@endif<span class="truncate text-sm text-slate-600 dark:text-slate-300">{{ $block->attachments->pluck('original_name')->join(', ') }}</span></div>
+    @else
+        <span class="inline-flex rounded-lg px-2 py-1 text-xs font-bold uppercase {{ $typeLabelClass }}" data-block-type-label>{{ str_replace('_',' ', $block->type) }}</span>
+    @endif
     @foreach($block->attachments as $attachment)
         <div class="mt-3 overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-950">
             @if($attachment->type === 'image')<img src="{{ $attachment->url }}" alt="{{ $attachment->original_name }}" class="max-h-[32rem] w-full object-contain" loading="lazy">
@@ -11,8 +22,4 @@
             <div class="flex items-center justify-between p-2 text-xs text-slate-500"><span class="truncate">{{ $attachment->original_name }}</span><button data-delete="{{ route('attachments.destroy', $attachment) }}" class="text-rose-600">Delete media</button></div>
         </div>
     @endforeach
-    <div class="mt-3 flex gap-3 border-t border-slate-100 pt-2 text-xs dark:border-slate-800">
-        @if($block->type === 'event' && $block->taskEvent)<a class="text-indigo-600" href="{{ route('events.edit', $block->taskEvent) }}">Add/edit notes & media</a>@elseif(!in_array($block->type,['generated_image']))<button class="text-indigo-600" data-edit-block="{{ route('blocks.update', $block) }}" data-content="{{ e($block->content) }}">Edit</button>@endif
-        <button class="text-rose-600" data-delete="{{ route('blocks.destroy', $block) }}">Delete</button>
-    </div>
 </article>

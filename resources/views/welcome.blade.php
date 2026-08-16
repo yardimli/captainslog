@@ -10,16 +10,20 @@
     @vite(['resources/css/app.css','resources/js/app.js'])
 </head>
 <body class="min-h-screen overflow-x-hidden bg-slate-100 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
+    @auth
+        @include('layouts.navigation')
+    @else
     <header class="border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
         <nav class="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:px-6 lg:px-8">
             <a href="{{ route('demo.index') }}" class="flex items-center gap-2 font-black"><x-application-logo class="h-9 w-9" /><span>Captain's Log</span></a>
             <span class="hidden rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 sm:inline">Live guest simulation</span>
             <div class="ml-auto flex items-center gap-1">
-                <button type="button" data-theme-toggle class="nav-link" aria-label="Toggle dark mode">◐</button>
-                @auth<a class="btn" href="{{ route('calendar') }}">Open my log</a>@else<a class="nav-link" href="{{ route('login') }}">Sign in</a><a class="btn" href="{{ route('register') }}">Create account</a>@endauth
+                <button type="button" data-theme-toggle class="nav-link p-2" aria-label="Toggle theme" title="Toggle theme"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3a6 6 0 1 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
+                @auth<a class="nav-link p-2" href="{{ route('calendar') }}" aria-label="Open my log" title="Open my log"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 5h18v16H3zM16 3v4M8 3v4M3 10h18"/></svg></a>@else<a class="nav-link p-2" href="{{ route('login') }}" aria-label="Sign in" title="Sign in"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 7l5 5-5 5M19 12H7M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5"/></svg></a><a class="nav-link p-2" href="{{ route('register') }}" aria-label="Register" title="Register"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M8 11a4 4 0 1 0 0-8M19 8v6M22 11h-6"/></svg></a>@endauth
             </div>
         </nav>
     </header>
+    @endauth
 
     <main>
         <section class="relative overflow-hidden border-b border-slate-200 bg-slate-950 text-white dark:border-slate-800">
@@ -47,12 +51,16 @@
                     <section class="panel overflow-hidden bg-gradient-to-br from-indigo-600 to-violet-700 text-white dark:border-indigo-500"><div class="flex flex-wrap items-center gap-4"><div><p class="text-xs font-bold uppercase tracking-wider text-indigo-200">Captain's log</p><h3 class="text-2xl font-black">{{ $day->format('l, F j, Y') }}</h3></div><div class="ml-auto flex flex-wrap gap-2">@foreach($tasks as $task)<button class="rounded-xl px-3 py-2 text-sm font-bold shadow-sm hover:brightness-110" style="background-color:{{ $task->color_hex }};color:{{ $task->button_text_color }}" data-task-event="{{ route('demo.events.store', [$log, $task]) }}" data-name="{{ $task->name }}" data-options='@json($task->options ?? [])'><span class="mr-1 inline-block h-3 w-3 rounded-sm border border-current opacity-80" style="background-color:{{ $task->color_hex }}"></span>{{ $task->name }} <span class="ml-1 rounded-full bg-white/20 px-2" data-count>{{ $counts[$task->id] ?? 0 }}</span></button>@endforeach</div></div></section>
 
                     @foreach($log->blocks as $block)
-                        <article class="panel group">
-                            <div class="mb-3 flex items-start gap-3"><span class="rounded-lg bg-slate-100 px-2 py-1 text-xs font-bold uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ str_replace('_',' ', $block->type) }}</span><div class="ml-auto text-right text-xs text-slate-400"><time>Created {{ $block->created_at->format('g:i A') }}</time><p>Updated {{ $block->updated_at->format('g:i A') }}</p></div></div>
-                            @if($block->taskEvent)<p class="mb-2 text-lg font-black">{{ $block->taskEvent->task_name }} <span class="text-indigo-600">· {{ $block->taskEvent->selected_value }}</span></p>@endif
-                            @if($block->content)<div class="whitespace-pre-wrap text-[1.02rem] leading-relaxed">{{ $block->content }}</div>@endif
-                            @unless($block->type === 'event')<div class="mt-4 flex gap-4 border-t border-slate-100 pt-3 text-xs dark:border-slate-800"><button class="font-bold text-indigo-600" data-edit-block="{{ route('demo.blocks.update', $block) }}" data-content="{{ e($block->content) }}">Edit</button><button class="font-bold text-rose-600" data-delete="{{ route('demo.blocks.destroy', $block) }}">Delete</button></div>@endunless
-                        </article>
+                        @php $recordedAt = $block->taskEvent?->occurred_at ?? $block->occurred_at ?? $block->created_at; @endphp
+                        <div class="timeline-item flex min-w-0 items-start gap-3">
+                            <time class="w-20 shrink-0 pt-4 text-center font-mono text-xs font-bold text-slate-500">{{ $recordedAt->format('g:i A') }}</time>
+                            <article class="panel group min-w-0 flex-1">
+                                <div class="mb-3 flex items-start gap-3"><span class="rounded-lg bg-slate-100 px-2 py-1 text-xs font-bold uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ str_replace('_',' ', $block->type) }}</span></div>
+                                @if($block->taskEvent)<p class="mb-2 text-lg font-black">{{ $block->taskEvent->task_name }} <span class="text-indigo-600">· {{ $block->taskEvent->selected_value }}</span></p>@endif
+                                @if($block->content)<div class="whitespace-pre-wrap text-[1.02rem] leading-relaxed">{{ $block->content }}</div>@endif
+                                @unless($block->type === 'event')<div class="mt-4 flex gap-4 border-t border-slate-100 pt-3 text-xs dark:border-slate-800"><button class="font-bold text-indigo-600" data-edit-block="{{ route('demo.blocks.update', $block) }}" data-content="{{ e($block->content) }}" data-updated="{{ $block->updated_at->format('g:i A') }}">Edit</button><button class="font-bold text-rose-600" data-delete="{{ route('demo.blocks.destroy', $block) }}">Delete</button></div>@endunless
+                            </article>
+                        </div>
                     @endforeach
                 </div>
 

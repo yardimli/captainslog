@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\TaskDefinition;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class TaskController extends Controller
@@ -18,7 +19,7 @@ class TaskController extends Controller
         $data = $this->validated($request);
         $task = $request->user()->taskDefinitions()->create($data);
 
-        return redirect()->route('tasks.index')->with('status', 'Task created.');
+        return redirect()->route('tasks.index')->with('status', 'Event created.');
     }
 
     public function update(Request $request, TaskDefinition $task)
@@ -26,15 +27,42 @@ class TaskController extends Controller
         abort_unless($task->user_id === $request->user()->id, 403);
         $task->update($this->validated($request));
 
-        return redirect()->route('tasks.index')->with('status', 'Task updated.');
+        return redirect()->route('tasks.index')->with('status', 'Event updated.');
     }
 
     public function destroy(Request $request, TaskDefinition $task)
     {
         abort_unless($task->user_id === $request->user()->id, 403);
-        $task->update(['is_active' => false]);
+        DB::transaction(function () use ($task) {
+            $task->events()->with('block')->get()->each(function ($event) use ($task) {
+                if ($event->block) {
+                    $content = 'Event: '.$event->task_name;
+                    if ($event->selected_value !== null) {
+                        $content .= "\nValue: ".$event->selected_value;
+                    }
+                    if (filled($event->block->content)) {
+                        $content .= "\n\n".$event->block->content;
+                    }
+                    $event->block->update([
+                        'type' => 'text',
+                        'content' => $content,
+                        'occurred_at' => $event->occurred_at,
+                        'metadata' => array_merge($event->block->metadata ?? [], [
+                            'converted_from_event' => [
+                                'definition_id' => $task->id,
+                                'name' => $event->task_name,
+                                'value' => $event->selected_value,
+                                'deleted_at' => now()->toIso8601String(),
+                            ],
+                        ]),
+                    ]);
+                }
+                $event->delete();
+            });
+            $task->delete();
+        });
 
-        return redirect()->route('tasks.index')->with('status', 'Task archived.');
+        return redirect()->route('tasks.index')->with('status', 'Event deleted. Its recorded entries were preserved as editable text.');
     }
 
     private function validated(Request $request): array
@@ -48,6 +76,8 @@ class TaskController extends Controller
             'weekdays.*' => 'integer|between:1,7',
             'month_days_text' => 'nullable|string|max:200',
             'scheduled_times_text' => 'nullable|string|max:300',
+            'scheduled_times' => 'nullable|array|max:24',
+            'scheduled_times.*' => 'date_format:H:i',
         ]);
         $options = collect(preg_split('/[\r\n,]+/', $data['options_text'] ?? ''))->map(fn ($v) => trim($v))->filter()->unique()->values()->all();
         $recurrenceDays = match ($data['recurrence_type']) {
@@ -55,7 +85,7 @@ class TaskController extends Controller
             'monthly' => collect(preg_split('/[\s,]+/', $data['month_days_text'] ?? ''))->filter()->map(fn ($day) => (int) $day)->filter(fn ($day) => $day >= 1 && $day <= 31)->unique()->sort()->values()->all(),
             default => null,
         };
-        $scheduledTimes = collect(preg_split('/[\s,]+/', $data['scheduled_times_text'] ?? ''))
+        $scheduledTimes = collect($data['scheduled_times'] ?? preg_split('/[\s,]+/', $data['scheduled_times_text'] ?? ''))
             ->map(fn ($time) => trim($time))->filter()->unique()->sort()->values();
 
         if (in_array($data['recurrence_type'], ['weekly', 'monthly'], true) && empty($recurrenceDays)) {

@@ -1,0 +1,31 @@
+<x-app-layout>
+    <x-slot name="header">
+        <div><p class="text-xs font-semibold uppercase tracking-wide text-indigo-600">OpenRouter</p><h1 class="text-2xl font-bold">API usage</h1></div>
+    </x-slot>
+
+    <div class="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
+        <section class="grid gap-3 sm:grid-cols-3">
+            <div class="panel"><p class="text-xs font-bold uppercase text-slate-500">Calls</p><p class="mt-1 text-2xl font-black">{{ number_format($totals->calls) }}</p></div>
+            <div class="panel"><p class="text-xs font-bold uppercase text-slate-500">Tokens</p><p class="mt-1 text-2xl font-black">{{ number_format($totals->tokens) }}</p></div>
+            <div class="panel"><p class="text-xs font-bold uppercase text-slate-500">Estimated cost</p><p class="mt-1 text-2xl font-black">${{ number_format((float) $totals->cost, 8) }}</p></div>
+        </section>
+
+        <section class="panel overflow-hidden p-0">
+            <div class="border-b border-slate-200 p-4 dark:border-slate-800"><h2 class="font-bold">Call history</h2><p class="text-sm text-slate-500">Each call links back to the day where it was made.</p></div>
+            <div class="divide-y divide-slate-200 dark:divide-slate-800">
+                @forelse($calls as $call)
+                    <article class="grid gap-2 p-4 text-sm sm:grid-cols-[9rem_minmax(0,1fr)_7rem_8rem_7rem] sm:items-center">
+                        <div><strong class="block">{{ ucfirst($call->operation) }}</strong><time class="text-xs text-slate-500">{{ $call->created_at->format('M j') }}, {{ auth()->user()->formatTime($call->created_at) }}</time></div>
+                        <div class="min-w-0"><p class="truncate font-medium">{{ $call->model ?: 'Models endpoint' }}</p>@if($call->error)<p class="truncate text-xs text-rose-600">{{ $call->error }}</p>@endif</div>
+                        <span>{{ number_format($call->total_tokens) }} tokens</span>
+                        <span>${{ number_format((float) $call->cost, 8) }}</span>
+                        @if($call->dailyLog)<a class="font-semibold text-indigo-600 dark:text-indigo-400" href="{{ route('logs.show', $call->dailyLog->log_date->toDateString()) }}">View day</a>@else<span class="text-slate-400">No day</span>@endif
+                    </article>
+                @empty
+                    <p class="p-6 text-sm text-slate-500">No API calls have been recorded yet.</p>
+                @endforelse
+            </div>
+        </section>
+        {{ $calls->links() }}
+    </div>
+</x-app-layout>

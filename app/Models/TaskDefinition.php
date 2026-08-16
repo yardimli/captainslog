@@ -44,7 +44,7 @@ class TaskDefinition extends Model
             'monthly' => 'Monthly on '.collect($days)->implode(', '),
             default => 'Every day',
         };
-        $times = collect($this->scheduled_times ?? [])->implode(', ');
+        $times = collect($this->scheduled_times ?? [])->map(fn ($time) => auth()->user()?->formatClock($time) ?? $time)->implode(', ');
 
         return $times ? "$recurrence at $times" : $recurrence;
     }

@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\ApiCall;
+use App\Models\Attachment;
 use App\Models\DailyLog;
 use App\Models\TaskDefinition;
+use App\Models\TaskEvent;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -35,7 +37,111 @@ class CaptainsLogTest extends TestCase
         $response->assertSee('href="'.route('logs.show', '2026-08-14').'"', false)
             ->assertSee('href="'.route('logs.show', today()->toDateString()).'"', false)
             ->assertSee('href="'.route('logs.show', '2026-08-16').'"', false)
-            ->assertSee('href="'.route('calendar', '2026-08-15').'?view=week"', false);
+            ->assertDontSee('href="'.route('calendar', '2026-08-15').'?view=week"', false);
+    }
+
+    public function test_daily_log_exposes_composer_and_ai_actions_through_responsive_navigation(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->get('/logs/2026-08-16')->assertOk()
+            ->assertSee('data-mobile-nav-toggle', false)
+            ->assertSee('data-panel-open="chat"', false)
+            ->assertSee('data-panel-open="image"', false)
+            ->assertSee('data-composer-open', false)
+            ->assertSee('data-overlay="composer"', false)
+            ->assertSee('data-overlay="chat"', false)
+            ->assertSee('data-overlay="image"', false);
+    }
+
+    public function test_authenticated_navigation_uses_one_hamburger_on_all_screen_sizes(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->get('/logs/2026-08-16')->assertOk()
+            ->assertSee('data-mobile-nav-toggle', false)
+            ->assertSee('API settings')
+            ->assertSee('Event setup')
+            ->assertSee('API usage')
+            ->assertSee('Account settings')
+            ->assertSee('Generate image')
+            ->assertSee('Chat with log')
+            ->assertSee('aria-label="Toggle theme"', false)
+            ->assertSee('aria-label="Sign out"', false)
+            ->assertDontSee('md:hidden', false);
+
+        $this->get(route('calendar'))->assertOk()
+            ->assertSee(route('logs.show', today()->toDateString()).'?panel=chat')
+            ->assertSee(route('logs.show', today()->toDateString()).'?panel=image');
+    }
+
+    public function test_account_display_and_chat_preferences_are_saved_and_applied(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->patch(route('settings.update'), [
+            'time_format' => '12',
+            'week_starts_on' => 0,
+            'default_chat_model' => 'test/structured-model',
+        ])->assertRedirect();
+
+        $user->refresh();
+        $this->assertSame('12', $user->time_format);
+        $this->assertSame(0, $user->week_starts_on);
+        $this->assertSame('test/structured-model', $user->default_chat_model);
+
+        $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-19']);
+        $log->blocks()->create(['type' => 'text', 'content' => 'Evening note', 'position' => 1, 'occurred_at' => '2026-08-19 18:30:00']);
+        TaskDefinition::create(['user_id' => $user->id, 'name' => 'Evening event', 'is_sticky' => true, 'scheduled_times' => ['19:15'], 'recurrence_type' => 'daily']);
+
+        $this->get(route('logs.show', '2026-08-19'))->assertOk()
+            ->assertSee('>6:30 PM</time>', false)
+            ->assertDontSee('Recorded 6:30 PM')
+            ->assertSee('7:15 PM')
+            ->assertSee('data-selected="test/structured-model"', false)
+            ->assertSee('data-time-picker', false);
+
+        $this->get(route('calendar', '2026-08-19').'?view=week')->assertOk()
+            ->assertSeeInOrder([
+                route('logs.show', '2026-08-16'),
+                route('logs.show', '2026-08-17'),
+                route('logs.show', '2026-08-18'),
+                route('logs.show', '2026-08-19'),
+                route('logs.show', '2026-08-20'),
+                route('logs.show', '2026-08-21'),
+                route('logs.show', '2026-08-22'),
+            ]);
+    }
+
+    public function test_event_time_slots_use_add_remove_visual_controls(): void
+    {
+        $user = User::factory()->create();
+        TaskDefinition::create(['user_id' => $user->id, 'name' => 'Five-minute event', 'scheduled_times' => ['08:00', '14:30'], 'recurrence_type' => 'daily']);
+
+        $this->actingAs($user)->get(route('tasks.index'))->assertOk()
+            ->assertSee('data-time-slots', false)
+            ->assertSee('data-time-slot-add', false)
+            ->assertSee('data-values=\'["08:00","14:30"]\'', false)
+            ->assertSee('+ Add time slot')
+            ->assertSee('Each slot can be removed with ×.');
+
+        $this->post(route('tasks.store'), [
+            'name' => 'Visual slots', 'color' => '#4f46e5', 'recurrence_type' => 'daily',
+            'scheduled_times' => ['06:15', '18:45'], 'is_sticky' => '1',
+        ])->assertRedirect(route('tasks.index'));
+        $this->assertDatabaseHas('task_definitions', ['user_id' => $user->id, 'name' => 'Visual slots']);
+        $this->assertSame(['06:15', '18:45'], TaskDefinition::where('name', 'Visual slots')->first()->scheduled_times);
+    }
+
+    public function test_guest_navigation_has_auth_and_theme_icons_without_a_hamburger(): void
+    {
+        auth()->logout();
+
+        $this->get(route('demo.index'))->assertOk()
+            ->assertSee('aria-label="Sign in"', false)
+            ->assertSee('aria-label="Register"', false)
+            ->assertSee('aria-label="Toggle theme"', false)
+            ->assertDontSee('data-mobile-nav-toggle', false);
     }
 
     public function test_task_buttons_accept_custom_browser_colors_and_legacy_colors_still_render(): void
@@ -102,6 +208,39 @@ class CaptainsLogTest extends TestCase
         ])->assertSessionHasErrors('scheduled_times_text');
     }
 
+    public function test_deleting_an_event_preserves_recorded_entries_as_editable_text_with_media(): void
+    {
+        Carbon::setTestNow('2026-08-16 14:00:00');
+        $user = User::factory()->create();
+        $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
+        $definition = TaskDefinition::create(['user_id' => $user->id, 'name' => 'Stress level', 'options' => ['1', '2', '3'], 'is_sticky' => true]);
+        $block = $log->blocks()->create(['type' => 'event', 'content' => 'Settled after breathing practice.', 'position' => 1, 'occurred_at' => '2026-08-15 10:30:00']);
+        $event = TaskEvent::create([
+            'daily_log_id' => $log->id, 'task_definition_id' => $definition->id, 'log_block_id' => $block->id,
+            'task_name' => 'Stress level', 'selected_value' => '2', 'occurred_at' => '2026-08-15 10:30:00',
+        ]);
+        $attachment = Attachment::create([
+            'user_id' => $user->id, 'daily_log_id' => $log->id, 'log_block_id' => $block->id, 'type' => 'audio',
+            'disk' => 'local', 'path' => 'test/event-audio.webm', 'original_name' => 'event-audio.webm', 'mime_type' => 'audio/webm', 'size' => 128,
+        ]);
+
+        $this->actingAs($user)->delete(route('tasks.destroy', $definition))->assertRedirect(route('tasks.index'));
+
+        $this->assertDatabaseMissing('task_definitions', ['id' => $definition->id]);
+        $this->assertDatabaseMissing('task_events', ['id' => $event->id]);
+        $this->assertDatabaseHas('log_blocks', [
+            'id' => $block->id, 'type' => 'text', 'occurred_at' => '2026-08-15 10:30:00',
+            'content' => "Event: Stress level\nValue: 2\n\nSettled after breathing practice.",
+        ]);
+        $this->assertDatabaseHas('attachments', ['id' => $attachment->id, 'log_block_id' => $block->id]);
+        $converted = $block->fresh();
+        $this->assertSame('Stress level', data_get($converted->metadata, 'converted_from_event.name'));
+        $this->actingAs($user)->get(route('logs.show', '2026-08-15'))->assertOk()
+            ->assertSee('Event: Stress level')
+            ->assertSee('data-edit-kind="block"', false);
+        Carbon::setTestNow();
+    }
+
     public function test_daily_timeline_orders_real_entries_around_scheduled_sticky_events(): void
     {
         $user = User::factory()->create();
@@ -118,16 +257,98 @@ class CaptainsLogTest extends TestCase
 
         $this->actingAs($user)->get('/logs/2026-08-15')->assertOk()
             ->assertSeeInOrder(['Before the scheduled slot', 'Evening check', 'After the scheduled slot'])
-            ->assertSee('data-hour="17"', false);
+            ->assertSee('data-timeline-time="17:00"', false);
+    }
+
+    public function test_more_events_menu_has_a_foreground_layer_and_outside_click_hook(): void
+    {
+        $user = User::factory()->create();
+        TaskDefinition::create([
+            'user_id' => $user->id,
+            'name' => 'Dropdown event',
+            'is_sticky' => false,
+            'recurrence_type' => 'daily',
+        ]);
+
+        $this->actingAs($user)->get('/logs/2026-08-16')->assertOk()
+            ->assertDontSee('data-event-schedule-panel', false)
+            ->assertSee('data-events-menu', false)
+            ->assertSee('style="z-index:70"', false);
+    }
+
+    public function test_past_empty_time_is_hidden_while_future_time_remains_grouped(): void
+    {
+        Carbon::setTestNow('2026-08-16 14:00:00');
+        $user = User::factory()->create();
+        TaskDefinition::create([
+            'user_id' => $user->id,
+            'name' => 'Scheduled checkpoint',
+            'is_sticky' => true,
+            'recurrence_type' => 'daily',
+            'scheduled_times' => ['10:00', '18:00'],
+        ]);
+
+        $this->actingAs($user)->get('/logs/2026-08-16')->assertOk()
+            ->assertDontSee('data-state="past"', false)
+            ->assertDontSee('data-from="00:00"', false)
+            ->assertDontSee('data-from="10:00"', false)
+            ->assertSeeInOrder([
+                'data-timeline-time="10:00"',
+                'data-current-time="14:00"',
+                'data-from="14:00"',
+                'data-timeline-time="18:00"',
+                'data-from="18:00"',
+                'data-to="24:00"',
+            ], false);
+        Carbon::setTestNow();
+    }
+
+    public function test_recorded_planner_entries_can_be_hidden_but_scheduled_controls_cannot(): void
+    {
+        Carbon::setTestNow('2026-08-16 14:00:00');
+        $user = User::factory()->create();
+        $otherUser = User::factory()->create();
+        $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-16']);
+        $block = $log->blocks()->create(['type' => 'text', 'content' => 'Private planner note', 'position' => 1, 'occurred_at' => '2026-08-16 15:00:00']);
+        $task = TaskDefinition::create([
+            'user_id' => $user->id,
+            'name' => 'Evening medicine',
+            'is_sticky' => true,
+            'recurrence_type' => 'daily',
+            'scheduled_times' => ['18:00'],
+        ]);
+
+        $this->actingAs($user)->patchJson(route('blocks.visibility', $block), ['hidden' => true])->assertOk();
+
+        $this->get('/logs/2026-08-16')->assertOk()
+            ->assertSee('Show hidden entries')
+            ->assertDontSee('Private planner note')
+            ->assertSee('Evening medicine')
+            ->assertDontSee('Hide Evening medicine for this day');
+
+        $this->get('/logs/2026-08-16?show_hidden=1')->assertOk()
+            ->assertSee('Hide hidden entries')
+            ->assertSee('Private planner note')
+            ->assertSee('Evening medicine')
+            ->assertSee('data-hidden-planner-item', false)
+            ->assertSee('data-is-hidden="true"', false)
+            ->assertSee('data-hide-url=', false);
+
+        $this->actingAs($otherUser)->patchJson(route('blocks.visibility', $block), ['hidden' => false])->assertForbidden();
+        $this->actingAs($user)->patchJson(route('blocks.visibility', $block), ['hidden' => false])->assertOk();
+        $this->assertDatabaseHas('log_blocks', ['id' => $block->id, 'is_hidden' => false]);
+        Carbon::setTestNow();
     }
 
     public function test_user_can_create_edit_and_delete_a_text_block_but_not_another_users_block(): void
     {
         $user = User::factory()->create();
         $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
-        $response = $this->actingAs($user)->postJson(route('blocks.store', $log), ['type' => 'text', 'content' => 'Steady as she goes.'])->assertCreated();
+        $response = $this->actingAs($user)->postJson(route('blocks.store', $log), ['type' => 'text', 'content' => 'Steady as she goes.', 'occurred_at' => '13:30'])->assertCreated();
         $blockId = $response->json('block.id');
-        $this->patchJson("/blocks/$blockId", ['content' => 'Course corrected.'])->assertOk();
+        $this->assertDatabaseHas('log_blocks', ['id' => $blockId, 'occurred_at' => '2026-08-15 13:30:00']);
+        $this->patchJson("/blocks/$blockId", ['content' => 'Course corrected.', 'occurred_at' => '15:20'])->assertOk();
+        $this->assertDatabaseHas('log_blocks', ['id' => $blockId, 'occurred_at' => '2026-08-15 15:20:00']);
         $this->actingAs(User::factory()->create())->deleteJson("/blocks/$blockId")->assertForbidden();
         $this->actingAs($user)->deleteJson("/blocks/$blockId")->assertOk();
         $this->assertDatabaseMissing('log_blocks', ['id' => $blockId]);
@@ -141,11 +362,20 @@ class CaptainsLogTest extends TestCase
         $this->actingAs($user)->postJson(route('events.store', [$log, $task]), [])->assertUnprocessable();
         Carbon::setTestNow('2026-08-15 15:45:00');
         $response = $this->postJson(route('events.store', [$log, $task]), ['value' => '4'])->assertCreated()->assertJsonPath('count', 1);
+        $response->assertJsonStructure(['hide_url', 'delete_url']);
         $eventId = $response->json('event.id');
         $this->assertDatabaseHas('task_events', ['id' => $eventId, 'selected_value' => '4', 'occurred_at' => '2026-08-15 15:45:00']);
         Carbon::setTestNow();
-        $this->patch(route('events.update', $eventId), ['notes' => 'Recovered after a walk.'])->assertRedirect();
-        $this->assertDatabaseHas('log_blocks', ['content' => 'Recovered after a walk.']);
+        $this->get(route('events.edit', $eventId))->assertOk()
+            ->assertSee('data-event-autosave-form', false)
+            ->assertSee('Changes save automatically.')
+            ->assertDontSee('Save notes &amp; time', false);
+        $this->patchJson(route('events.update', $eventId), ['notes' => 'Recovered after a walk.', 'occurred_at' => '16:10'])
+            ->assertOk()
+            ->assertJsonPath('event.id', $eventId)
+            ->assertJsonStructure(['updated_time']);
+        $this->assertDatabaseHas('log_blocks', ['content' => 'Recovered after a walk.', 'occurred_at' => '2026-08-15 16:10:00']);
+        $this->assertDatabaseHas('task_events', ['id' => $eventId, 'occurred_at' => '2026-08-15 16:10:00']);
     }
 
     public function test_media_upload_is_tracked_and_stored_privately(): void
@@ -175,15 +405,97 @@ class CaptainsLogTest extends TestCase
 
     public function test_openrouter_chat_reply_and_cost_are_added_to_the_day(): void
     {
-        Http::fake(['openrouter.ai/*' => Http::response([
-            'id' => 'gen-123', 'model' => 'test/model', 'choices' => [['message' => ['content' => 'A concise reflection.']]],
-            'usage' => ['prompt_tokens' => 12, 'completion_tokens' => 5, 'total_tokens' => 17, 'cost' => 0.0012],
-        ], 200)]);
+        Http::fake(function ($request) {
+            $schema = data_get($request->data(), 'response_format.json_schema.name');
+            if ($schema === 'captains_log_intent') {
+                return Http::response(['id' => 'classify-123', 'model' => 'test/model', 'choices' => [['message' => ['content' => json_encode(['intent' => 'question', 'normalized_request' => 'Summarize this day.'])]]], 'usage' => ['total_tokens' => 6, 'cost' => 0.0001]], 200);
+            }
+
+            return Http::response([
+                'id' => 'gen-123', 'model' => 'test/model', 'choices' => [['message' => ['content' => 'A concise reflection.']]],
+                'usage' => ['prompt_tokens' => 12, 'completion_tokens' => 5, 'total_tokens' => 17, 'cost' => 0.0012],
+            ], 200);
+        });
         $user = User::factory()->create(['openrouter_api_key' => 'sk-test']);
         $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
-        $this->actingAs($user)->postJson(route('openrouter.chat', $log), ['message' => 'Summarize this day.', 'model' => 'test/model'])->assertCreated();
+        $contextLog = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-01']);
+        $contextLog->blocks()->create(['type' => 'text', 'content' => 'Month context signal', 'position' => 1, 'occurred_at' => '2026-08-01 09:00:00']);
+        $this->actingAs($user)->postJson(route('openrouter.chat', $log), ['message' => 'Summarize this day.', 'model' => 'test/model'])->assertCreated()->assertJsonPath('kind', 'answer')->assertJsonPath('answer', 'A concise reflection.');
         $this->assertDatabaseHas('log_blocks', ['daily_log_id' => $log->id, 'type' => 'chat_assistant', 'content' => 'A concise reflection.']);
         $this->assertDatabaseHas('api_calls', ['daily_log_id' => $log->id, 'operation' => 'chat', 'total_tokens' => 17]);
-        $this->assertSame('0.00120000', ApiCall::first()->cost);
+        $this->assertSame('0.00120000', ApiCall::where('operation', 'chat')->first()->cost);
+        Http::assertSent(fn ($request) => data_get($request->data(), 'response_format') === null && str_contains(json_encode($request->data('messages')), 'Month context signal'));
+    }
+
+    public function test_smart_chat_previews_actions_and_only_executes_them_after_confirmation(): void
+    {
+        Carbon::setTestNow('2026-08-16 13:20:00');
+        Http::fake(function ($request) {
+            $schema = data_get($request->data(), 'response_format.json_schema.name');
+            $content = $schema === 'captains_log_intent'
+                ? ['intent' => 'action', 'normalized_request' => 'Create and record a wellness event.']
+                : ['actions' => [
+                    ['type' => 'add_log_entry', 'date' => '2026-08-17', 'time' => '08:15', 'content' => 'Prepared for the morning mission.', 'event_name' => null, 'value' => null, 'notes' => null, 'name' => null, 'color' => null, 'options' => null, 'recurrence_type' => null, 'recurrence_days' => null, 'scheduled_times' => null, 'is_sticky' => null],
+                    ['type' => 'create_event', 'date' => null, 'time' => null, 'content' => null, 'event_name' => null, 'value' => null, 'notes' => null, 'name' => 'Wellness level', 'color' => '#4f46e5', 'options' => ['1', '2', '3'], 'recurrence_type' => 'daily', 'recurrence_days' => null, 'scheduled_times' => ['08:00'], 'is_sticky' => true],
+                    ['type' => 'record_event', 'date' => '2026-08-17', 'time' => '09:30', 'content' => null, 'event_name' => 'Wellness level', 'value' => '2', 'notes' => 'A little tense.', 'name' => null, 'color' => null, 'options' => null, 'recurrence_type' => null, 'recurrence_days' => null, 'scheduled_times' => null, 'is_sticky' => null],
+                ]];
+
+            return Http::response(['id' => 'smart-123', 'model' => 'test/model', 'choices' => [['message' => ['content' => json_encode($content)]]], 'usage' => ['total_tokens' => 20, 'cost' => 0.001]], 200);
+        });
+        $user = User::factory()->create(['openrouter_api_key' => 'sk-test']);
+        $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-16']);
+
+        $proposal = $this->actingAs($user)->postJson(route('openrouter.chat', $log), [
+            'message' => 'Create a purple wellness event with values 1 to 3 and record 2 tomorrow at 9:30.', 'model' => 'test/model',
+        ])->assertStatus(202)->assertJsonPath('kind', 'action')->assertJsonStructure(['summary', 'confirm_url']);
+
+        $this->assertDatabaseMissing('task_definitions', ['user_id' => $user->id, 'name' => 'Wellness level']);
+        $this->assertDatabaseMissing('log_blocks', ['content' => 'Prepared for the morning mission.']);
+
+        $this->postJson($proposal->json('confirm_url'))->assertOk()->assertJsonPath('kind', 'confirmed');
+        $this->assertDatabaseHas('task_definitions', ['user_id' => $user->id, 'name' => 'Wellness level', 'color' => '#4f46e5']);
+        $this->assertDatabaseHas('log_blocks', ['content' => 'Prepared for the morning mission.', 'occurred_at' => '2026-08-17 08:15:00']);
+        $this->assertDatabaseHas('task_events', ['task_name' => 'Wellness level', 'selected_value' => '2', 'occurred_at' => '2026-08-17 09:30:00']);
+        $this->assertDatabaseHas('chat_action_proposals', ['user_id' => $user->id, 'status' => 'confirmed']);
+        Carbon::setTestNow();
+    }
+
+    public function test_api_usage_has_its_own_owned_page_and_is_removed_from_daily_log(): void
+    {
+        $user = User::factory()->create();
+        $other = User::factory()->create();
+        $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
+        ApiCall::create(['user_id' => $user->id, 'daily_log_id' => $log->id, 'operation' => 'chat', 'model' => 'test/model', 'status_code' => 200, 'total_tokens' => 42, 'cost' => 0.001]);
+        ApiCall::create(['user_id' => $other->id, 'operation' => 'chat', 'model' => 'private/model', 'status_code' => 200, 'total_tokens' => 99, 'cost' => 1]);
+
+        $this->actingAs($user)->get(route('api-usage.index'))->assertOk()
+            ->assertSee('test/model')
+            ->assertDontSee('private/model')
+            ->assertSee(route('logs.show', '2026-08-15'));
+        $this->get(route('logs.show', '2026-08-15'))->assertOk()
+            ->assertDontSee('API usage ·')
+            ->assertSee('href="'.route('api-usage.index').'"', false);
+    }
+
+    public function test_timeline_entries_expose_the_timestamp_aware_side_editor(): void
+    {
+        $user = User::factory()->create();
+        $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
+        $log->blocks()->create(['type' => 'text', 'content' => 'Editable bridge note', 'position' => 1, 'occurred_at' => '2026-08-15 09:35:00']);
+
+        $this->actingAs($user)->get(route('logs.show', '2026-08-15'))->assertOk()
+            ->assertSee('data-timeline-edit', false)
+            ->assertSee('data-timeline-time="09:35"', false)
+            ->assertSee('>09:35</time>', false)
+            ->assertSee('data-edit-updated=', false)
+            ->assertSee('data-hide-url=', false)
+            ->assertSee('data-delete-url=', false)
+            ->assertSee('data-composer-entry-actions', false)
+            ->assertSee('data-composer-updated', false)
+            ->assertDontSee('Recorded 09:35')
+            ->assertSee('data-composer-time', false)
+            ->assertSee('data-composer-note-form', false)
+            ->assertSee('data-autosave-status', false)
+            ->assertSee('data-composer-media-form', false);
     }
 }

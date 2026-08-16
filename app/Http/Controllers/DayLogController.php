@@ -16,7 +16,8 @@ class DayLogController extends Controller
         if (! $log) {
             $log = DailyLog::create(['user_id' => $request->user()->id, 'log_date' => $day]);
         }
-        $log->load(['blocks.attachments', 'blocks.taskEvent', 'apiCalls']);
+        $showHidden = $request->boolean('show_hidden');
+        $log->load(['blocks.attachments', 'blocks.taskEvent']);
         $tasks = TaskDefinition::where('user_id', $request->user()->id)
             ->where('is_active', true)
             ->orderBy('name')
@@ -24,25 +25,31 @@ class DayLogController extends Controller
             ->filter(fn (TaskDefinition $task) => $task->occursOn($day))
             ->values();
         $counts = $log->taskEvents()->selectRaw('task_definition_id, count(*) as total')->groupBy('task_definition_id')->pluck('total', 'task_definition_id');
-        $timeline = collect(range(0, 23))->mapWithKeys(fn ($hour) => [$hour => collect()]);
+        $timelineItems = collect();
 
         foreach ($log->blocks as $block) {
-            $occurredAt = $block->taskEvent?->occurred_at ?? $block->created_at;
-            $timeline[$occurredAt->hour]->push([
+            if ($block->is_hidden && ! $showHidden) {
+                continue;
+            }
+            $occurredAt = $block->taskEvent?->occurred_at ?? $block->occurred_at ?? $block->created_at;
+            $timelineItems->push([
                 'kind' => 'block',
                 'time' => $occurredAt->format('H:i'),
+                'minute' => ($occurredAt->hour * 60) + $occurredAt->minute,
                 'sort' => $occurredAt->format('H:i:s').'-1-'.$block->id,
                 'block' => $block,
+                'is_hidden' => $block->is_hidden,
             ]);
         }
 
         foreach ($tasks->where('is_sticky', true) as $task) {
             $times = $task->scheduled_times ?: ['00:00'];
             foreach ($times as $time) {
-                $hour = (int) substr($time, 0, 2);
-                $timeline[$hour]->push([
+                [$hour, $minute] = array_map('intval', explode(':', $time));
+                $timelineItems->push([
                     'kind' => 'schedule',
                     'time' => $time,
+                    'minute' => ($hour * 60) + $minute,
                     'sort' => $time.':00-0-'.$task->id,
                     'task' => $task,
                     'is_unscheduled' => empty($task->scheduled_times),
@@ -50,8 +57,46 @@ class DayLogController extends Controller
             }
         }
 
-        $timeline = $timeline->map(fn ($items) => $items->sortBy('sort')->values());
+        $itemsByMinute = $timelineItems->sortBy('sort')->groupBy('minute');
+        $currentMinute = $day->isToday() ? (now()->hour * 60) + now()->minute : null;
+        $positions = $itemsByMinute->keys();
+        if ($currentMinute !== null) {
+            $positions->push($currentMinute);
+        }
+        $positions = $positions->push(1440)->unique()->sort()->values();
+        $cursor = 0;
+        $formatMinute = fn (int $minute) => $minute === 1440 ? '24:00' : sprintf('%02d:%02d', intdiv($minute, 60), $minute % 60);
+        $gapState = function (int $end) use ($day, $currentMinute): string {
+            if ($day->isBefore(today())) {
+                return 'past';
+            }
+            if ($day->isAfter(today())) {
+                return 'future';
+            }
 
-        return view('logs.show', compact('day', 'log', 'tasks', 'counts', 'timeline'));
+            return $end <= $currentMinute ? 'past' : 'future';
+        };
+        $timeline = collect();
+
+        foreach ($positions as $position) {
+            $position = (int) $position;
+            if ($position > $cursor) {
+                $timeline->push([
+                    'kind' => 'gap',
+                    'from' => $formatMinute($cursor),
+                    'to' => $formatMinute($position),
+                    'state' => $gapState($position),
+                ]);
+            }
+            if ($currentMinute !== null && $position === $currentMinute) {
+                $timeline->push(['kind' => 'now', 'time' => $formatMinute($currentMinute)]);
+            }
+            foreach ($itemsByMinute->get($position, collect()) as $item) {
+                $timeline->push($item);
+            }
+            $cursor = $position;
+        }
+
+        return view('logs.show', compact('day', 'log', 'tasks', 'counts', 'timeline', 'showHidden'));
     }
 }

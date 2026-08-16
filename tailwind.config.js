@@ -8,6 +8,7 @@ export default {
         './vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php',
         './storage/framework/views/*.php',
         './resources/views/**/*.blade.php',
+        './resources/js/**/*.js',
     ],
     safelist: ['bg-indigo-500','bg-emerald-500','bg-amber-500','bg-rose-500','bg-sky-500'],
 
