@@ -49,9 +49,9 @@
         <button type="button" class="absolute inset-0 bg-slate-950/55 opacity-0 transition-opacity" data-overlay-backdrop data-overlay-close="composer" aria-label="Close log composer"></button>
         <aside class="absolute inset-y-0 right-0 w-full max-w-md translate-x-full overflow-y-auto bg-slate-100 p-4 shadow-2xl transition-transform duration-300 dark:bg-slate-950 sm:p-6" data-overlay-panel>
             <div class="mb-4 flex items-start"><div><p class="text-xs font-bold uppercase tracking-wider text-indigo-600">{{ $day->format('M j, Y') }}</p><h2 class="text-2xl font-black" data-composer-title>Add to this log</h2><p class="mt-1 hidden text-xs text-slate-500" data-composer-updated></p></div><button type="button" class="btn-secondary ml-auto" data-overlay-close="composer">Close</button></div>
-            <div class="mb-4 hidden grid-cols-2 gap-2" data-composer-entry-actions><button type="button" class="btn-secondary text-amber-700 dark:text-amber-300" data-composer-visibility>Hide</button><button type="button" class="btn-secondary text-rose-600" data-composer-delete>Delete</button></div>
             <label class="label">Entry time</label><div class="mb-4" data-time-picker><button type="button" class="btn-secondary w-full justify-center text-lg font-bold" data-time-picker-open></button><input type="hidden" name="composer_time" required data-composer-time data-time-picker-input value="{{ $day->isToday() ? now()->format('H:i') : '12:00' }}"></div>
             @include('logs.partials.composer')
+            <div class="mt-6 hidden grid-cols-2 gap-2 border-t border-slate-200 pt-4 dark:border-slate-800" data-composer-entry-actions><button type="button" class="btn-secondary text-amber-700 dark:text-amber-300" data-composer-visibility>Hide</button><button type="button" class="btn-secondary text-rose-600" data-composer-delete>Delete</button></div>
         </aside>
     </div>
 
