@@ -1,0 +1,150 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\DailyLog;
+use App\Models\TaskDefinition;
+use App\Models\TaskEvent;
+use App\Models\User;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cookie;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+
+class GuestDemoService
+{
+    public const COOKIE = 'captainslog_guest';
+
+    public function account(Request $request): User
+    {
+        if ($request->attributes->has('guest_demo_user')) {
+            return $request->attributes->get('guest_demo_user');
+        }
+
+        $token = $request->cookie(self::COOKIE);
+        $validToken = is_string($token) && preg_match('/^[A-Za-z0-9]{64}$/', $token);
+        $user = $validToken ? User::where('guest_token_hash', hash('sha256', $token))->where('is_guest', true)->first() : null;
+
+        if (! $user) {
+            $token = Str::random(64);
+            $user = User::create([
+                'name' => 'Guest Captain',
+                'email' => 'guest-'.Str::lower(Str::random(24)).'@demo.invalid',
+                'password' => Hash::make(Str::random(64)),
+                'is_guest' => true,
+                'guest_token_hash' => hash('sha256', $token),
+            ]);
+            Cookie::queue(Cookie::make(self::COOKIE, $token, 60 * 24 * 365, '/', null, $request->isSecure(), true, false, 'lax'));
+        }
+
+        $this->seedRollingWeek($user);
+        $request->attributes->set('guest_demo_user', $user);
+
+        return $user;
+    }
+
+    private function seedRollingWeek(User $user): void
+    {
+        DB::transaction(function () use ($user) {
+            $tasks = $this->tasks($user);
+            foreach (range(7, 0) as $daysAgo) {
+                $date = today()->subDays($daysAgo);
+                if (DailyLog::where('user_id', $user->id)->whereDate('log_date', $date)->exists()) {
+                    continue;
+                }
+                $this->seedDay($user, $date, $daysAgo, $tasks);
+            }
+        });
+    }
+
+    private function tasks(User $user): array
+    {
+        $definitions = [
+            ['name' => 'Dog medication', 'color' => '#e11d48', 'is_sticky' => true, 'options' => ['Worf', "T'Paw", 'Both dogs']],
+            ['name' => 'Yoga class', 'color' => '#4f46e5', 'is_sticky' => true, 'options' => ['Gentle', 'Warp core', 'Hot nebula']],
+            ['name' => 'Anger check', 'color' => '#d97706', 'is_sticky' => false, 'options' => ['Calm', 'Red alert', 'Klingon opera']],
+            ['name' => 'Pet care', 'color' => '#059669', 'is_sticky' => false, 'options' => ['Fed', 'Walked', 'Negotiated']],
+            ['name' => 'Weigh-in', 'color' => '#0284c7', 'is_sticky' => false, 'options' => null],
+        ];
+
+        return collect($definitions)->mapWithKeys(function ($definition) use ($user) {
+            $task = TaskDefinition::firstOrCreate(['user_id' => $user->id, 'name' => $definition['name']], $definition);
+
+            return [$definition['name'] => $task];
+        })->all();
+    }
+
+    private function seedDay(User $user, Carbon $date, int $daysAgo, array $tasks): void
+    {
+        $entries = $this->entries()[$daysAgo];
+        $log = DailyLog::create(['user_id' => $user->id, 'log_date' => $date]);
+        foreach ($entries as $position => $entry) {
+            $log->blocks()->forceCreate([
+                'type' => $entry['type'] ?? 'text',
+                'content' => $entry['content'],
+                'metadata' => ['demo' => true],
+                'position' => $position + 1,
+                'created_at' => $date->copy()->setTime(7 + ($position * 5), 15),
+                'updated_at' => $date->copy()->setTime(7 + ($position * 5), 15),
+            ]);
+        }
+
+        $medication = $log->blocks()->forceCreate(['type' => 'event', 'metadata' => ['demo' => true], 'position' => 10, 'created_at' => $date->copy()->setTime(20, 5), 'updated_at' => $date->copy()->setTime(20, 5)]);
+        TaskEvent::create([
+            'daily_log_id' => $log->id,
+            'task_definition_id' => $tasks['Dog medication']->id,
+            'log_block_id' => $medication->id,
+            'task_name' => 'Dog medication',
+            'selected_value' => 'Both dogs',
+            'occurred_at' => $date->copy()->setTime(20, 5),
+        ]);
+    }
+
+    private function entries(): array
+    {
+        return [
+            7 => [
+                ['content' => "Captain's log: launched the USS Inner Peace at 06:00. Taught twelve cadets downward-facing targ while my beagle Worf stole a foam block."],
+                ['content' => "Anger-management session went well until a client described breathing exercises as 'suggestions.' I counted to ten in Klingon and called it professional development."],
+                ['type' => 'chat_assistant', 'content' => 'Computer: Meal plan recommends vegetables that have not been replicated in the shape of a starship.'],
+            ],
+            6 => [
+                ['content' => 'Morning weigh-in: the scale announced a temporal anomaly. I announced it needed recalibration. We have agreed to mediation.'],
+                ['content' => "Walked Worf and T'Paw. Spot the cat supervised from a windowsill like an admiral with extremely judgmental whiskers."],
+                ['content' => 'Hot-nebula yoga class achieved maximum warp perspiration. Nobody was assimilated, although Gary did join the class newsletter.'],
+            ],
+            5 => [
+                ['content' => "Counselor's log: helped a client replace 'engage rage engines' with 'I feel frustrated.' A diplomatic breakthrough."],
+                ['content' => 'Prepared a high-protein lunch. Quinoa remains the Tribble of the pantry: one cup somehow became seventeen.'],
+                ['content' => "T'Paw detected the pill hidden in cheese at six meters. Tried peanut butter. Resistance was futile, eventually."],
+            ],
+            4 => [
+                ['content' => 'Captain’s log: sunrise yoga on the observation deck. Spot sat on the mat during savasana and claimed salvage rights.'],
+                ['content' => 'Red-alert moment: delivery arrived without the low-calorie dressing. Used the STOP technique and only drafted one strongly worded subspace message.'],
+                ['type' => 'chat_assistant', 'content' => 'Computer: Daily victory detected—stairs used instead of turbolift. Commendation pending.'],
+            ],
+            3 => [
+                ['content' => "Worf's medication administered on schedule. He performed the traditional beagle maneuver: swallowing the cheese and returning the tablet."],
+                ['content' => 'Led chair yoga for the senior officers. Captain’s chair refused to participate but provided excellent lumbar support.'],
+                ['content' => 'Dinner: one sensible bowl of soup and a completely classified number of bread rolls. The logs have been sealed by Starfleet Wellness.'],
+            ],
+            2 => [
+                ['content' => 'Anger group practiced calm boundary setting. “Shields up” is apparently not an approved example, even when said gently.'],
+                ['content' => "Pet report: Worf walked, T'Paw medicated, Spot fed. Spot filed a grievance alleging the bowl was 4% below regulation capacity."],
+                ['content' => 'Warp-core flow class: 42 minutes. My leggings survived, morale is high, and the snack drawer remains under observation.'],
+            ],
+            1 => [
+                ['content' => "Captain's log: resisted a doughnut at staff briefing. It used advanced cloaking technology and reappeared beside my coffee."],
+                ['content' => 'Therapy note: reframed “I will launch him out an airlock” as “I need space.” Concise, accurate, billing-friendly.'],
+                ['type' => 'chat_assistant', 'content' => 'Computer: Three pets accounted for. Two dogs medicated. One cat continues to reject the chain of command.'],
+            ],
+            0 => [
+                ['content' => "Captain's log, present day: began with sun salutations while Worf treated my spine as a docking platform."],
+                ['content' => "Today's mission: teach yoga at 10:00, counsel anger without developing any, walk Worf and T'Paw, negotiate with Spot, and lose weight at impulse speed."],
+                ['type' => 'chat_assistant', 'content' => 'Computer: Course plotted for a calmer day. Tea is hot, dog medication is scheduled, and emergency biscuits remain within treaty limits.'],
+            ],
+        ];
+    }
+}
