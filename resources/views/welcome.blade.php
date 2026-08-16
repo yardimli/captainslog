@@ -5,13 +5,14 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Captain's Log · Live guest demo</title>
+    <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
     <script>if(localStorage.getItem('captainslog.theme')==='dark'||(!localStorage.getItem('captainslog.theme')&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')</script>
     @vite(['resources/css/app.css','resources/js/app.js'])
 </head>
 <body class="min-h-screen overflow-x-hidden bg-slate-100 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
     <header class="border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
         <nav class="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4 sm:px-6 lg:px-8">
-            <a href="{{ route('demo.index') }}" class="flex items-center gap-2 font-black"><span class="grid h-9 w-9 place-items-center rounded-xl bg-indigo-600 text-white">CL</span><span>Captain's Log</span></a>
+            <a href="{{ route('demo.index') }}" class="flex items-center gap-2 font-black"><x-application-logo class="h-9 w-9" /><span>Captain's Log</span></a>
             <span class="hidden rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 sm:inline">Live guest simulation</span>
             <div class="ml-auto flex items-center gap-1">
                 <button type="button" data-theme-toggle class="nav-link" aria-label="Toggle dark mode">◐</button>

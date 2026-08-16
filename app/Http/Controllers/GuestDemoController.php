@@ -24,7 +24,7 @@ class GuestDemoController extends Controller
         $log = DailyLog::where('user_id', $user->id)->whereDate('log_date', $day)->firstOrFail();
         $log->load(['blocks.attachments', 'blocks.taskEvent']);
         $logs = DailyLog::where('user_id', $user->id)->whereBetween('log_date', [$days->first(), $days->last()])->withCount('blocks')->get()->keyBy(fn ($item) => $item->log_date->toDateString());
-        $tasks = TaskDefinition::where('user_id', $user->id)->where('is_active', true)->where('is_sticky', true)->get();
+        $tasks = TaskDefinition::where('user_id', $user->id)->where('is_active', true)->where('is_sticky', true)->get()->filter(fn (TaskDefinition $task) => $task->occursOn($day));
         $counts = $log->taskEvents()->selectRaw('task_definition_id, count(*) as total')->groupBy('task_definition_id')->pluck('total', 'task_definition_id');
 
         return view('welcome', compact('day', 'days', 'log', 'logs', 'tasks', 'counts'));
@@ -61,6 +61,7 @@ class GuestDemoController extends Controller
     {
         $user = $this->demo->account($request);
         abort_unless($dailyLog->user_id === $user->id && $task->user_id === $user->id, 403);
+        abort_unless($task->is_active && $task->occursOn($dailyLog->log_date), 422, 'This event is not scheduled for this day.');
         $data = $request->validate(['value' => [empty($task->options) ? 'nullable' : 'required', 'nullable', 'string', 'max:100']]);
         if (! empty($task->options) && ! in_array($data['value'] ?? null, $task->options, true)) {
             abort(422, 'Choose a valid value.');

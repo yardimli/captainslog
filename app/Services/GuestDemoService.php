@@ -62,15 +62,15 @@ class GuestDemoService
     private function tasks(User $user): array
     {
         $definitions = [
-            ['name' => 'Dog medication', 'color' => '#e11d48', 'is_sticky' => true, 'options' => ['Worf', "T'Paw", 'Both dogs']],
-            ['name' => 'Yoga class', 'color' => '#4f46e5', 'is_sticky' => true, 'options' => ['Gentle', 'Warp core', 'Hot nebula']],
-            ['name' => 'Anger check', 'color' => '#d97706', 'is_sticky' => false, 'options' => ['Calm', 'Red alert', 'Klingon opera']],
-            ['name' => 'Pet care', 'color' => '#059669', 'is_sticky' => false, 'options' => ['Fed', 'Walked', 'Negotiated']],
-            ['name' => 'Weigh-in', 'color' => '#0284c7', 'is_sticky' => false, 'options' => null],
+            ['name' => 'Dog medication', 'color' => '#e11d48', 'is_sticky' => true, 'recurrence_type' => 'daily', 'scheduled_times' => ['08:00', '20:00'], 'options' => ['Worf', "T'Paw", 'Both dogs']],
+            ['name' => 'Yoga class', 'color' => '#4f46e5', 'is_sticky' => true, 'recurrence_type' => 'weekly', 'recurrence_days' => [1, 3, 5, 6, 7], 'scheduled_times' => ['10:00'], 'options' => ['Gentle', 'Warp core', 'Hot nebula']],
+            ['name' => 'Anger check', 'color' => '#d97706', 'is_sticky' => false, 'recurrence_type' => 'daily', 'scheduled_times' => ['16:30'], 'options' => ['Calm', 'Red alert', 'Klingon opera']],
+            ['name' => 'Pet care', 'color' => '#059669', 'is_sticky' => false, 'recurrence_type' => 'daily', 'scheduled_times' => ['07:30', '19:00'], 'options' => ['Fed', 'Walked', 'Negotiated']],
+            ['name' => 'Weigh-in', 'color' => '#0284c7', 'is_sticky' => false, 'recurrence_type' => 'weekly', 'recurrence_days' => [1, 4], 'scheduled_times' => ['07:00'], 'options' => null],
         ];
 
         return collect($definitions)->mapWithKeys(function ($definition) use ($user) {
-            $task = TaskDefinition::firstOrCreate(['user_id' => $user->id, 'name' => $definition['name']], $definition);
+            $task = TaskDefinition::updateOrCreate(['user_id' => $user->id, 'name' => $definition['name']], $definition);
 
             return [$definition['name'] => $task];
         })->all();

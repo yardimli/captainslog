@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ isset($title) ? trim(strip_tags((string) $title)).' - ' : '' }}{{ config('app.name', "Captain's Log") }}</title>
+    <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
     <script>if(localStorage.getItem('captainslog.theme')==='dark'||(!localStorage.getItem('captainslog.theme')&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')</script>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
@@ -15,7 +16,7 @@
             <div class="absolute inset-0 opacity-[.08]" style="background-image:linear-gradient(rgba(255,255,255,.8) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.8) 1px,transparent 1px);background-size:42px 42px"></div>
             <div class="relative">
                 <a href="{{ route('demo.index') }}" class="inline-flex items-center gap-3 text-xl font-black">
-                    <span class="grid h-12 w-12 place-items-center rounded-2xl bg-indigo-600 shadow-lg shadow-indigo-500/30">CL</span>
+                    <x-application-logo class="h-12 w-12 shadow-lg shadow-indigo-500/30" />
                     <span>Captain's Log</span>
                 </a>
                 <div class="mt-20 max-w-xl">
@@ -34,7 +35,7 @@
         <div class="relative flex min-h-screen flex-col">
             <header class="flex h-16 items-center gap-3 border-b border-slate-200 bg-white/80 px-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80 sm:px-8">
                 <a href="{{ route('demo.index') }}" class="flex items-center gap-2 font-black lg:hidden">
-                    <span class="grid h-9 w-9 place-items-center rounded-xl bg-indigo-600 text-white">CL</span>
+                    <x-application-logo class="h-9 w-9" />
                     <span>Captain's Log</span>
                 </a>
                 <a href="{{ route('demo.index') }}#demo" class="ml-auto text-sm font-semibold text-slate-500 hover:text-indigo-600 dark:text-slate-300 dark:hover:text-indigo-400">Try the live demo</a>

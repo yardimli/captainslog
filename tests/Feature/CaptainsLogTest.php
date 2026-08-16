@@ -6,6 +6,7 @@ use App\Models\ApiCall;
 use App\Models\DailyLog;
 use App\Models\TaskDefinition;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
@@ -45,6 +46,8 @@ class CaptainsLogTest extends TestCase
             'name' => 'Hydration alert',
             'color' => '#12Ab9F',
             'is_sticky' => '1',
+            'recurrence_type' => 'daily',
+            'scheduled_times_text' => '09:00',
         ])->assertRedirect(route('tasks.index'));
 
         $custom = TaskDefinition::where('user_id', $user->id)->where('name', 'Hydration alert')->firstOrFail();
@@ -53,6 +56,69 @@ class CaptainsLogTest extends TestCase
         $this->assertSame('#12ab9f', $custom->color_hex);
         $this->assertSame('#e11d48', $legacy->color_hex);
         $this->actingAs($user)->post(route('tasks.store'), ['name' => 'Bad color', 'color' => 'javascript:red'])->assertSessionHasErrors('color');
+    }
+
+    public function test_tasks_support_daily_weekly_and_monthly_recurrence_with_time_slots(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post(route('tasks.store'), [
+            'name' => 'Saturday rounds',
+            'color' => '#4f46e5',
+            'is_sticky' => '1',
+            'recurrence_type' => 'weekly',
+            'weekdays' => [6],
+            'scheduled_times_text' => '08:00, 17:00',
+        ])->assertRedirect(route('tasks.index'));
+
+        $task = TaskDefinition::where('name', 'Saturday rounds')->firstOrFail();
+        $this->assertSame('weekly', $task->recurrence_type);
+        $this->assertSame([6], $task->recurrence_days);
+        $this->assertSame(['08:00', '17:00'], $task->scheduled_times);
+
+        $mondayTask = TaskDefinition::create([
+            'user_id' => $user->id,
+            'name' => 'Monday rounds',
+            'recurrence_type' => 'weekly',
+            'recurrence_days' => [1],
+            'scheduled_times' => ['08:00'],
+            'is_sticky' => true,
+        ]);
+
+        $this->get('/logs/2026-08-15')->assertOk()
+            ->assertSee('Saturday rounds')
+            ->assertDontSee('Monday rounds');
+        $saturdayLog = DailyLog::where('user_id', $user->id)->whereDate('log_date', '2026-08-15')->firstOrFail();
+        $this->postJson(route('events.store', [$saturdayLog, $mondayTask]))
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'This event is not scheduled for this day.');
+
+        $this->post(route('tasks.store'), [
+            'name' => 'Missing slot',
+            'color' => '#4f46e5',
+            'is_sticky' => '1',
+            'recurrence_type' => 'monthly',
+            'month_days_text' => '1, 15',
+        ])->assertSessionHasErrors('scheduled_times_text');
+    }
+
+    public function test_daily_timeline_orders_real_entries_around_scheduled_sticky_events(): void
+    {
+        $user = User::factory()->create();
+        $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
+        TaskDefinition::create([
+            'user_id' => $user->id,
+            'name' => 'Evening check',
+            'is_sticky' => true,
+            'recurrence_type' => 'daily',
+            'scheduled_times' => ['17:00'],
+        ]);
+        $log->blocks()->forceCreate(['type' => 'text', 'content' => 'Before the scheduled slot', 'position' => 1, 'created_at' => '2026-08-15 13:00:00', 'updated_at' => '2026-08-15 13:00:00']);
+        $log->blocks()->forceCreate(['type' => 'text', 'content' => 'After the scheduled slot', 'position' => 2, 'created_at' => '2026-08-15 19:00:00', 'updated_at' => '2026-08-15 19:00:00']);
+
+        $this->actingAs($user)->get('/logs/2026-08-15')->assertOk()
+            ->assertSeeInOrder(['Before the scheduled slot', 'Evening check', 'After the scheduled slot'])
+            ->assertSee('data-hour="17"', false);
     }
 
     public function test_user_can_create_edit_and_delete_a_text_block_but_not_another_users_block(): void
@@ -73,9 +139,11 @@ class CaptainsLogTest extends TestCase
         $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
         $task = TaskDefinition::create(['user_id' => $user->id, 'name' => 'Stress level', 'options' => ['1', '2', '3', '4', '5'], 'is_sticky' => true]);
         $this->actingAs($user)->postJson(route('events.store', [$log, $task]), [])->assertUnprocessable();
+        Carbon::setTestNow('2026-08-15 15:45:00');
         $response = $this->postJson(route('events.store', [$log, $task]), ['value' => '4'])->assertCreated()->assertJsonPath('count', 1);
         $eventId = $response->json('event.id');
-        $this->assertDatabaseHas('task_events', ['id' => $eventId, 'selected_value' => '4']);
+        $this->assertDatabaseHas('task_events', ['id' => $eventId, 'selected_value' => '4', 'occurred_at' => '2026-08-15 15:45:00']);
+        Carbon::setTestNow();
         $this->patch(route('events.update', $eventId), ['notes' => 'Recovered after a walk.'])->assertRedirect();
         $this->assertDatabaseHas('log_blocks', ['content' => 'Recovered after a walk.']);
     }

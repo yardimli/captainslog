@@ -1,5 +1,6 @@
+@php $recordedAt = $block->taskEvent?->occurred_at ?? $block->created_at; @endphp
 <article class="panel group" id="block-{{ $block->id }}">
-    <div class="mb-3 flex items-start gap-3"><span class="rounded-lg px-2 py-1 text-xs font-bold uppercase {{ $block->type === 'event' ? 'bg-emerald-100 text-emerald-800' : ($block->type === 'chat_assistant' ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-600') }}">{{ str_replace('_',' ', $block->type) }}</span><div class="ml-auto text-right text-xs text-slate-400"><time>Created {{ $block->created_at->format('g:i A') }}</time><p>Updated {{ $block->updated_at->format('g:i A') }}</p></div></div>
+    <div class="mb-3 flex items-start gap-3"><span class="rounded-lg px-2 py-1 text-xs font-bold uppercase {{ $block->type === 'event' ? 'bg-emerald-100 text-emerald-800' : ($block->type === 'chat_assistant' ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-600') }}">{{ str_replace('_',' ', $block->type) }}</span><div class="ml-auto text-right text-xs text-slate-400"><time>Recorded {{ $recordedAt->format('g:i A') }}</time><p>Updated {{ $block->updated_at->format('g:i A') }}</p></div></div>
     @if($block->taskEvent)<div class="mb-2 text-lg font-bold">{{ $block->taskEvent->task_name }} @if($block->taskEvent->selected_value)<span class="text-indigo-600">· {{ $block->taskEvent->selected_value }}</span>@endif</div>@endif
     @if($block->content)<div class="whitespace-pre-wrap leading-relaxed">{{ $block->content }}</div>@endif
     @foreach($block->attachments as $attachment)

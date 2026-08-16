@@ -10,8 +10,8 @@ const toast = (message, error = false) => {
 function modal({title, message = '', options = null, initial = null, confirmText = 'Continue', cancelText = 'Cancel'}) {
     return new Promise(resolve => {
         const backdrop = document.createElement('div');
-        backdrop.className = 'fixed inset-0 z-50 grid place-items-end bg-slate-950/60 p-3 sm:place-items-center';
-        const panel = document.createElement('div'); panel.className = 'w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-900';
+        backdrop.className = 'motion-backdrop-enter fixed inset-0 z-50 grid place-items-end bg-slate-950/60 p-3 sm:place-items-center';
+        const panel = document.createElement('div'); panel.className = 'motion-panel-enter w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-900';
         const heading = document.createElement('h2'); heading.className = 'text-lg font-bold'; heading.textContent = title; panel.append(heading);
         if (message) { const copy = document.createElement('p'); copy.className = 'mt-2 text-sm text-slate-500'; copy.textContent = message; panel.append(copy); }
         let input = null;
@@ -52,7 +52,14 @@ document.addEventListener('click', async e => {
         let value = null; const options = JSON.parse(task.dataset.options || '[]');
         if (options.length) { value = await modal({title:task.dataset.name, message:'Choose a value before this event is tracked.', options, confirmText:'Track event'}); if (value === null) return; }
         task.disabled = true;
-        try { const body = await ajax(task.dataset.taskEvent,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value})}); task.querySelector('[data-count]').textContent = body.count; toast(body.message); if (body.notes_url && await modal({title:'Event tracked', message:'Would you like to attach notes, a photo, or a recording?', confirmText:'Add notes & media', cancelText:'Done'})) location.href = body.notes_url; }
+        try {
+            const body = await ajax(task.dataset.taskEvent,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value})});
+            document.querySelectorAll(`[data-task-event="${task.dataset.taskEvent}"] [data-count]`).forEach(count => { count.textContent = body.count; });
+            toast(body.message);
+            const addNotes = body.notes_url && await modal({title:'Event tracked', message:'Would you like to attach notes, a photo, or a recording?', confirmText:'Add notes & media', cancelText:'Done'});
+            if (addNotes) location.href = body.notes_url;
+            else location.reload();
+        }
         catch(error) { toast(error.message,true); } finally { task.disabled = false; }
     }
 });
@@ -71,6 +78,18 @@ document.querySelectorAll('[data-color-input]').forEach(input => {
     const preview = document.getElementById(input.dataset.colorInput);
     const update = () => { if (preview) { preview.style.backgroundColor = input.value; preview.title = input.value; } };
     input.addEventListener('input', update); update();
+});
+
+document.querySelectorAll('[data-recurrence-form]').forEach(form => {
+    const select = form.querySelector('[data-recurrence-select]');
+    const weekly = form.querySelector('[data-recurrence-weekly]');
+    const monthly = form.querySelector('[data-recurrence-monthly]');
+    const update = () => {
+        weekly?.classList.toggle('hidden', select.value !== 'weekly');
+        monthly?.classList.toggle('hidden', select.value !== 'monthly');
+    };
+    select?.addEventListener('change', update);
+    if (select) update();
 });
 
 async function loadModels(select) {

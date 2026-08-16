@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -16,9 +17,37 @@ class TaskDefinition extends Model
         'sky' => '#0284c7',
     ];
 
-    protected $fillable = ['user_id', 'name', 'color', 'is_sticky', 'options', 'is_active'];
+    protected $fillable = ['user_id', 'name', 'color', 'is_sticky', 'recurrence_type', 'recurrence_days', 'scheduled_times', 'options', 'is_active'];
 
-    protected $casts = ['is_sticky' => 'boolean', 'is_active' => 'boolean', 'options' => 'array'];
+    protected $casts = [
+        'is_sticky' => 'boolean',
+        'is_active' => 'boolean',
+        'recurrence_days' => 'array',
+        'scheduled_times' => 'array',
+        'options' => 'array',
+    ];
+
+    public function occursOn(CarbonInterface $day): bool
+    {
+        return match ($this->recurrence_type ?: 'daily') {
+            'weekly' => in_array($day->isoWeekday(), $this->recurrence_days ?? [], true),
+            'monthly' => in_array($day->day, $this->recurrence_days ?? [], true),
+            default => true,
+        };
+    }
+
+    public function getScheduleSummaryAttribute(): string
+    {
+        $days = $this->recurrence_days ?? [];
+        $recurrence = match ($this->recurrence_type ?: 'daily') {
+            'weekly' => collect($days)->map(fn ($day) => ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][$day - 1] ?? null)->filter()->implode(', '),
+            'monthly' => 'Monthly on '.collect($days)->implode(', '),
+            default => 'Every day',
+        };
+        $times = collect($this->scheduled_times ?? [])->implode(', ');
+
+        return $times ? "$recurrence at $times" : $recurrence;
+    }
 
     public function getColorHexAttribute(): string
     {

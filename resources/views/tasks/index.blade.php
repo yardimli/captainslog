@@ -1,30 +1,80 @@
 <x-app-layout>
-    <x-slot name="header"><h1 class="text-xl font-bold">Repeating tasks & event buttons</h1></x-slot>
-    <div class="mx-auto grid max-w-5xl gap-5 p-4 sm:p-6 lg:grid-cols-[22rem_1fr] lg:p-8">
+    <x-slot name="header">
+        <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-indigo-600">Event schedule</p>
+            <h1 class="text-xl font-bold">Repeating tasks & event buttons</h1>
+        </div>
+    </x-slot>
+
+    <div class="mx-auto grid max-w-6xl gap-5 p-4 sm:p-6 lg:grid-cols-[24rem_1fr] lg:p-8">
         <section class="panel h-fit">
-            <h2 class="mb-4 font-bold">Create a task button</h2>
-            <form method="POST" action="{{ route('tasks.store') }}" class="space-y-4">@csrf
-                <div><label class="label">Friendly name</label><input class="input" name="name" required placeholder="Stress level"></div>
-                <div><label class="label" for="new-task-color">Button color</label><div class="flex items-center gap-3"><span id="new-task-preview" class="h-7 w-7 shrink-0 rounded-md border border-slate-300 shadow-sm dark:border-slate-600" style="background-color:#4f46e5" title="#4f46e5"></span><input id="new-task-color" data-color-input="new-task-preview" type="color" name="color" value="#4f46e5" class="h-11 w-full cursor-pointer rounded-xl border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-950"><span class="text-xs text-slate-500">Choose any color</span></div></div>
-                <label class="flex gap-2 text-sm"><input type="checkbox" name="is_sticky" value="1">Always show at the top of each day</label>
-                <div><label class="label">Optional values</label><textarea class="input" name="options_text" rows="3" placeholder="1, 2, 3, 4, 5"></textarea><p class="mt-1 text-xs text-slate-500">Comma or line separated. When present, a value is required before the event is tracked.</p></div>
-                <button class="btn w-full">Create task</button>
+            <h2 class="font-bold">Create an event button</h2>
+            <p class="mt-1 text-sm text-slate-500">Choose when it recurs and add one or more time slots.</p>
+
+            @if($errors->any())
+                <div class="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-700 dark:bg-rose-950 dark:text-rose-200">
+                    <ul class="list-disc space-y-1 pl-5">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
+                </div>
+            @endif
+
+            <form method="POST" action="{{ route('tasks.store') }}" class="mt-5 space-y-4" data-recurrence-form>
+                @csrf
+                <div><label class="label">Friendly name</label><input class="input" name="name" value="{{ old('name') }}" required placeholder="Dog medication"></div>
+                <div>
+                    <label class="label" for="new-task-color">Button color</label>
+                    <div class="flex items-center gap-3"><span id="new-task-preview" class="h-7 w-7 shrink-0 rounded-md border border-slate-300 shadow-sm dark:border-slate-600" style="background-color:{{ old('color', '#4f46e5') }}"></span><input id="new-task-color" data-color-input="new-task-preview" type="color" name="color" value="{{ old('color', '#4f46e5') }}" class="h-11 w-full cursor-pointer rounded-xl border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-950"></div>
+                </div>
+                <div>
+                    <label class="label">Repeats</label>
+                    <select class="input" name="recurrence_type" data-recurrence-select>
+                        <option value="daily" @selected(old('recurrence_type') === 'daily')>Every day</option>
+                        <option value="weekly" @selected(old('recurrence_type') === 'weekly')>Selected weekdays</option>
+                        <option value="monthly" @selected(old('recurrence_type') === 'monthly')>Selected days of the month</option>
+                    </select>
+                </div>
+                <fieldset data-recurrence-weekly class="hidden rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                    <legend class="px-1 text-sm font-semibold">Weekdays</legend>
+                    <div class="grid grid-cols-4 gap-2 text-sm">
+                        @foreach(['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] as $index => $weekday)
+                            <label class="flex items-center gap-1.5"><input type="checkbox" name="weekdays[]" value="{{ $index + 1 }}" @checked(in_array($index + 1, old('weekdays', [])))>{{ $weekday }}</label>
+                        @endforeach
+                    </div>
+                </fieldset>
+                <div data-recurrence-monthly class="hidden"><label class="label">Days of the month</label><input class="input" name="month_days_text" value="{{ old('month_days_text') }}" placeholder="1, 10, 15, 28"><p class="mt-1 text-xs text-slate-500">Use numbers from 1 to 31.</p></div>
+                <div><label class="label">Time slots</label><input class="input" name="scheduled_times_text" value="{{ old('scheduled_times_text') }}" placeholder="08:00, 14:30, 20:00"><p class="mt-1 text-xs text-slate-500">Use 24-hour time. Separate multiple slots with commas.</p></div>
+                <label class="flex gap-2 text-sm"><input type="checkbox" name="is_sticky" value="1" @checked(old('is_sticky'))><span><strong>Sticky event</strong><span class="block text-xs text-slate-500">Show its button in the timeline at every scheduled time.</span></span></label>
+                <div><label class="label">Optional values</label><textarea class="input" name="options_text" rows="3" placeholder="1, 2, 3, 4, 5">{{ old('options_text') }}</textarea><p class="mt-1 text-xs text-slate-500">When present, a value must be selected before tracking.</p></div>
+                <button class="btn w-full">Create event</button>
             </form>
         </section>
+
         <section class="space-y-3">
-            <h2 class="text-lg font-bold">Your task buttons</h2>
+            <div><h2 class="text-lg font-bold">Your event buttons</h2><p class="text-sm text-slate-500">Sticky buttons appear inside their hour; other active events stay in the daily dropdown.</p></div>
             @forelse($tasks as $task)
                 <details class="panel" @if($loop->first) open @endif>
-                    <summary class="flex cursor-pointer list-none items-center gap-3"><span class="h-5 w-5 shrink-0 rounded-md border border-slate-300 shadow-sm dark:border-slate-600" style="background-color:{{ $task->color_hex }}" title="{{ $task->color_hex }}"></span><strong>{{ $task->name }}</strong><span class="ml-auto text-xs text-slate-500">{{ $task->is_sticky ? 'Sticky' : 'Dropdown' }} · {{ $task->is_active ? 'Active' : 'Archived' }}</span></summary>
-                    <form method="POST" action="{{ route('tasks.update', $task) }}" class="mt-4 grid gap-3 sm:grid-cols-2">@csrf @method('PATCH')
-                        <input class="input" name="name" value="{{ $task->name }}" required>
-                        <div class="flex items-center gap-2"><span id="task-preview-{{ $task->id }}" class="h-7 w-7 shrink-0 rounded-md border border-slate-300 shadow-sm dark:border-slate-600" style="background-color:{{ $task->color_hex }}" title="{{ $task->color_hex }}"></span><input aria-label="{{ $task->name }} color" data-color-input="task-preview-{{ $task->id }}" type="color" name="color" value="{{ $task->color_hex }}" class="h-11 w-full cursor-pointer rounded-xl border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-950"></div>
-                        <textarea class="input sm:col-span-2" name="options_text" rows="2">{{ implode(', ', $task->options ?? []) }}</textarea>
-                        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_sticky" value="1" @checked($task->is_sticky)>Sticky</label><button class="btn">Save changes</button>
+                    <summary class="flex cursor-pointer list-none items-start gap-3">
+                        <span class="mt-0.5 h-5 w-5 shrink-0 rounded-md border border-slate-300 shadow-sm dark:border-slate-600" style="background-color:{{ $task->color_hex }}"></span>
+                        <span><strong class="block">{{ $task->name }}</strong><span class="text-xs text-slate-500">{{ $task->schedule_summary }}</span></span>
+                        <span class="ml-auto rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-500 dark:bg-slate-800">{{ $task->is_sticky ? 'Sticky' : 'Dropdown' }} · {{ $task->is_active ? 'Active' : 'Archived' }}</span>
+                    </summary>
+
+                    <form method="POST" action="{{ route('tasks.update', $task) }}" class="mt-5 grid gap-4 sm:grid-cols-2" data-recurrence-form>
+                        @csrf @method('PATCH')
+                        <div><label class="label">Friendly name</label><input class="input" name="name" value="{{ $task->name }}" required></div>
+                        <div><label class="label">Color</label><div class="flex items-center gap-2"><span id="task-preview-{{ $task->id }}" class="h-7 w-7 shrink-0 rounded-md border border-slate-300" style="background-color:{{ $task->color_hex }}"></span><input aria-label="{{ $task->name }} color" data-color-input="task-preview-{{ $task->id }}" type="color" name="color" value="{{ $task->color_hex }}" class="h-11 w-full cursor-pointer rounded-xl border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-950"></div></div>
+                        <div class="sm:col-span-2"><label class="label">Repeats</label><select class="input" name="recurrence_type" data-recurrence-select><option value="daily" @selected($task->recurrence_type === 'daily')>Every day</option><option value="weekly" @selected($task->recurrence_type === 'weekly')>Selected weekdays</option><option value="monthly" @selected($task->recurrence_type === 'monthly')>Selected days of the month</option></select></div>
+                        <fieldset data-recurrence-weekly class="hidden rounded-xl border border-slate-200 p-3 dark:border-slate-700 sm:col-span-2"><legend class="px-1 text-sm font-semibold">Weekdays</legend><div class="grid grid-cols-4 gap-2 text-sm">@foreach(['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] as $index => $weekday)<label class="flex items-center gap-1.5"><input type="checkbox" name="weekdays[]" value="{{ $index + 1 }}" @checked(in_array($index + 1, $task->recurrence_days ?? []))>{{ $weekday }}</label>@endforeach</div></fieldset>
+                        <div data-recurrence-monthly class="hidden sm:col-span-2"><label class="label">Days of the month</label><input class="input" name="month_days_text" value="{{ implode(', ', $task->recurrence_days ?? []) }}" placeholder="1, 10, 15, 28"></div>
+                        <div class="sm:col-span-2"><label class="label">Time slots</label><input class="input" name="scheduled_times_text" value="{{ implode(', ', $task->scheduled_times ?? []) }}" placeholder="08:00, 14:30, 20:00"></div>
+                        <div class="sm:col-span-2"><label class="label">Optional values</label><textarea class="input" name="options_text" rows="2">{{ implode(', ', $task->options ?? []) }}</textarea></div>
+                        <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_sticky" value="1" @checked($task->is_sticky)>Sticky in its time slots</label>
+                        <button class="btn">Save changes</button>
                     </form>
-                    @if($task->is_active)<form method="POST" action="{{ route('tasks.destroy', $task) }}" class="mt-3 text-right">@csrf @method('DELETE')<button class="text-sm text-rose-600">Archive task</button></form>@endif
+                    @if($task->is_active)<form method="POST" action="{{ route('tasks.destroy', $task) }}" class="mt-3 text-right">@csrf @method('DELETE')<button class="text-sm text-rose-600">Archive event</button></form>@endif
                 </details>
-            @empty<div class="panel text-sm text-slate-500">No task buttons yet.</div>@endforelse
+            @empty
+                <div class="panel text-sm text-slate-500">No event buttons yet.</div>
+            @endforelse
         </section>
     </div>
 </x-app-layout>

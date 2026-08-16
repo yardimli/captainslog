@@ -13,6 +13,7 @@ class TaskEventController extends Controller
     public function store(Request $request, DailyLog $dailyLog, TaskDefinition $task)
     {
         abort_unless($dailyLog->user_id === $request->user()->id && $task->user_id === $request->user()->id, 403);
+        abort_unless($task->is_active && $task->occursOn($dailyLog->log_date), 422, 'This event is not scheduled for this day.');
         $data = $request->validate(['value' => [empty($task->options) ? 'nullable' : 'required', 'nullable', 'string', 'max:100']]);
         if (! empty($task->options) && ! in_array($data['value'] ?? null, $task->options, true)) {
             abort(422, 'Choose a valid value.');
