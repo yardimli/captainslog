@@ -67,6 +67,16 @@ class User extends Authenticatable
         return $this->hasMany(TaskDefinition::class);
     }
 
+    public function sensors()
+    {
+        return $this->hasMany(Sensor::class);
+    }
+
+    public function browsingActivities()
+    {
+        return $this->hasMany(BrowsingActivity::class);
+    }
+
     public function formatTime(DateTimeInterface $time): string
     {
         return $time->format($this->time_format === '12' ? 'g:i A' : 'H:i');

@@ -26,7 +26,7 @@ class GuestDemoController extends Controller
         $log = DailyLog::where('user_id', $user->id)->whereDate('log_date', $day)->firstOrFail();
         $log->load(['blocks.attachments', 'blocks.taskEvent']);
         $logs = DailyLog::where('user_id', $user->id)->whereBetween('log_date', [$days->first(), $days->last()])->withCount('blocks')->get()->keyBy(fn ($item) => $item->log_date->toDateString());
-        $tasks = TaskDefinition::where('user_id', $user->id)->where('is_active', true)->where('is_sticky', true)->get()->filter(fn (TaskDefinition $task) => $task->occursOn($day));
+        $tasks = TaskDefinition::where('user_id', $user->id)->where('is_active', true)->where('is_sticky', true)->get()->filter(fn (TaskDefinition $task) => $task->occursOn($day) && $task->isPlannerVisible($day, now()));
         $counts = $log->taskEvents()->selectRaw('task_definition_id, count(*) as total')->groupBy('task_definition_id')->pluck('total', 'task_definition_id');
 
         return view('welcome', compact('day', 'days', 'log', 'logs', 'tasks', 'counts'));

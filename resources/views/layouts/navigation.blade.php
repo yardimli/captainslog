@@ -3,8 +3,48 @@
     $activeLogDate = request()->routeIs('logs.show') ? request()->route('date') : today()->toDateString();
 @endphp
 <nav class="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95" data-primary-navigation>
-    <div id="primary-navigation-content" class="mx-auto flex h-16 max-w-7xl items-center gap-2 px-4 sm:px-6 lg:px-8">
-        <a href="{{ route('calendar') }}" class="flex items-center gap-2 font-bold">@include('partials.logo', ['class' => 'h-9 w-9'])<span class="hidden sm:inline">Captain's Log</span></a>
+    <div id="primary-navigation-content" class="mx-auto flex min-h-16 max-w-7xl flex-wrap items-center gap-2 px-4 py-2 sm:flex-nowrap sm:px-6 lg:px-8">
+        <a href="{{ route('calendar') }}" class="flex min-w-0 items-center gap-2 font-bold">
+            @include('partials.logo', ['class' => 'h-9 w-9 shrink-0'])
+            <span class="min-w-0 leading-tight">
+                <span class="block">Captain's Log</span>
+                @if(request()->routeIs('logs.show') && isset($day))
+                    <time class="block whitespace-nowrap text-[11px] font-medium text-slate-500 dark:text-slate-400 sm:text-xs" datetime="{{ $day->toDateString() }}" data-navigation-date>{{ $day->format('l, F j, Y') }}</time>
+                @elseif(request()->routeIs('calendar') && isset($start, $end))
+                    <span class="block whitespace-nowrap text-[11px] font-medium text-slate-500 dark:text-slate-400 sm:text-xs" data-navigation-date>{{ $start->format('M j') }} &ndash; {{ $end->format('M j, Y') }}</span>
+                @endif
+            </span>
+        </a>
+
+        @if(request()->routeIs('logs.show') && isset($day, $tasks, $log, $counts))
+            <div id="daily-log-navigation-actions" class="order-3 flex w-full items-center justify-end gap-1 sm:order-none sm:w-auto" data-day-navigation>
+                <a class="nav-link grid h-9 w-9 place-items-center p-0" href="{{ route('logs.show', $day->copy()->subDay()->toDateString()) }}" aria-label="Previous day" title="Previous day">
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                </a>
+                <a class="nav-link grid h-9 w-9 place-items-center p-0" href="{{ route('logs.show', today()->toDateString()) }}" aria-label="Today" title="Today">
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/><circle cx="12" cy="15" r="2" fill="currentColor" stroke="none"/></svg>
+                </a>
+                <a class="nav-link grid h-9 w-9 place-items-center p-0" href="{{ route('logs.show', $day->copy()->addDay()->toDateString()) }}" aria-label="Next day" title="Next day">
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                </a>
+                <a class="nav-link grid h-9 w-9 place-items-center p-0" href="{{ route('calendar') }}" aria-label="Open calendar" title="Calendar">
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M8 14h2M12 14h2M16 14h2M8 18h2M12 18h2"/></svg>
+                </a>
+                @if($tasks->isNotEmpty())
+                    <details class="relative z-50" data-events-menu>
+                        <summary class="nav-link grid h-9 w-9 cursor-pointer list-none place-items-center p-0 [&::-webkit-details-marker]:hidden" aria-label="Events" title="Events">
+                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 2v3M16 2v3M3 9h18"/><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 13h3v3H8zM15 13h1"/></svg>
+                        </summary>
+                        <div id="more-events-menu" class="absolute right-0 mt-2 grid w-72 gap-1 rounded-xl border bg-white p-2 shadow-2xl dark:border-slate-700 dark:bg-slate-900" style="z-index:70">
+                            @foreach($tasks as $task)
+                                <button class="flex items-center rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800" data-task-event="{{ route('events.store', [$log, $task]) }}" data-capture-location data-name="{{ $task->name }}" data-options='@json($task->options ?? [])'><span class="mr-2 h-4 w-4 shrink-0 rounded-sm border border-slate-300 dark:border-slate-600" style="background-color:{{ $task->color_hex }}"></span><span class="mr-2 text-lg" aria-hidden="true">{{ $task->emoji }}</span><span class="min-w-0"><strong>{{ $task->name }}</strong> <span class="rounded-full bg-slate-100 px-1.5 dark:bg-slate-800" data-count>{{ $counts[$task->id] ?? 0 }}</span><small class="block text-slate-500">{{ collect($task->scheduled_times ?? [])->map(fn ($time) => auth()->user()->formatClock($time))->implode(', ') ?: 'Any time' }}</small></span></button>
+                            @endforeach
+                        </div>
+                    </details>
+                @endif
+            </div>
+        @endif
+
         <button type="button" data-theme-toggle class="nav-link ml-auto p-2" aria-label="Toggle theme" title="Toggle theme"><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3a6 6 0 1 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
         <form method="POST" action="{{ route('logout') }}">@csrf<button class="nav-link p-2" aria-label="Sign out" title="Sign out"><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg></button></form>
         <button type="button" class="nav-link p-2" data-mobile-nav-toggle aria-expanded="false" aria-controls="account-navigation" aria-label="Open navigation" title="Menu"><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
@@ -14,6 +54,7 @@
         <div id="account-navigation-links" class="grid gap-1 text-sm">
             <a class="nav-link {{ request()->routeIs('settings.*') ? 'nav-active' : '' }}" href="{{ route('settings.edit') }}">API settings</a>
             <a class="nav-link {{ request()->routeIs('tasks.*') ? 'nav-active' : '' }}" href="{{ route('tasks.index') }}">Event setup</a>
+            <a class="nav-link {{ request()->routeIs('sensors.*') ? 'nav-active' : '' }}" href="{{ route('sensors.index') }}">Sensors</a>
             <a class="nav-link {{ request()->routeIs('api-usage.*') ? 'nav-active' : '' }}" href="{{ route('api-usage.index') }}">API usage</a>
             <a class="nav-link {{ request()->routeIs('profile.*') ? 'nav-active' : '' }}" href="{{ route('profile.edit') }}">Account settings</a>
             @if(request()->routeIs('logs.show') && request()->boolean('show_hidden'))

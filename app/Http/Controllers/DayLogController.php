@@ -4,11 +4,15 @@ namespace App\Http\Controllers;
 
 use App\Models\DailyLog;
 use App\Models\TaskDefinition;
+use App\Services\GithubSensorSync;
+use App\Services\BrowsingActivityRecorder;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class DayLogController extends Controller
 {
+    public function __construct(private GithubSensorSync $githubSensor, private BrowsingActivityRecorder $browsingRecorder) {}
+
     public function show(Request $request, string $date)
     {
         $day = Carbon::parse($date)->startOfDay();
@@ -16,8 +20,10 @@ class DayLogController extends Controller
         if (! $log) {
             $log = DailyLog::create(['user_id' => $request->user()->id, 'log_date' => $day]);
         }
+        $this->githubSensor->sync($request->user(), $log, $day);
+        $this->browsingRecorder->finalizeStale($request->user());
         $showHidden = $request->boolean('show_hidden');
-        $log->load(['blocks.attachments', 'blocks.taskEvent']);
+        $log->load(['blocks.attachments', 'blocks.taskEvent', 'blocks.browsingActivities']);
         $tasks = TaskDefinition::where('user_id', $request->user()->id)
             ->where('is_active', true)
             ->orderBy('name')
@@ -42,7 +48,8 @@ class DayLogController extends Controller
             ]);
         }
 
-        foreach ($tasks->where('is_sticky', true) as $task) {
+        $plannerTasks = $tasks->where('is_sticky', true)->filter(fn (TaskDefinition $task) => $task->isPlannerVisible($day, now()));
+        foreach ($plannerTasks as $task) {
             $times = $task->scheduled_times ?: ['00:00'];
             foreach ($times as $time) {
                 [$hour, $minute] = array_map('intval', explode(':', $time));
@@ -56,6 +63,14 @@ class DayLogController extends Controller
                 ]);
             }
         }
+
+        $nextStickyVisibility = $day->isToday()
+            ? $tasks->where('is_sticky', true)
+                ->pluck('visible_after')
+                ->filter(fn ($time) => $time && $time > now()->format('H:i'))
+                ->sort()
+                ->first()
+            : null;
 
         $itemsByMinute = $timelineItems->sortBy('sort')->groupBy('minute');
         $currentMinute = $day->isToday() ? (now()->hour * 60) + now()->minute : null;
@@ -99,6 +114,6 @@ class DayLogController extends Controller
 
         $mainFragment = $request->header('X-Day-View') === 'main';
 
-        return view('logs.show', compact('day', 'log', 'tasks', 'counts', 'timeline', 'showHidden', 'mainFragment'));
+        return view('logs.show', compact('day', 'log', 'tasks', 'counts', 'timeline', 'showHidden', 'mainFragment', 'nextStickyVisibility'));
     }
 }

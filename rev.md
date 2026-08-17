@@ -225,13 +225,30 @@ A seed-version field upgrades existing guest cookies exactly once. This adds the
 
 **Browser verification:** Both hero images loaded at 1536×1024, today's generated-image timeline entry rendered with 🎨, clicking it opened an aside thumbnail, and the aside exposed Delete without a Hide control. The new-note editor also returned the 🚀 result for the search term “rocket.”
 
+## 16. Event Setup list with shared add/edit aside
+
+**Status:** Implemented, regression-tested, and browser-verified.
+
+Event Setup no longer renders a stack of expandable inline forms. It now follows the daily-log interaction pattern: event definitions are listed as compact rows, the page-heading **Add event** action opens a right-side editor, and selecting any existing row opens the same editor populated for that event.
+
+The aside contains the complete event definition—friendly name, searchable emoji picker, browser color control, daily/weekly/monthly recurrence, weekday/month-day selection, dynamic visual time slots, sticky state, and optional values. Create and update submit through AJAX and refresh the list after success. Existing events expose Delete at the bottom of the aside, preserving the established conversion behavior for recorded entries.
+
+**Files:**
+
+- `resources/views/tasks/index.blade.php` — provides the event list, JSON-backed row data, page-heading Add action, and reusable right-side editor.
+- `resources/js/app.js` — populates/reset the shared editor, switches POST/PATCH actions, restores recurrence and time-slot state, and supports right-side overlay animation beyond the log composer.
+- `app/Http/Controllers/TaskController.php` — returns create/update JSON responses for the AJAX aside while retaining normal redirect responses.
+- `tests/Feature/CaptainsLogTest.php` — verifies the event list/aside markers, serialized time slots, and AJAX create/update persistence.
+
+**Browser verification:** Confirmed there are no inline `<details>` editors; selecting **Dog walk** opened an aside populated with 🐕, weekly days Monday/Wednesday/Friday, 08:00 and 18:30 slots, sticky state, values, and bottom Delete. Saving renamed the list row through AJAX. **Add event** reopened the same aside reset to ✅, no slots, no Delete, and the Create action.
+
 ## Final verification
 
 **Result: All requested revisions above are verified in the current working tree.**
 
 Final checks run on 2026-08-17:
 
-- `php artisan test` — **PASS:** 58 tests, 363 assertions.
+- `php artisan test` — **PASS:** 58 tests, 371 assertions.
 - `php artisan view:cache` — **PASS:** every Blade template compiled successfully.
 - `npm.cmd run build` — **PASS:** Vite produced the production CSS/JavaScript bundle. Vite emitted the existing non-blocking `postcss.config.js` module-type warning.
 - `vendor/bin/pint --test` — **PASS:** 108 PHP files satisfy the configured Laravel formatting rules.

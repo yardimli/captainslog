@@ -22,21 +22,35 @@ class CaptainsLogTest extends TestCase
     public function test_calendar_and_dated_log_are_refreshable_and_owned(): void
     {
         $user = User::factory()->create();
-        $this->actingAs($user)->get('/calendar/2026-08-15?view=week')->assertOk()->assertSee('Calendar');
+        $this->actingAs($user)->get('/calendar/2026-08-15?view=week')->assertOk()
+            ->assertSee('data-navigation-date', false)
+            ->assertSee('Aug 10 &ndash; Aug 16, 2026', false)
+            ->assertDontSee('calendar-page-heading', false)
+            ->assertDontSee('page-heading-container', false);
         $this->get('/logs/2026-08-15')->assertOk()->assertSee('Saturday, August 15, 2026');
         $this->get('/logs/2026-08-15')->assertOk()->assertSee('Saturday, August 15, 2026');
         $this->assertDatabaseHas('daily_logs', ['user_id' => $user->id, 'log_date' => '2026-08-15 00:00:00']);
     }
 
-    public function test_daily_log_heading_has_previous_today_next_and_calendar_navigation(): void
+    public function test_daily_log_navigation_contains_the_date_and_icon_only_day_controls(): void
     {
         $user = User::factory()->create();
 
         $response = $this->actingAs($user)->get('/logs/2026-08-15')->assertOk();
 
-        $response->assertSee('href="'.route('logs.show', '2026-08-14').'"', false)
+        $response->assertSee('data-navigation-date', false)
+            ->assertSee('Saturday, August 15, 2026')
+            ->assertSee('data-day-navigation', false)
+            ->assertSee('href="'.route('logs.show', '2026-08-14').'"', false)
             ->assertSee('href="'.route('logs.show', today()->toDateString()).'"', false)
             ->assertSee('href="'.route('logs.show', '2026-08-16').'"', false)
+            ->assertSee('aria-label="Previous day"', false)
+            ->assertSee('aria-label="Today"', false)
+            ->assertSee('aria-label="Next day"', false)
+            ->assertSee('href="'.route('calendar').'" aria-label="Open calendar"', false)
+            ->assertDontSee('daily-log-page-heading', false)
+            ->assertDontSee('&larr; Previous', false)
+            ->assertDontSee('Next &rarr;', false)
             ->assertDontSee('href="'.route('calendar', '2026-08-15').'?view=week"', false);
     }
 
@@ -62,6 +76,7 @@ class CaptainsLogTest extends TestCase
             ->assertSee('data-mobile-nav-toggle', false)
             ->assertSee('API settings')
             ->assertSee('Event setup')
+            ->assertSee('Sensors')
             ->assertSee('API usage')
             ->assertSee('Account settings')
             ->assertSee('Generate image')
@@ -116,25 +131,39 @@ class CaptainsLogTest extends TestCase
     public function test_event_time_slots_use_add_remove_visual_controls(): void
     {
         $user = User::factory()->create();
-        TaskDefinition::create(['user_id' => $user->id, 'name' => 'Five-minute event', 'scheduled_times' => ['08:00', '14:30'], 'recurrence_type' => 'daily']);
+        TaskDefinition::create(['user_id' => $user->id, 'name' => 'Five-minute event', 'scheduled_times' => ['08:00', '14:30'], 'visible_after' => '07:30', 'is_sticky' => true, 'recurrence_type' => 'daily']);
 
         $this->actingAs($user)->get(route('tasks.index'))->assertOk()
             ->assertSee('data-time-slots', false)
             ->assertSee('data-time-slot-add', false)
+            ->assertSee('data-event-definition-open=', false)
+            ->assertSee('data-overlay="event-definition"', false)
+            ->assertSee('data-overlay-side="right"', false)
+            ->assertSee('data-event-definition-form', false)
             ->assertSee('max-h-[80dvh]', false)
             ->assertSee('data-time-dialog-cancel', false)
             ->assertDontSee('data-time-keyboard-toggle', false)
             ->assertDontSee('data-time-dialog-apply', false)
-            ->assertSee('data-values=\'["08:00","14:30"]\'', false)
+            ->assertSee('"scheduled_times":["08:00","14:30"]', false)
+            ->assertSee('"visible_after":"07:30"', false)
+            ->assertSee('data-visible-after-toggle', false)
+            ->assertSee('data-sticky-visibility-field', false)
             ->assertSee('+ Add time slot')
-            ->assertSee('Each slot can be removed with ×.');
+            ->assertSee('Tap a time to slide through hours');
 
-        $this->post(route('tasks.store'), [
+        $response = $this->postJson(route('tasks.store'), [
             'name' => 'Visual slots', 'color' => '#4f46e5', 'recurrence_type' => 'daily',
-            'scheduled_times' => ['06:15', '18:45'], 'is_sticky' => '1',
-        ])->assertRedirect(route('tasks.index'));
+            'scheduled_times' => ['06:15', '18:45'], 'visible_after' => '05:30', 'is_sticky' => '1',
+        ])->assertCreated()->assertJsonPath('reload', true);
         $this->assertDatabaseHas('task_definitions', ['user_id' => $user->id, 'name' => 'Visual slots']);
-        $this->assertSame(['06:15', '18:45'], TaskDefinition::where('name', 'Visual slots')->first()->scheduled_times);
+        $created = TaskDefinition::findOrFail($response->json('event.id'));
+        $this->assertSame(['06:15', '18:45'], $created->scheduled_times);
+        $this->assertSame('05:30', $created->visible_after);
+        $this->patchJson(route('tasks.update', $created), [
+            'name' => 'Updated visual slots', 'emoji' => '⏰', 'color' => '#059669', 'recurrence_type' => 'weekly',
+            'weekdays' => [1, 5], 'scheduled_times' => ['07:00'], 'is_sticky' => '1',
+        ])->assertOk()->assertJsonPath('event.name', 'Updated visual slots')->assertJsonPath('reload', true);
+        $this->assertDatabaseHas('task_definitions', ['id' => $created->id, 'name' => 'Updated visual slots', 'emoji' => '⏰']);
     }
 
     public function test_guest_navigation_has_auth_and_theme_icons_without_a_hamburger(): void
@@ -238,12 +267,17 @@ class CaptainsLogTest extends TestCase
             ->assertJsonPath('message', 'This event is not scheduled for this day.');
 
         $this->post(route('tasks.store'), [
-            'name' => 'Missing slot',
+            'name' => 'Visible without slot',
             'color' => '#4f46e5',
             'is_sticky' => '1',
             'recurrence_type' => 'monthly',
             'month_days_text' => '1, 15',
-        ])->assertSessionHasErrors('scheduled_times_text');
+            'visible_after' => '18:00',
+        ])->assertRedirect(route('tasks.index'));
+        $withoutSlot = TaskDefinition::where('name', 'Visible without slot')->firstOrFail();
+        $this->assertTrue($withoutSlot->is_sticky);
+        $this->assertNull($withoutSlot->scheduled_times);
+        $this->assertSame('18:00', $withoutSlot->visible_after);
     }
 
     public function test_deleting_an_event_preserves_recorded_entries_as_editable_text_with_media(): void
@@ -298,6 +332,42 @@ class CaptainsLogTest extends TestCase
             ->assertSee('data-timeline-time="17:00"', false);
     }
 
+    public function test_sticky_event_visibility_time_only_delays_todays_planner_button(): void
+    {
+        Carbon::setTestNow('2026-08-17 17:45:00');
+        $user = User::factory()->create();
+        TaskDefinition::create([
+            'user_id' => $user->id,
+            'name' => 'Bedtime',
+            'is_sticky' => true,
+            'recurrence_type' => 'daily',
+            'visible_after' => '18:00',
+        ]);
+        TaskDefinition::create([
+            'user_id' => $user->id,
+            'name' => 'Always ready',
+            'is_sticky' => true,
+            'recurrence_type' => 'daily',
+            'scheduled_times' => ['20:00'],
+        ]);
+
+        $this->actingAs($user)->get('/logs/2026-08-17')->assertOk()
+            ->assertDontSee('data-timeline-time="00:00"', false)
+            ->assertSee('data-timeline-time="20:00"', false)
+            ->assertSee('data-next-sticky-visibility="18:00"', false)
+            ->assertSee('data-name="Bedtime"', false)
+            ->assertSee('data-name="Always ready"', false);
+
+        $this->get('/logs/2026-08-18')->assertOk()
+            ->assertSee('data-timeline-time="00:00"', false);
+
+        Carbon::setTestNow('2026-08-17 18:00:00');
+        $this->get('/logs/2026-08-17')->assertOk()
+            ->assertSee('data-timeline-time="00:00"', false)
+            ->assertDontSee('data-next-sticky-visibility', false);
+        Carbon::setTestNow();
+    }
+
     public function test_more_events_menu_has_a_foreground_layer_and_outside_click_hook(): void
     {
         $user = User::factory()->create();
@@ -311,6 +381,8 @@ class CaptainsLogTest extends TestCase
         $this->actingAs($user)->get('/logs/2026-08-16')->assertOk()
             ->assertDontSee('data-event-schedule-panel', false)
             ->assertSee('data-events-menu', false)
+            ->assertSee('aria-label="Events"', false)
+            ->assertDontSee('>More events<', false)
             ->assertSee('style="z-index:70"', false);
     }
 
@@ -411,20 +483,40 @@ class CaptainsLogTest extends TestCase
         $this->actingAs($user)->postJson(route('events.store', [$log, $task]), [])->assertUnprocessable();
         Carbon::setTestNow('2026-08-15 15:45:00');
         $response = $this->postJson(route('events.store', [$log, $task]), ['value' => '4'])->assertCreated()->assertJsonPath('count', 1);
-        $response->assertJsonStructure(['hide_url', 'delete_url']);
+        $response->assertJsonStructure(['hide_url', 'delete_url', 'location_url']);
         $eventId = $response->json('event.id');
         $this->assertDatabaseHas('task_events', ['id' => $eventId, 'selected_value' => '4', 'occurred_at' => '2026-08-15 15:45:00']);
+        $this->patchJson(route('events.location', $eventId), ['latitude' => 25.033, 'longitude' => 121.5654, 'accuracy' => 15.5])
+            ->assertOk()
+            ->assertJsonPath('location.latitude', 25.033)
+            ->assertJsonPath('location.longitude', 121.5654);
+        $locatedEvent = TaskEvent::findOrFail($eventId);
+        $this->assertSame(25.033, $locatedEvent->latitude);
+        $this->assertSame(121.5654, $locatedEvent->longitude);
+        $this->assertSame(15.5, $locatedEvent->location_accuracy);
+        $this->actingAs(User::factory()->create())->patchJson(route('events.location', $eventId), ['latitude' => 1, 'longitude' => 1])->assertForbidden();
+        $this->actingAs($user)->patchJson(route('events.location', $eventId), ['latitude' => 91, 'longitude' => 1])->assertUnprocessable();
         Carbon::setTestNow();
         $this->get(route('events.edit', $eventId))->assertOk()
             ->assertSee('data-event-autosave-form', false)
+            ->assertSee('Recorded location')
+            ->assertSee('25.03300, 121.56540')
             ->assertSee('Changes save automatically.')
             ->assertDontSee('Save notes &amp; time', false);
+        $this->get(route('logs.show', '2026-08-15'))->assertOk()
+            ->assertSee('data-capture-location', false)
+            ->assertSee('data-edit-location=', false)
+            ->assertSee('"latitude":25.033', false)
+            ->assertSee('data-composer-location', false);
         $this->patchJson(route('events.update', $eventId), ['notes' => 'Recovered after a walk.', 'occurred_at' => '16:10'])
             ->assertOk()
             ->assertJsonPath('event.id', $eventId)
             ->assertJsonStructure(['updated_time']);
         $this->assertDatabaseHas('log_blocks', ['content' => 'Recovered after a walk.', 'occurred_at' => '2026-08-15 16:10:00']);
         $this->assertDatabaseHas('task_events', ['id' => $eventId, 'occurred_at' => '2026-08-15 16:10:00']);
+        $script = file_get_contents(resource_path('js/app.js'));
+        $this->assertStringContainsString('navigator.geolocation.getCurrentPosition', $script);
+        $this->assertStringContainsString("body.location_url", $script);
     }
 
     public function test_media_upload_is_tracked_and_stored_privately(): void
@@ -531,9 +623,9 @@ class CaptainsLogTest extends TestCase
             $content = $schema === 'captains_log_intent'
                 ? ['intent' => 'action', 'normalized_request' => 'Create and record a wellness event.']
                 : ['actions' => [
-                    ['type' => 'add_log_entry', 'date' => '2026-08-17', 'time' => '08:15', 'content' => 'Prepared for the morning mission.', 'emoji' => '🚀', 'event_name' => null, 'value' => null, 'notes' => null, 'name' => null, 'color' => null, 'options' => null, 'recurrence_type' => null, 'recurrence_days' => null, 'scheduled_times' => null, 'is_sticky' => null],
-                    ['type' => 'create_event', 'date' => null, 'time' => null, 'content' => null, 'emoji' => '💚', 'event_name' => null, 'value' => null, 'notes' => null, 'name' => 'Wellness level', 'color' => '#4f46e5', 'options' => ['1', '2', '3'], 'recurrence_type' => 'daily', 'recurrence_days' => null, 'scheduled_times' => ['08:00'], 'is_sticky' => true],
-                    ['type' => 'record_event', 'date' => '2026-08-17', 'time' => '09:30', 'content' => null, 'emoji' => null, 'event_name' => 'Wellness level', 'value' => '2', 'notes' => 'A little tense.', 'name' => null, 'color' => null, 'options' => null, 'recurrence_type' => null, 'recurrence_days' => null, 'scheduled_times' => null, 'is_sticky' => null],
+                    ['type' => 'add_log_entry', 'date' => '2026-08-17', 'time' => '08:15', 'content' => 'Prepared for the morning mission.', 'emoji' => '🚀', 'event_name' => null, 'value' => null, 'notes' => null, 'name' => null, 'color' => null, 'options' => null, 'recurrence_type' => null, 'recurrence_days' => null, 'scheduled_times' => null, 'visible_after' => null, 'is_sticky' => null],
+                    ['type' => 'create_event', 'date' => null, 'time' => null, 'content' => null, 'emoji' => '💚', 'event_name' => null, 'value' => null, 'notes' => null, 'name' => 'Wellness level', 'color' => '#4f46e5', 'options' => ['1', '2', '3'], 'recurrence_type' => 'daily', 'recurrence_days' => null, 'scheduled_times' => null, 'visible_after' => '07:30', 'is_sticky' => true],
+                    ['type' => 'record_event', 'date' => '2026-08-17', 'time' => '09:30', 'content' => null, 'emoji' => null, 'event_name' => 'Wellness level', 'value' => '2', 'notes' => 'A little tense.', 'name' => null, 'color' => null, 'options' => null, 'recurrence_type' => null, 'recurrence_days' => null, 'scheduled_times' => null, 'visible_after' => null, 'is_sticky' => null],
                 ]];
 
             return Http::response(['id' => 'smart-123', 'model' => 'test/model', 'choices' => [['message' => ['content' => json_encode($content)]]], 'usage' => ['total_tokens' => 20, 'cost' => 0.001]], 200);
@@ -549,7 +641,7 @@ class CaptainsLogTest extends TestCase
         $this->assertDatabaseMissing('log_blocks', ['content' => 'Prepared for the morning mission.']);
 
         $this->postJson($proposal->json('confirm_url'))->assertOk()->assertJsonPath('kind', 'confirmed');
-        $this->assertDatabaseHas('task_definitions', ['user_id' => $user->id, 'name' => 'Wellness level', 'emoji' => '💚', 'color' => '#4f46e5']);
+        $this->assertDatabaseHas('task_definitions', ['user_id' => $user->id, 'name' => 'Wellness level', 'emoji' => '💚', 'color' => '#4f46e5', 'scheduled_times' => null, 'visible_after' => '07:30']);
         $this->assertDatabaseHas('log_blocks', ['content' => 'Prepared for the morning mission.', 'emoji' => '🚀', 'occurred_at' => '2026-08-17 08:15:00']);
         $this->assertDatabaseHas('log_blocks', ['content' => 'A little tense.', 'emoji' => '💚', 'occurred_at' => '2026-08-17 09:30:00']);
         $this->assertDatabaseHas('task_events', ['task_name' => 'Wellness level', 'selected_value' => '2', 'occurred_at' => '2026-08-17 09:30:00']);

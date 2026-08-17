@@ -79,12 +79,13 @@ class ChatActionExecutor
             'emoji' => 'nullable|string|max:32',
             'options' => 'nullable|array|max:30', 'options.*' => 'string|max:100', 'recurrence_type' => 'required|in:daily,weekly,monthly',
             'recurrence_days' => 'nullable|array|max:31', 'recurrence_days.*' => 'integer|between:1,31',
-            'scheduled_times' => 'nullable|array|max:24', 'scheduled_times.*' => 'date_format:H:i', 'is_sticky' => 'required|boolean',
+            'scheduled_times' => 'nullable|array|max:24', 'scheduled_times.*' => 'date_format:H:i', 'visible_after' => 'nullable|date_format:H:i', 'is_sticky' => 'required|boolean',
         ]);
         $data['color'] = strtolower($data['color']);
         $data['emoji'] = filled($data['emoji'] ?? null) ? $data['emoji'] : TaskDefinition::DEFAULT_EMOJI;
         $data['options'] = collect($data['options'] ?? [])->unique()->values()->all() ?: null;
         $data['scheduled_times'] = collect($data['scheduled_times'] ?? [])->unique()->sort()->values()->all() ?: null;
+        $data['visible_after'] = $data['is_sticky'] ? ($data['visible_after'] ?? null) : null;
         $data['recurrence_days'] = collect($data['recurrence_days'] ?? [])->map(fn ($day) => (int) $day)->unique()->sort()->values()->all() ?: null;
         if ($data['recurrence_type'] === 'daily') {
             $data['recurrence_days'] = null;
@@ -93,10 +94,6 @@ class ChatActionExecutor
         if ($data['recurrence_type'] !== 'daily' && (empty($data['recurrence_days']) || max($data['recurrence_days']) > $upperBound)) {
             throw ValidationException::withMessages(['actions' => 'The proposed event recurrence days are invalid.']);
         }
-        if ($data['is_sticky'] && empty($data['scheduled_times'])) {
-            throw ValidationException::withMessages(['actions' => 'A sticky event needs at least one time slot.']);
-        }
-
         return $data;
     }
 
@@ -116,6 +113,9 @@ class ChatActionExecutor
         }
         if ($action['is_sticky']) {
             $details .= ' as a sticky button';
+            if ($action['visible_after']) {
+                $details .= ', visible after '.($user?->formatClock($action['visible_after']) ?? $action['visible_after']);
+            }
         }
 
         return $details;
@@ -138,7 +138,7 @@ class ChatActionExecutor
         $event = TaskDefinition::create([
             'user_id' => $user->id, 'name' => $action['name'], 'emoji' => $action['emoji'], 'color' => $action['color'], 'options' => $action['options'],
             'recurrence_type' => $action['recurrence_type'], 'recurrence_days' => $action['recurrence_days'], 'scheduled_times' => $action['scheduled_times'],
-            'is_sticky' => $action['is_sticky'], 'is_active' => true,
+            'visible_after' => $action['visible_after'], 'is_sticky' => $action['is_sticky'], 'is_active' => true,
         ]);
 
         return ['type' => 'create_event', 'id' => $event->id, 'name' => $event->name];

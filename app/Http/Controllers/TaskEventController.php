@@ -26,7 +26,7 @@ class TaskEventController extends Controller
             return TaskEvent::create(['daily_log_id' => $dailyLog->id, 'task_definition_id' => $task->id, 'log_block_id' => $block->id, 'task_name' => $task->name, 'selected_value' => $data['value'] ?? null, 'occurred_at' => $occurredAt]);
         });
 
-        return response()->json(['message' => "$task->name logged.", 'event' => $event, 'count' => $dailyLog->taskEvents()->where('task_definition_id', $task->id)->count(), 'edit_url' => route('events.update', $event), 'hide_url' => route('blocks.visibility', $event->log_block_id), 'delete_url' => route('blocks.destroy', $event->log_block_id), 'block_id' => $event->log_block_id, 'emoji' => $task->emoji, 'time' => $event->occurred_at->format('H:i')], 201);
+        return response()->json(['message' => "$task->name logged.", 'event' => $event, 'count' => $dailyLog->taskEvents()->where('task_definition_id', $task->id)->count(), 'edit_url' => route('events.update', $event), 'location_url' => route('events.location', $event), 'hide_url' => route('blocks.visibility', $event->log_block_id), 'delete_url' => route('blocks.destroy', $event->log_block_id), 'block_id' => $event->log_block_id, 'emoji' => $task->emoji, 'time' => $event->occurred_at->format('H:i')], 201);
     }
 
     public function edit(Request $request, TaskEvent $event)
@@ -61,6 +61,26 @@ class TaskEventController extends Controller
         }
 
         return redirect()->route('logs.show', $event->dailyLog->log_date->toDateString())->with('status', 'Event updated.');
+    }
+
+    public function updateLocation(Request $request, TaskEvent $event)
+    {
+        $this->authorizeEvent($request, $event);
+        $data = $request->validate([
+            'latitude' => 'required|numeric|between:-90,90',
+            'longitude' => 'required|numeric|between:-180,180',
+            'accuracy' => 'nullable|numeric|min:0|max:100000',
+        ]);
+        $event->update([
+            'latitude' => $data['latitude'],
+            'longitude' => $data['longitude'],
+            'location_accuracy' => $data['accuracy'] ?? null,
+        ]);
+
+        return response()->json([
+            'message' => 'Event location saved.',
+            'location' => ['latitude' => $event->latitude, 'longitude' => $event->longitude, 'accuracy' => $event->location_accuracy],
+        ]);
     }
 
     private function authorizeEvent(Request $request, TaskEvent $event): void

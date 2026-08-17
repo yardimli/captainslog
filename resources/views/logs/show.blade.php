@@ -1,28 +1,7 @@
 @extends('layouts.app')
 
-@section('header')
-        <div id="daily-log-page-heading" class="flex flex-wrap items-center gap-3 overflow-visible" data-day-view-fragment>
-            <div id="daily-log-heading-copy"><p class="text-xs font-semibold uppercase tracking-wide text-indigo-600">Daily log</p><h1 class="text-2xl font-bold">{{ $day->format('l, F j, Y') }}</h1></div>
-            <div id="daily-log-heading-actions" class="ml-auto flex flex-wrap items-center gap-2">
-                <a class="btn-secondary" href="{{ route('logs.show', $day->copy()->subDay()->toDateString()) }}" aria-label="Previous day">&larr; Previous</a>
-                <a class="btn-secondary" href="{{ route('logs.show', today()->toDateString()) }}">Today</a>
-                <a class="btn-secondary" href="{{ route('logs.show', $day->copy()->addDay()->toDateString()) }}" aria-label="Next day">Next &rarr;</a>
-                @if($tasks->where('is_sticky', false)->isNotEmpty())
-                    <details class="relative z-50" data-events-menu>
-                        <summary class="btn-secondary cursor-pointer">More events</summary>
-                        <div id="more-events-menu" class="absolute right-0 mt-2 grid w-72 gap-1 rounded-xl border bg-white p-2 shadow-2xl dark:border-slate-700 dark:bg-slate-900" style="z-index:70">
-                            @foreach($tasks->where('is_sticky', false) as $task)
-                                <button class="flex items-center rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800" data-task-event="{{ route('events.store', [$log, $task]) }}" data-name="{{ $task->name }}" data-options='@json($task->options ?? [])'><span class="mr-2 h-4 w-4 shrink-0 rounded-sm border border-slate-300 dark:border-slate-600" style="background-color:{{ $task->color_hex }}"></span><span class="mr-2 text-lg" aria-hidden="true">{{ $task->emoji }}</span><span class="min-w-0"><strong>{{ $task->name }}</strong> <span class="rounded-full bg-slate-100 px-1.5 dark:bg-slate-800" data-count>{{ $counts[$task->id] ?? 0 }}</span><small class="block text-slate-500">{{ collect($task->scheduled_times ?? [])->map(fn ($time) => auth()->user()->formatClock($time))->implode(', ') ?: 'Any time' }}</small></span></button>
-                            @endforeach
-                        </div>
-                    </details>
-                @endif
-            </div>
-        </div>
-@endsection
-
 @section('content')
-    <div id="daily-log-page-container" class="mx-auto max-w-5xl space-y-5 p-4 sm:p-6 lg:p-8" data-day-view-fragment>
+    <div id="daily-log-page-container" class="mx-auto max-w-5xl space-y-5 p-4 sm:p-6 lg:p-8" data-day-view-fragment @if($nextStickyVisibility) data-next-sticky-visibility="{{ $nextStickyVisibility }}" @endif>
         <section id="timeline" class="space-y-2" data-log-date="{{ $day->toDateString() }}">
             @foreach($timeline as $item)
                 @if($item['kind'] === 'gap')
@@ -37,11 +16,17 @@
                     @php $task = $item['task']; @endphp
                     <div class="timeline-item flex min-w-0 cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white p-3 pl-0 shadow-sm dark:border-slate-700 dark:bg-slate-900" data-scheduled-event data-timeline-time="{{ $item['time'] }}">
                         <time class="w-20 shrink-0 text-center font-mono text-xs font-bold text-slate-500">{{ $item['is_unscheduled'] ? 'Any' : auth()->user()->formatClock($item['time']) }}</time>
-                        <button class="flex min-w-0 flex-1 items-center rounded-xl px-3 py-2.5 text-left text-sm font-semibold shadow-sm transition hover:brightness-110 disabled:cursor-wait disabled:opacity-50" style="background-color:{{ $task->color_hex }};color:{{ $task->button_text_color }}" data-task-event="{{ route('events.store', [$log, $task]) }}" data-name="{{ $task->name }}" data-options='@json($task->options ?? [])'><span class="mr-2 h-3 w-3 shrink-0 rounded-sm border border-current opacity-80" style="background-color:{{ $task->color_hex }}"></span><span class="mr-2 text-lg" aria-hidden="true">{{ $task->emoji }}</span><span class="truncate">{{ $task->name }}</span><span class="ml-2 rounded-full bg-white/20 px-2" data-count>{{ $counts[$task->id] ?? 0 }}</span></button>
+                        <button class="flex min-w-0 flex-1 items-center rounded-xl px-3 py-2.5 text-left text-sm font-semibold shadow-sm transition hover:brightness-110 disabled:cursor-wait disabled:opacity-50" style="background-color:{{ $task->color_hex }};color:{{ $task->button_text_color }}" data-task-event="{{ route('events.store', [$log, $task]) }}" data-capture-location data-name="{{ $task->name }}" data-options='@json($task->options ?? [])'><span class="mr-2 h-3 w-3 shrink-0 rounded-sm border border-current opacity-80" style="background-color:{{ $task->color_hex }}"></span><span class="mr-2 text-lg" aria-hidden="true">{{ $task->emoji }}</span><span class="truncate">{{ $task->name }}</span><span class="ml-2 rounded-full bg-white/20 px-2" data-count>{{ $counts[$task->id] ?? 0 }}</span></button>
                     </div>
                 @else
-                    @php $block = $item['block']; @endphp
-                    <div class="timeline-item flex min-w-0 cursor-pointer items-start gap-3 {{ $item['is_hidden'] ? 'opacity-60' : '' }}" data-recorded-time="{{ $item['time'] }}" data-timeline-time="{{ $item['time'] }}" data-timeline-edit data-edit-kind="{{ $block->taskEvent ? 'event' : 'block' }}" data-edit-url="{{ $block->taskEvent ? route('events.update', $block->taskEvent) : route('blocks.update', $block) }}" data-edit-content="{{ $block->content }}" data-edit-emoji="{{ $block->emoji }}" data-edit-updated="{{ auth()->user()->formatTime($block->updated_at) }}" data-edit-media="{{ $block->attachments->where('type', 'image')->map(fn ($attachment) => ['url' => $attachment->url])->values()->toJson() }}" data-hide-url="{{ route('blocks.visibility', $block) }}" data-delete-url="{{ route('blocks.destroy', $block) }}" data-is-hidden="{{ $block->is_hidden ? 'true' : 'false' }}" data-has-media="{{ $block->attachments->isNotEmpty() ? 'true' : 'false' }}" data-block-id="{{ $block->id }}" @if($item['is_hidden']) data-hidden-planner-item @endif><time class="w-20 shrink-0 pt-4 text-center font-mono text-xs font-bold text-slate-500">{{ auth()->user()->formatClock($item['time']) }}</time><div class="timeline-entry-card min-w-0 flex-1">@include('logs.partials.block', ['block' => $block])</div></div>
+                    @php
+                        $block = $item['block'];
+                        $isBrowsing = $block->type === 'sensor_browser';
+                        $isGithub = $block->type === 'sensor_github' && data_get($block->metadata, 'empty') !== true && filled(data_get($block->metadata, 'commits'));
+                        $browsingDomains = $isBrowsing ? $block->browsingActivities->groupBy('domain')->map(fn ($activities, $domain) => ['domain' => $domain, 'seconds' => (int) $activities->sum('duration_seconds')])->sortByDesc('seconds')->values() : collect();
+                        $githubEvents = $isGithub ? collect(data_get($block->metadata, 'commits', []))->map(fn ($commit) => ['time' => auth()->user()->formatTime(\Carbon\Carbon::parse($commit['occurred_at'])), 'sha' => $commit['sha'] ?? '', 'message' => $commit['message'] ?? null, 'url' => $commit['url'] ?? null])->values() : collect();
+                    @endphp
+                    <div class="timeline-item flex min-w-0 cursor-pointer items-start gap-3 {{ $item['is_hidden'] ? 'opacity-60' : '' }}" data-recorded-time="{{ $item['time'] }}" data-timeline-time="{{ $item['time'] }}" @if($isBrowsing) data-timeline-browsing data-browsing-start="{{ auth()->user()->formatClock($item['time']) }}" data-browsing-total="{{ (int) $browsingDomains->sum('seconds') }}" data-browsing-domains='@json($browsingDomains)' @elseif($isGithub) data-timeline-github data-github-project="{{ $block->content }}" data-github-start="{{ auth()->user()->formatClock($item['time']) }}" data-github-events='@json($githubEvents)' @else data-timeline-edit data-edit-kind="{{ $block->taskEvent ? 'event' : 'block' }}" data-edit-url="{{ $block->taskEvent ? route('events.update', $block->taskEvent) : route('blocks.update', $block) }}" data-edit-content="{{ $block->content }}" data-edit-emoji="{{ $block->emoji }}" data-edit-updated="{{ auth()->user()->formatTime($block->updated_at) }}" data-edit-media="{{ $block->attachments->where('type', 'image')->map(fn ($attachment) => ['url' => $attachment->url])->values()->toJson() }}" data-edit-location='@json($block->taskEvent?->latitude !== null ? ['latitude' => $block->taskEvent->latitude, 'longitude' => $block->taskEvent->longitude, 'accuracy' => $block->taskEvent->location_accuracy] : null)' data-hide-url="{{ route('blocks.visibility', $block) }}" data-delete-url="{{ route('blocks.destroy', $block) }}" data-is-hidden="{{ $block->is_hidden ? 'true' : 'false' }}" data-has-media="{{ $block->attachments->isNotEmpty() ? 'true' : 'false' }}" data-block-id="{{ $block->id }}" @endif @if($item['is_hidden']) data-hidden-planner-item @endif><time class="w-20 shrink-0 pt-4 text-center font-mono text-xs font-bold text-slate-500">{{ auth()->user()->formatClock($item['time']) }}</time><div class="timeline-entry-card min-w-0 flex-1">@include('logs.partials.block', ['block' => $block])</div></div>
                 @endif
             @endforeach
         </section>
@@ -52,8 +37,26 @@
         <aside class="absolute inset-y-0 right-0 w-full max-w-md translate-x-full overflow-y-auto bg-slate-100 p-4 shadow-2xl transition-transform duration-300 dark:bg-slate-950 sm:p-6" data-overlay-panel>
             <div id="log-composer-heading" class="mb-4 flex items-start gap-2"><div id="log-composer-heading-copy"><p class="text-xs font-bold uppercase tracking-wider text-indigo-600">{{ $day->format('M j, Y') }}</p><h2 class="text-2xl font-black" data-composer-title>Add to this log</h2><p class="mt-1 hidden text-xs text-slate-500" data-composer-updated></p></div><div id="log-composer-heading-actions" class="ml-auto flex items-center gap-2"><button type="button" class="btn-secondary hidden border-rose-300 text-rose-700 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950" data-composer-cancel>Cancel</button><button type="button" class="btn-secondary" data-overlay-close="composer">Close</button></div></div>
             <label class="label">Entry time</label><div id="composer-time-picker" class="mb-4" data-time-picker><button type="button" class="btn-secondary w-full justify-center text-lg font-bold" data-time-picker-open></button><input type="hidden" name="composer_time" required data-composer-time data-time-picker-input value="{{ $day->isToday() ? now()->format('H:i') : '12:00' }}"></div>
+            <div id="composer-event-location" class="mb-4 hidden rounded-2xl border border-slate-200 bg-white p-3 text-sm dark:border-slate-700 dark:bg-slate-900" data-composer-location><p class="text-xs font-bold uppercase tracking-wider text-indigo-600">Recorded location</p><p class="mt-1 font-mono text-xs" data-composer-location-coordinates></p><p class="mt-1 text-xs text-slate-500" data-composer-location-accuracy></p></div>
             @include('logs.partials.composer')
             <div id="composer-entry-actions" class="mt-6 hidden grid-cols-2 gap-2 border-t border-slate-200 pt-4 dark:border-slate-800" data-composer-entry-actions><button type="button" class="btn-secondary text-amber-700 dark:text-amber-300" data-composer-visibility>Hide</button><button type="button" class="btn-secondary text-rose-600" data-composer-delete>Delete</button></div>
+        </aside>
+    </div>
+
+    <div id="github-details-overlay" class="fixed inset-0 hidden" style="z-index:80" data-overlay="github" data-overlay-side="right" role="dialog" aria-modal="true" aria-labelledby="github-details-title">
+        <button type="button" class="absolute inset-0 bg-slate-950/55 opacity-0 transition-opacity" data-overlay-backdrop data-overlay-close="github" aria-label="Close GitHub activity details"></button>
+        <aside class="absolute inset-y-0 right-0 w-full max-w-md translate-x-full overflow-y-auto bg-slate-100 p-4 shadow-2xl transition-transform duration-300 dark:bg-slate-950 sm:p-6" data-overlay-panel>
+            <div id="github-details-heading" class="flex items-start gap-3"><div id="github-details-heading-copy"><p class="text-xs font-bold uppercase tracking-wider text-indigo-600">GitHub sensor</p><h2 id="github-details-title" class="text-2xl font-black" data-github-detail-project>GitHub activity</h2><p class="mt-1 text-sm text-slate-500"><span data-github-detail-start></span> · <span data-github-detail-count></span></p></div><button type="button" class="btn-secondary ml-auto" data-overlay-close="github">Close</button></div>
+            <div id="github-event-summary" class="mt-6 space-y-2" data-github-event-list></div>
+        </aside>
+    </div>
+
+    <div id="browsing-details-overlay" class="fixed inset-0 hidden" style="z-index:80" data-overlay="browsing" data-overlay-side="right" role="dialog" aria-modal="true" aria-labelledby="browsing-details-title">
+        <button type="button" class="absolute inset-0 bg-slate-950/55 opacity-0 transition-opacity" data-overlay-backdrop data-overlay-close="browsing" aria-label="Close browsing details"></button>
+        <aside class="absolute inset-y-0 right-0 w-full max-w-md translate-x-full overflow-y-auto bg-slate-100 p-4 shadow-2xl transition-transform duration-300 dark:bg-slate-950 sm:p-6" data-overlay-panel>
+            <div id="browsing-details-heading" class="flex items-start gap-3"><div id="browsing-details-heading-copy"><p class="text-xs font-bold uppercase tracking-wider text-sky-600">Chrome sensor</p><h2 id="browsing-details-title" class="text-2xl font-black">Browsing</h2><p class="mt-1 text-sm text-slate-500"><span data-browsing-detail-start></span> · <span data-browsing-detail-total></span></p></div><button type="button" class="btn-secondary ml-auto" data-overlay-close="browsing">Close</button></div>
+            <div id="browsing-domain-summary" class="mt-6 space-y-2" data-browsing-domain-list></div>
+            <p class="mt-5 text-xs leading-relaxed text-slate-500">Only site domains and time totals are stored. Individual page paths, titles, and query strings are not added to your log.</p>
         </aside>
     </div>
 

@@ -133,7 +133,7 @@ function closeOverlay(root, immediate = false) {
     if (!root) return;
     root.querySelector('[data-overlay-backdrop]')?.classList.replace('opacity-100', 'opacity-0');
     const panel = root.querySelector('[data-overlay-panel]');
-    if (root.dataset.overlay === 'composer') panel?.classList.add('translate-x-full');
+    if (root.dataset.overlay === 'composer' || root.dataset.overlaySide === 'right') panel?.classList.add('translate-x-full');
     else panel?.classList.add('translate-y-5', 'opacity-0');
     root.dataset.open = 'false'; root.classList.add('pointer-events-none'); document.body.classList.remove('overflow-hidden');
     const finish = () => { if (immediate || root.dataset.open !== 'true') { root.classList.add('hidden'); root.classList.remove('grid'); } };
@@ -302,6 +302,62 @@ function initEmojiPicker(picker) {
 
 document.querySelectorAll('[data-emoji-picker]').forEach(initEmojiPicker);
 
+function syncEventVisibilityControls(form) {
+    const sticky = form.querySelector('[data-event-sticky-toggle]')?.checked === true;
+    const field = form.querySelector('[data-sticky-visibility-field]');
+    const toggle = form.querySelector('[data-visible-after-toggle]');
+    const picker = form.querySelector('[data-visible-after-picker]');
+    const input = picker?.querySelector('[data-time-picker-input]');
+    field?.classList.toggle('hidden', !sticky);
+    if (toggle) toggle.disabled = !sticky;
+    const enabled = sticky && toggle?.checked === true;
+    picker?.classList.toggle('hidden', !enabled);
+    if (input) input.disabled = !enabled;
+}
+
+function configureEventDefinition(data = null) {
+    const root = document.querySelector('[data-overlay="event-definition"]');
+    const form = root?.querySelector('[data-event-definition-form]');
+    if (!root || !form) return;
+    const editing = Boolean(data?.update_url);
+    form.reset();
+    form.action = editing ? data.update_url : form.dataset.createAction;
+    let method = form.querySelector('input[name="_method"]');
+    if (editing) {
+        if (!method) { method = cloneTemplate('ajax-method-template'); form.append(method); }
+        method.value = 'PATCH';
+    } else method?.remove();
+    form.querySelector('[name="name"]').value = data?.name || '';
+    setEmojiPickerValue(form.querySelector('[data-emoji-picker]'), data?.emoji || '✅');
+    const color = form.querySelector('[name="color"]');
+    color.value = data?.color || '#4f46e5';
+    const colorPreview = document.getElementById(color.dataset.colorInput);
+    if (colorPreview) { colorPreview.style.backgroundColor = color.value; colorPreview.title = color.value; }
+    const recurrence = form.querySelector('[name="recurrence_type"]');
+    recurrence.value = data?.recurrence_type || 'daily';
+    const days = (data?.recurrence_days || []).map(Number);
+    form.querySelectorAll('[name="weekdays[]"]').forEach(input => { input.checked = days.includes(Number(input.value)); });
+    form.querySelector('[name="month_days_text"]').value = recurrence.value === 'monthly' ? days.join(', ') : '';
+    form.querySelector('[name="options_text"]').value = data?.options_text || '';
+    form.querySelector('[name="is_sticky"]').checked = Boolean(data?.is_sticky);
+    const visibleAfter = form.querySelector('[name="visible_after"]');
+    const visibleAfterToggle = form.querySelector('[data-visible-after-toggle]');
+    visibleAfter.value = data?.visible_after || '18:00';
+    visibleAfterToggle.checked = Boolean(data?.visible_after);
+    visibleAfter.dispatchEvent(new Event('change', {bubbles:true}));
+    syncEventVisibilityControls(form);
+    form.querySelector('[data-time-slots]')?.setTimeSlotValues(data?.scheduled_times || []);
+    recurrence.dispatchEvent(new Event('change', {bubbles:true}));
+    root.querySelector('[data-event-definition-title]').textContent = editing ? `Edit ${data.name}` : 'Add event';
+    root.querySelector('[data-event-definition-submit]').textContent = editing ? 'Save changes' : 'Create event';
+    const deleteSection = root.querySelector('[data-event-definition-delete-section]');
+    deleteSection?.classList.toggle('hidden', !editing);
+    const deleteForm = root.querySelector('[data-event-definition-delete-form]');
+    if (deleteForm) deleteForm.action = data?.delete_url || '';
+    openOverlay('event-definition');
+    setTimeout(() => form.querySelector('[name="name"]')?.focus(), 320);
+}
+
 document.addEventListener('click', event => {
     document.querySelectorAll('[data-emoji-picker]').forEach(picker => {
         if (!picker.contains(event.target)) {
@@ -316,7 +372,9 @@ document.addEventListener('change', event => {
     document.querySelectorAll(`[data-shared-time-field="${source.dataset.sharedTimeSource}"]`).forEach(field => { field.value = source.value; });
 });
 
-document.querySelectorAll('[data-time-slots]').forEach(editor => {
+function initTimeSlots(editor) {
+    if (editor.dataset.timeSlotsInitialized === 'true') return;
+    editor.dataset.timeSlotsInitialized = 'true';
     const list = editor.querySelector('[data-time-slot-list]'), name = editor.dataset.name || 'scheduled_times[]';
     const addSlot = (value, open = false) => {
         const row = cloneTemplate('time-slot-row-template'); if (!row) return;
@@ -325,9 +383,17 @@ document.querySelectorAll('[data-time-slots]').forEach(editor => {
         row.querySelector('[data-time-slot-remove]').addEventListener('click', () => row.remove());
         list.append(row); initTimePicker(picker); if (open) choose.click();
     };
+    editor.setTimeSlotValues = values => { list.replaceChildren(); values.forEach(value => addSlot(value)); };
     let values = []; try { values = JSON.parse(editor.dataset.values || '[]'); } catch (_) {}
-    values.forEach(value => addSlot(value));
+    editor.setTimeSlotValues(values);
     editor.querySelector('[data-time-slot-add]')?.addEventListener('click', () => { const date = new Date(), five = Math.ceil(date.getMinutes() / 5) * 5, hour = (date.getHours() + Math.floor(five / 60)) % 24; addSlot(`${String(hour).padStart(2,'0')}:${String(five % 60).padStart(2,'0')}`, true); });
+}
+
+document.querySelectorAll('[data-time-slots]').forEach(initTimeSlots);
+document.querySelectorAll('[data-event-definition-form]').forEach(form => {
+    form.querySelector('[data-event-sticky-toggle]')?.addEventListener('change', () => syncEventVisibilityControls(form));
+    form.querySelector('[data-visible-after-toggle]')?.addEventListener('change', () => syncEventVisibilityControls(form));
+    syncEventVisibilityControls(form);
 });
 
 function syncComposerTime() {
@@ -367,7 +433,7 @@ function scheduleEventAutosave(form, delay = 650) {
     }, delay));
 }
 
-function configureComposer({time, mode = 'create', kind = 'block', action = '', content = '', emoji = '📝', updated = '', hideUrl = '', deleteUrl = '', isHidden = false, hasMedia = false, media = [], blockId = ''} = {}) {
+function configureComposer({time, mode = 'create', kind = 'block', action = '', content = '', emoji = '📝', updated = '', hideUrl = '', deleteUrl = '', isHidden = false, hasMedia = false, media = [], location = null, blockId = ''} = {}) {
     const root = document.querySelector('[data-overlay="composer"]');
     const timeInput = root?.querySelector('[data-composer-time]');
     const form = root?.querySelector('[data-composer-note-form]');
@@ -391,6 +457,15 @@ function configureComposer({time, mode = 'create', kind = 'block', action = '', 
     setEmojiPickerValue(form.querySelector('[data-emoji-picker]'), emoji || (kind === 'event' ? '✅' : '📝'));
     root.querySelector('[data-composer-title]').textContent = mode === 'edit' ? 'Edit log entry' : 'Add to this log';
     if (updatedLabel) { updatedLabel.textContent = updated ? `Updated ${updated}` : ''; updatedLabel.classList.toggle('hidden', mode !== 'edit' || !updated); }
+    const locationPanel = root.querySelector('[data-composer-location]');
+    const hasLocation = kind === 'event' && location?.latitude != null && location?.longitude != null;
+    locationPanel?.classList.toggle('hidden', !hasLocation);
+    if (hasLocation) {
+        locationPanel.querySelector('[data-composer-location-coordinates]').textContent = `${Number(location.latitude).toFixed(5)}, ${Number(location.longitude).toFixed(5)}`;
+        const accuracy = locationPanel.querySelector('[data-composer-location-accuracy]');
+        accuracy.textContent = location.accuracy != null ? `Accuracy approximately ${Math.round(Number(location.accuracy))} metres` : '';
+        accuracy.classList.toggle('hidden', location.accuracy == null);
+    }
     root.querySelector('[data-note-heading]').textContent = kind === 'event' ? 'Event notes' : (mode === 'edit' ? 'Edit note' : 'Write a note');
     const submit = root.querySelector('[data-composer-submit]');
     submit.textContent = 'Add to log';
@@ -428,6 +503,48 @@ function configureComposer({time, mode = 'create', kind = 'block', action = '', 
     form.dataset.originalEmoji = form.querySelector('[name="emoji"]')?.value || '';
     openOverlay('composer');
     setTimeout(() => textarea.focus(), 320);
+}
+
+function browsingDuration(seconds) {
+    const total = Math.max(0, Number(seconds) || 0);
+    if (total < 60) return 'Under 1 min';
+    const minutes = Math.floor(total / 60);
+    return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+function openBrowsingDetails(item) {
+    const root = document.querySelector('[data-overlay="browsing"]');
+    if (!root) return;
+    root.querySelector('[data-browsing-detail-start]').textContent = `Started ${item.dataset.browsingStart}`;
+    root.querySelector('[data-browsing-detail-total]').textContent = browsingDuration(item.dataset.browsingTotal);
+    const rows = JSON.parse(item.dataset.browsingDomains || '[]').map(domain => {
+        const row = cloneTemplate('browsing-domain-row-template');
+        row.querySelector('[data-browsing-domain-name]').textContent = domain.domain;
+        row.querySelector('[data-browsing-domain-time]').textContent = browsingDuration(domain.seconds);
+        return row;
+    });
+    root.querySelector('[data-browsing-domain-list]').replaceChildren(...rows);
+    openOverlay('browsing');
+}
+
+function openGithubDetails(item) {
+    const root = document.querySelector('[data-overlay="github"]');
+    if (!root) return;
+    const events = JSON.parse(item.dataset.githubEvents || '[]');
+    root.querySelector('[data-github-detail-project]').textContent = item.dataset.githubProject || 'GitHub activity';
+    root.querySelector('[data-github-detail-start]').textContent = `Started ${item.dataset.githubStart}`;
+    root.querySelector('[data-github-detail-count]').textContent = `${events.length} ${events.length === 1 ? 'commit' : 'commits'}`;
+    const rows = events.map(event => {
+        const row = cloneTemplate('github-event-row-template');
+        row.querySelector('[data-github-event-time]').textContent = event.time;
+        row.querySelector('[data-github-event-sha]').textContent = String(event.sha || '').slice(0, 7);
+        row.querySelector('[data-github-event-message]').textContent = event.message || `Commit ${String(event.sha || '').slice(0, 7)}`;
+        const link = row.querySelector('[data-github-event-link]');
+        if (event.url) link.href = event.url; else link.classList.add('hidden');
+        return row;
+    });
+    root.querySelector('[data-github-event-list]').replaceChildren(...rows);
+    openOverlay('github');
 }
 
 async function saveComposerDraft(root, {close = true, refresh = true} = {}) {
@@ -486,6 +603,24 @@ document.addEventListener('submit', async e => {
     catch (error) { toast(error.message, true); } finally { setButtonBusy(button, false); }
 });
 
+document.querySelectorAll('[data-sensor-enable]').forEach(toggle => toggle.addEventListener('change', () => toggle.form?.requestSubmit()));
+
+document.addEventListener('submit', async event => {
+    const form = event.target.closest('[data-confirm-sensor-unlink]');
+    if (!form || form.dataset.confirmed === 'true') return;
+    event.preventDefault();
+    const confirmed = await modal({title:'Unlink GitHub?', message:'The encrypted token and sensor settings will be removed. Existing GitHub log entries will remain.', confirmText:'Unlink'});
+    if (confirmed) { form.dataset.confirmed = 'true'; form.requestSubmit(); }
+});
+
+document.addEventListener('submit', async event => {
+    const form = event.target.closest('[data-confirm-browser-unlink]');
+    if (!form || form.dataset.confirmed === 'true') return;
+    event.preventDefault();
+    const confirmed = await modal({title:'Unlink Chrome extension?', message:'The extension key will stop working. Existing browsing entries and domain totals will remain.', confirmText:'Unlink'});
+    if (confirmed) { form.dataset.confirmed = 'true'; form.requestSubmit(); }
+});
+
 document.addEventListener('submit', event => {
     const form = event.target.closest('[data-event-autosave-form]'); if (!form) return;
     event.preventDefault(); scheduleEventAutosave(form, 0);
@@ -541,6 +676,15 @@ document.addEventListener('submit', async e => {
     } finally { setButtonBusy(button, false); }
 });
 
+function captureBrowserLocation() {
+    if (!window.isSecureContext || !navigator.geolocation) return Promise.resolve(null);
+    return new Promise(resolve => navigator.geolocation.getCurrentPosition(
+        position => resolve({latitude:position.coords.latitude, longitude:position.coords.longitude, accuracy:position.coords.accuracy}),
+        () => resolve(null),
+        {enableHighAccuracy:true, timeout:10000, maximumAge:60000},
+    ));
+}
+
 document.addEventListener('click', async e => {
     document.querySelectorAll('[data-events-menu][open]').forEach(menu => {
         if (!menu.contains(e.target)) menu.removeAttribute('open');
@@ -550,10 +694,17 @@ document.addEventListener('click', async e => {
     else if (!e.target.closest('[data-mobile-nav-menu]')) setMobileNavigation(false);
     const overlayTrigger = e.target.closest('[data-panel-open]');
     const composerTrigger = e.target.closest('[data-composer-open]');
+    const eventDefinitionCreate = e.target.closest('[data-event-definition-create]');
+    const eventDefinitionOpen = e.target.closest('[data-event-definition-open]');
     const overlayClose = e.target.closest('[data-overlay-close]');
     const composerCancel = e.target.closest('[data-composer-cancel]');
     if (overlayTrigger) { setMobileNavigation(false); openOverlay(overlayTrigger.dataset.panelOpen); }
     if (composerTrigger) configureComposer({time: composerTrigger.dataset.currentTime || composerTrigger.dataset.defaultTime});
+    if (eventDefinitionCreate) configureEventDefinition();
+    if (eventDefinitionOpen) {
+        const source = document.getElementById(eventDefinitionOpen.dataset.eventDefinitionOpen);
+        if (source) configureEventDefinition(JSON.parse(source.textContent));
+    }
     if (composerCancel) closeOverlay(composerCancel.closest('[data-overlay="composer"]'));
     if (overlayClose) {
         const overlay = overlayClose.closest('[data-overlay]');
@@ -564,7 +715,9 @@ document.addEventListener('click', async e => {
     const timelineItem = e.target.closest('.timeline-item');
     const nestedAction = e.target.closest('button, a, input, textarea, select, form, audio, video');
     if (timelineItem && !composerTrigger && !e.target.closest('[data-task-event]') && (!nestedAction || nestedAction === timelineItem)) {
-        if (timelineItem.matches('[data-timeline-edit]')) configureComposer({time: timelineItem.dataset.timelineTime, mode:'edit', kind:timelineItem.dataset.editKind, action:timelineItem.dataset.editUrl, content:timelineItem.dataset.editContent, emoji:timelineItem.dataset.editEmoji, updated:timelineItem.dataset.editUpdated, hideUrl:timelineItem.dataset.hideUrl, deleteUrl:timelineItem.dataset.deleteUrl, isHidden:timelineItem.dataset.isHidden === 'true', hasMedia:timelineItem.dataset.hasMedia === 'true', media:JSON.parse(timelineItem.dataset.editMedia || '[]'), blockId:timelineItem.dataset.blockId});
+        if (timelineItem.matches('[data-timeline-github]')) openGithubDetails(timelineItem);
+        else if (timelineItem.matches('[data-timeline-browsing]')) openBrowsingDetails(timelineItem);
+        else if (timelineItem.matches('[data-timeline-edit]')) configureComposer({time: timelineItem.dataset.timelineTime, mode:'edit', kind:timelineItem.dataset.editKind, action:timelineItem.dataset.editUrl, content:timelineItem.dataset.editContent, emoji:timelineItem.dataset.editEmoji, updated:timelineItem.dataset.editUpdated, hideUrl:timelineItem.dataset.hideUrl, deleteUrl:timelineItem.dataset.deleteUrl, isHidden:timelineItem.dataset.isHidden === 'true', hasMedia:timelineItem.dataset.hasMedia === 'true', media:JSON.parse(timelineItem.dataset.editMedia || '[]'), location:JSON.parse(timelineItem.dataset.editLocation || 'null'), blockId:timelineItem.dataset.blockId});
         else if (timelineItem.matches('[data-time-gap]')) configureComposer({time:timelineItem.dataset.from});
         else configureComposer({time:timelineItem.dataset.timelineTime || timelineItem.dataset.currentTime});
     }
@@ -598,14 +751,23 @@ document.addEventListener('click', async e => {
         task.closest('[data-events-menu]')?.removeAttribute('open');
         let value = null; const options = JSON.parse(task.dataset.options || '[]');
         if (options.length) { value = await modal({title:task.dataset.name, message:'Choose a value before this event is tracked.', options, confirmText:'Track event'}); if (value === null) return; }
+        const locationPromise = task.hasAttribute('data-capture-location') ? captureBrowserLocation() : Promise.resolve(null);
         task.disabled = true;
         try {
             const body = await ajax(task.dataset.taskEvent,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value})});
             document.querySelectorAll(`[data-task-event="${task.dataset.taskEvent}"] [data-count]`).forEach(count => { count.textContent = body.count; });
             toast(body.message);
+            const capturedLocation = await locationPromise;
+            let savedLocation = null;
+            if (capturedLocation && body.location_url) {
+                try {
+                    const locationBody = await ajax(body.location_url, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(capturedLocation)});
+                    savedLocation = locationBody.location;
+                } catch (_) { toast('The event was logged, but its location could not be saved.', true); }
+            }
             await refreshDayViewOrReload();
             const addNotes = body.edit_url && await modal({title:'Event tracked', message:'Would you like to attach notes, a photo, or a recording?', confirmText:'Add notes & media', cancelText:'Done'});
-            if (addNotes) configureComposer({time:body.time, mode:'edit', kind:'event', action:body.edit_url, content:'', emoji:body.emoji || '✅', hideUrl:body.hide_url, deleteUrl:body.delete_url, blockId:body.block_id});
+            if (addNotes) configureComposer({time:body.time, mode:'edit', kind:'event', action:body.edit_url, content:'', emoji:body.emoji || '✅', hideUrl:body.hide_url, deleteUrl:body.delete_url, location:savedLocation, blockId:body.block_id});
         }
         catch(error) { toast(error.message,true); } finally { task.disabled = false; }
     }
@@ -795,4 +957,21 @@ function initializeRefreshedMain(root) {
     root.querySelectorAll('[data-model-select]').forEach(loadModels);
     root.querySelectorAll('[data-record]').forEach(initRecordingButton);
     initComposerTimeInput(root);
+    scheduleStickyVisibilityRefresh(root);
 }
+
+let stickyVisibilityTimer;
+function scheduleStickyVisibilityRefresh(root = document) {
+    clearTimeout(stickyVisibilityTimer);
+    const container = root.querySelector?.('[data-next-sticky-visibility]');
+    const value = container?.dataset.nextStickyVisibility;
+    if (!value) return;
+    const [hour, minute] = value.split(':').map(Number);
+    const target = new Date();
+    target.setHours(hour, minute, 0, 0);
+    const delay = target.getTime() - Date.now();
+    if (delay <= 0) return;
+    stickyVisibilityTimer = window.setTimeout(() => refreshDayViewOrReload(), delay + 500);
+}
+
+scheduleStickyVisibilityRefresh();

@@ -16,6 +16,8 @@ class LogBlock extends Model
         'generated_image' => '🎨',
         'chat_user' => '💬',
         'chat_assistant' => '🤖',
+        'sensor_github' => '💻',
+        'sensor_browser' => '🌐',
     ];
 
     protected $fillable = ['daily_log_id', 'type', 'emoji', 'content', 'metadata', 'position', 'occurred_at', 'is_hidden'];
@@ -47,5 +49,10 @@ class LogBlock extends Model
     public function taskEvent(): HasOne
     {
         return $this->hasOne(TaskEvent::class);
+    }
+
+    public function browsingActivities(): HasMany
+    {
+        return $this->hasMany(BrowsingActivity::class);
     }
 }

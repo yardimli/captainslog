@@ -36,4 +36,9 @@ class DailyLog extends Model
     {
         return $this->hasMany(TaskEvent::class);
     }
+
+    public function browsingActivities(): HasMany
+    {
+        return $this->hasMany(BrowsingActivity::class);
+    }
 }

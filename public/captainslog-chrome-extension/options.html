@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Captain's Log Browsing Sensor</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main id="extension-settings">
+    <header id="extension-settings-heading">
+      <div id="extension-logo" aria-hidden="true">🌐</div>
+      <div id="extension-title-copy"><p>Captain's Log</p><h1>Browsing sensor</h1></div>
+    </header>
+    <section id="connection-settings-card">
+      <label for="app-url">Captain's Log URL</label>
+      <input id="app-url" type="url" value="http://127.0.0.1:8016/" spellcheck="false">
+      <p class="help">The extension sends one active-site heartbeat per minute. Page paths and titles are not stored by the app.</p>
+      <div id="extension-actions">
+        <button id="save-url" type="button" class="secondary">Save URL</button>
+        <button id="connect" type="button">Connect to Captain's Log</button>
+      </div>
+    </section>
+    <section id="connection-status-card" aria-live="polite">
+      <div id="connection-status-heading"><span id="status-dot"></span><strong id="status-label">Not connected</strong></div>
+      <p id="status-detail">Save the app URL, then connect this extension to your signed-in account.</p>
+      <button id="send-now" type="button" class="secondary">Send current site now</button>
+    </section>
+  </main>
+  <script src="options.js"></script>
+</body>
+</html>

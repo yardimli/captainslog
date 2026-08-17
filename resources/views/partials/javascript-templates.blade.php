@@ -20,6 +20,21 @@
 <template id="select-option-template"><option></option></template>
 <template id="ajax-method-template"><input type="hidden" name="_method"></template>
 
+<template id="browsing-domain-row-template">
+    <div class="block-browsing-domain-row flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+        <span class="min-w-0 truncate font-semibold" data-browsing-domain-name></span>
+        <span class="shrink-0 rounded-full bg-sky-100 px-2.5 py-1 text-xs font-bold text-sky-800 dark:bg-sky-950 dark:text-sky-200" data-browsing-domain-time></span>
+    </div>
+</template>
+
+<template id="github-event-row-template">
+    <div class="event-github-commit-row rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+        <div class="event-github-commit-heading flex items-start justify-between gap-3"><time class="font-mono text-xs font-bold text-indigo-600" data-github-event-time></time><code class="rounded bg-slate-100 px-2 py-1 text-[11px] text-slate-500 dark:bg-slate-800" data-github-event-sha></code></div>
+        <p class="mt-2 break-words text-sm font-semibold" data-github-event-message></p>
+        <a class="mt-2 inline-flex text-xs font-bold text-indigo-600 hover:underline dark:text-indigo-400" target="_blank" rel="noopener noreferrer" data-github-event-link>Open commit</a>
+    </div>
+</template>
+
 <template id="composer-image-preview-template">
     <figure class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
         <img class="aspect-square w-full object-cover" alt="Attached image preview" loading="lazy" data-composer-image-preview>

@@ -19,7 +19,7 @@ class TaskDefinition extends Model
         'sky' => '#0284c7',
     ];
 
-    protected $fillable = ['user_id', 'name', 'emoji', 'color', 'is_sticky', 'recurrence_type', 'recurrence_days', 'scheduled_times', 'options', 'is_active'];
+    protected $fillable = ['user_id', 'name', 'emoji', 'color', 'is_sticky', 'recurrence_type', 'recurrence_days', 'scheduled_times', 'visible_after', 'options', 'is_active'];
 
     protected $casts = [
         'is_sticky' => 'boolean',
@@ -45,6 +45,20 @@ class TaskDefinition extends Model
         };
     }
 
+    public function isPlannerVisible(CarbonInterface $day, CarbonInterface $now): bool
+    {
+        if (! $this->is_sticky || blank($this->visible_after) || ! $day->isSameDay($now)) {
+            return true;
+        }
+
+        return $now->format('H:i') >= $this->visible_after;
+    }
+
+    public function getVisibleAfterAttribute(?string $value): ?string
+    {
+        return $value ? substr($value, 0, 5) : null;
+    }
+
     public function getScheduleSummaryAttribute(): string
     {
         $days = $this->recurrence_days ?? [];
@@ -55,7 +69,13 @@ class TaskDefinition extends Model
         };
         $times = collect($this->scheduled_times ?? [])->map(fn ($time) => auth()->user()?->formatClock($time) ?? $time)->implode(', ');
 
-        return $times ? "$recurrence at $times" : $recurrence;
+        $summary = $times ? "$recurrence at $times" : $recurrence;
+        if ($this->is_sticky && $this->visible_after) {
+            $visibleAfter = auth()->user()?->formatClock($this->visible_after) ?? $this->visible_after;
+            $summary .= " · visible after $visibleAfter";
+        }
+
+        return $summary;
     }
 
     public function getColorHexAttribute(): string

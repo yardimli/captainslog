@@ -9,6 +9,7 @@ use App\Http\Controllers\LogBlockController;
 use App\Http\Controllers\OpenRouterController;
 use App\Http\Controllers\PlannerVisibilityController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SensorController;
 use App\Http\Controllers\SessionKeepAliveController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\TaskController;
@@ -60,6 +61,14 @@ Route::middleware('auth')->group(function () {
     Route::post('/logs/{dailyLog}/tasks/{task}/events', [TaskEventController::class, 'store'])->name('events.store');
     Route::get('/events/{event}/edit', [TaskEventController::class, 'edit'])->name('events.edit');
     Route::patch('/events/{event}', [TaskEventController::class, 'update'])->name('events.update');
+    Route::patch('/events/{event}/location', [TaskEventController::class, 'updateLocation'])->name('events.location');
+
+    Route::get('/sensors', [SensorController::class, 'index'])->name('sensors.index');
+    Route::post('/sensors/github', [SensorController::class, 'linkGithub'])->name('sensors.github.link');
+    Route::patch('/sensors/github', [SensorController::class, 'toggleGithub'])->name('sensors.github.toggle');
+    Route::delete('/sensors/github', [SensorController::class, 'unlinkGithub'])->name('sensors.github.unlink');
+    Route::get('/sensors/browser/pair/{key}', [SensorController::class, 'pairBrowser'])->name('sensors.browser.pair');
+    Route::delete('/sensors/browser', [SensorController::class, 'unlinkBrowser'])->name('sensors.browser.unlink');
 
     Route::get('/settings', [SettingsController::class, 'edit'])->name('settings.edit');
     Route::get('/api-usage', [ApiUsageController::class, 'index'])->name('api-usage.index');

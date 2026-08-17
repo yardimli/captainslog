@@ -79,6 +79,16 @@ Each user supplies their own OpenRouter API key from **Settings**. The key is en
 
 The integration follows OpenRouter's APIs for [chat completions](https://openrouter.ai/docs/api/api-reference/chat/create-a-chat-completion), [image generation](https://openrouter.ai/docs/api/api-reference/images/generate-an-image), [image models](https://openrouter.ai/docs/api/api-reference/images/list-image-generation-models), [speech-to-text](https://openrouter.ai/docs/api/api-reference/stt/create-transcription), and the [model catalog](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties).
 
+### Automatic sensors
+
+- Link GitHub to add commit project names at their commit times. Commits for the same project and hour share one timeline entry, with every individual commit available in its side panel.
+- Install the included Manifest V3 Chrome extension from `public/captainslog-chrome-extension` to track active browsing domains.
+- Browsing activity is grouped into one log entry per hour, with domain totals available from the entry's side panel.
+- The extension sends a one-minute heartbeat while Chrome is active; three minutes without activity closes the session.
+- Pairing uses a random extension key opened against the configured Captain's Log URL. Laravel stores only its SHA-256 hash.
+- The extension defaults to `http://127.0.0.1:8016/`, and its options page supports a different app URL.
+- Only the active site's origin is transmitted; page paths, query strings, and page titles never leave the extension.
+
 ### Live guest simulation
 
 The landing page runs the real journal code without requiring registration.

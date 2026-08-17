@@ -1,9 +1,5 @@
 @extends('layouts.app')
 
-@section('header')
-<div id="calendar-page-heading" class="flex flex-wrap items-center gap-3"><h1 class="text-xl font-bold">Calendar</h1><span class="text-sm text-slate-500">{{ $start->format('M j') }} – {{ $end->format('M j, Y') }}</span></div>
-@endsection
-
 @section('content')
     <div id="calendar-page-container" class="mx-auto max-w-7xl space-y-4 p-4 sm:p-6 lg:p-8">
         <div id="calendar-navigation-controls" class="panel flex flex-wrap items-center gap-2">

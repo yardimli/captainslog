@@ -19,6 +19,10 @@ class TaskController extends Controller
         $data = $this->validated($request);
         $task = $request->user()->taskDefinitions()->create($data);
 
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Event created.', 'event' => $task, 'reload' => true], 201);
+        }
+
         return redirect()->route('tasks.index')->with('status', 'Event created.');
     }
 
@@ -26,6 +30,10 @@ class TaskController extends Controller
     {
         abort_unless($task->user_id === $request->user()->id, 403);
         $task->update($this->validated($request));
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Event updated.', 'event' => $task->fresh(), 'reload' => true]);
+        }
 
         return redirect()->route('tasks.index')->with('status', 'Event updated.');
     }
@@ -79,6 +87,7 @@ class TaskController extends Controller
             'scheduled_times_text' => 'nullable|string|max:300',
             'scheduled_times' => 'nullable|array|max:24',
             'scheduled_times.*' => 'date_format:H:i',
+            'visible_after' => 'nullable|date_format:H:i',
         ]);
         $options = collect(preg_split('/[\r\n,]+/', $data['options_text'] ?? ''))->map(fn ($v) => trim($v))->filter()->unique()->values()->all();
         $recurrenceDays = match ($data['recurrence_type']) {
@@ -95,10 +104,6 @@ class TaskController extends Controller
         if ($scheduledTimes->contains(fn ($time) => ! preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $time))) {
             throw ValidationException::withMessages(['scheduled_times_text' => 'Use 24-hour times such as 08:30 or 17:00.']);
         }
-        if ($request->boolean('is_sticky') && $scheduledTimes->isEmpty()) {
-            throw ValidationException::withMessages(['scheduled_times_text' => 'Add at least one time slot for a sticky event.']);
-        }
-
         return [
             'name' => $data['name'],
             'emoji' => filled($data['emoji'] ?? null) ? $data['emoji'] : TaskDefinition::DEFAULT_EMOJI,
@@ -107,6 +112,7 @@ class TaskController extends Controller
             'recurrence_type' => $data['recurrence_type'],
             'recurrence_days' => $recurrenceDays ?: null,
             'scheduled_times' => $scheduledTimes->all() ?: null,
+            'visible_after' => $request->boolean('is_sticky') ? ($data['visible_after'] ?? null) : null,
             'options' => $options ?: null,
             'is_active' => true,
         ];

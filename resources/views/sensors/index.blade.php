@@ -1,0 +1,60 @@
+@extends('layouts.app')
+
+@section('header')
+    <div id="sensors-page-heading"><p class="text-xs font-semibold uppercase tracking-wide text-indigo-600">Automatic log updates</p><h1 class="text-xl font-bold">Sensors</h1></div>
+@endsection
+
+@section('content')
+    <div id="sensors-page-container" class="mx-auto max-w-3xl space-y-5 p-4 sm:p-6 lg:p-8">
+        <section id="github-sensor-card" class="panel">
+            <div id="github-sensor-heading" class="flex items-start gap-3">
+                <span class="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-slate-950 text-white dark:bg-white dark:text-slate-950" aria-hidden="true">
+                    <svg class="h-7 w-7" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .7a11.5 11.5 0 0 0-3.64 22.4c.58.1.79-.25.79-.56v-2.24c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.78 1.2 1.78 1.2 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.57-.3-5.27-1.29-5.27-5.69 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.16 1.18a10.96 10.96 0 0 1 5.76 0c2.2-1.49 3.16-1.18 3.16-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.71 5.39-5.29 5.68.42.36.79 1.06.79 2.15v3.25c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg>
+                </span>
+                <div id="github-sensor-heading-copy" class="min-w-0 flex-1"><h2 class="text-lg font-bold">GitHub commits</h2><p class="mt-1 text-sm text-slate-500">Add each commit to its day at the commit time. Log entries contain only the project name.</p></div>
+                @if($githubSensor)<span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $githubSensor->enabled ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200' : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300' }}">{{ $githubSensor->enabled ? 'Enabled' : 'Disabled' }}</span>@endif
+            </div>
+
+            @if($githubSensor)
+                <div id="github-sensor-linked-controls" class="mt-5 space-y-4 border-t border-slate-200 pt-5 dark:border-slate-800">
+                    <div id="github-sensor-account" class="rounded-2xl bg-slate-50 p-4 dark:bg-slate-900"><p class="text-xs font-bold uppercase tracking-wider text-slate-500">Linked account</p><p class="mt-1 text-lg font-bold">{{ '@'.$githubSensor->username }}</p>@if($githubSensor->last_checked_at)<p class="mt-1 text-xs text-slate-500">Last checked {{ auth()->user()->formatTime($githubSensor->last_checked_at) }} on {{ $githubSensor->last_checked_at->format('M j, Y') }}</p>@endif</div>
+                    <form method="POST" action="{{ route('sensors.github.toggle') }}" data-ajax data-sensor-toggle-form>@csrf @method('PATCH')<input type="hidden" name="enabled" value="0"><label class="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-slate-200 p-4 dark:border-slate-700"><span><strong>Automatic updates</strong><span class="block text-xs text-slate-500">Check GitHub whenever you open a current or unsynced past day.</span></span><span class="relative inline-flex h-7 w-12 shrink-0"><input type="checkbox" class="peer sr-only" name="enabled" value="1" data-sensor-enable @checked($githubSensor->enabled)><span class="absolute inset-0 rounded-full bg-slate-300 transition peer-checked:bg-indigo-600 dark:bg-slate-700"></span><span class="absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5"></span></span></label></form>
+                    @if($githubSensor->last_error)<div id="github-sensor-error" class="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"><strong>Last check failed.</strong> {{ $githubSensor->last_error }}</div>@endif
+                    <form method="POST" action="{{ route('sensors.github.unlink') }}" data-confirm-sensor-unlink>@csrf @method('DELETE')<button class="btn-secondary w-full border-rose-300 text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:hover:bg-rose-950">Unlink GitHub</button></form>
+                    <p class="text-center text-xs text-slate-500">Unlinking removes the saved token but keeps GitHub entries already added to your logs.</p>
+                </div>
+            @else
+                <form method="POST" action="{{ route('sensors.github.link') }}" class="mt-5 space-y-4 border-t border-slate-200 pt-5 dark:border-slate-800">@csrf
+                    <div id="github-username-field"><label class="label" for="github-username">GitHub username</label><input id="github-username" class="input" name="github_username" value="{{ old('github_username') }}" required autocomplete="username" placeholder="octocat">@error('github_username')<p class="mt-1 text-sm text-rose-600">{{ $message }}</p>@enderror</div>
+                    <div id="github-token-field"><label class="label" for="github-token">Personal access token</label><input id="github-token" type="password" class="input" name="github_token" required autocomplete="off" placeholder="github_pat_…">@error('github_token')<p class="mt-1 text-sm text-rose-600">{{ $message }}</p>@enderror<p class="mt-1 text-xs text-slate-500">The token is validated against the username and encrypted before storage. Grant repository Contents read access if private commits should be included.</p></div>
+                    <button class="btn w-full">Validate and link GitHub</button>
+                </form>
+            @endif
+        </section>
+
+        <section id="browser-sensor-card" class="panel">
+            <div id="browser-sensor-heading" class="flex items-start gap-3">
+                <span class="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-indigo-600 text-white" aria-hidden="true">
+                    <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M8 21c2-3 2-15 0-18M16 21c-2-3-2-15 0-18"/></svg>
+                </span>
+                <div id="browser-sensor-heading-copy" class="min-w-0 flex-1"><h2 class="text-lg font-bold">Chrome browsing</h2><p class="mt-1 text-sm text-slate-500">Group active sites into hourly browsing entries. A session ends after three minutes without activity.</p></div>
+                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $browserSensor?->enabled ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200' : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300' }}">{{ $browserSensor?->enabled ? 'Paired' : 'Not paired' }}</span>
+            </div>
+            <div id="browser-sensor-installation" class="mt-5 space-y-4 border-t border-slate-200 pt-5 dark:border-slate-800">
+                <div id="browser-extension-instructions" class="rounded-2xl bg-slate-50 p-4 text-sm dark:bg-slate-900">
+                    <p class="font-bold">Install the included Chrome extension</p>
+                    <ol class="mt-2 list-decimal space-y-1 pl-5 text-slate-500"><li>Open <strong>chrome://extensions</strong> and enable Developer mode.</li><li>Choose <strong>Load unpacked</strong>.</li><li>Select <code class="rounded bg-slate-200 px-1 dark:bg-slate-800">public/captainslog-chrome-extension</code>.</li><li>Open the extension settings and press <strong>Connect to Captain's Log</strong>.</li></ol>
+                    <p class="mt-3 text-xs text-slate-500">The extension starts with <code>http://127.0.0.1:8016/</code>. You can change the app URL in its settings.</p>
+                </div>
+                @if($browserSensor)
+                    <div id="browser-sensor-status" class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950"><p class="font-bold text-emerald-800 dark:text-emerald-200">Extension paired</p>@if($browserSensor->last_checked_at)<p class="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Last browsing update {{ auth()->user()->formatTime($browserSensor->last_checked_at) }} on {{ $browserSensor->last_checked_at->format('M j, Y') }}</p>@else<p class="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Waiting for the first browsing update.</p>@endif</div>
+                    <form method="POST" action="{{ route('sensors.browser.unlink') }}" data-confirm-browser-unlink>@csrf @method('DELETE')<button class="btn-secondary w-full border-rose-300 text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:hover:bg-rose-950">Unlink Chrome extension</button></form>
+                @else
+                    <p class="text-center text-xs text-slate-500">Pairing begins from the extension. Its random key is stored here only as a secure hash.</p>
+                @endif
+            </div>
+        </section>
+
+        <section id="future-sensors-card" class="panel border-dashed"><p class="text-xs font-bold uppercase tracking-wider text-indigo-600">More sensors</p><h2 class="mt-1 text-lg font-bold">More automatic sources are coming</h2><p class="mt-1 text-sm text-slate-500">The sensor system is ready for additional activity, health, location, and service integrations.</p></section>
+    </div>
+@endsection
