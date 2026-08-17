@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\DailyLog;
+use App\Models\LogBlock;
 use App\Models\TaskDefinition;
 use App\Models\TaskEvent;
 use App\Models\User;
@@ -62,11 +63,11 @@ class ChatActionExecutor
 
         return match ($type) {
             'add_log_entry' => $this->validate($action, [
-                'type' => 'required|in:add_log_entry', 'date' => 'required|date_format:Y-m-d', 'time' => 'required|date_format:H:i', 'content' => 'required|string|max:100000',
+                'type' => 'required|in:add_log_entry', 'date' => 'required|date_format:Y-m-d', 'time' => 'required|date_format:H:i', 'content' => 'required|string|max:100000', 'emoji' => 'nullable|string|max:32',
             ]),
             'record_event' => array_merge($this->validate($action, [
-                'type' => 'required|in:record_event', 'event_name' => 'required|string|max:80', 'date' => 'required|date_format:Y-m-d', 'time' => 'required|date_format:H:i', 'value' => 'nullable|string|max:100', 'notes' => 'nullable|string|max:100000',
-            ]), ['value' => $action['value'] ?? null, 'notes' => $action['notes'] ?? null]),
+                'type' => 'required|in:record_event', 'event_name' => 'required|string|max:80', 'date' => 'required|date_format:Y-m-d', 'time' => 'required|date_format:H:i', 'value' => 'nullable|string|max:100', 'notes' => 'nullable|string|max:100000', 'emoji' => 'nullable|string|max:32',
+            ]), ['value' => $action['value'] ?? null, 'notes' => $action['notes'] ?? null, 'emoji' => $action['emoji'] ?? null]),
             'create_event' => $this->normalizeEvent($action),
         };
     }
@@ -75,11 +76,13 @@ class ChatActionExecutor
     {
         $data = $this->validate($action, [
             'type' => 'required|in:create_event', 'name' => 'required|string|max:80', 'color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'emoji' => 'nullable|string|max:32',
             'options' => 'nullable|array|max:30', 'options.*' => 'string|max:100', 'recurrence_type' => 'required|in:daily,weekly,monthly',
             'recurrence_days' => 'nullable|array|max:31', 'recurrence_days.*' => 'integer|between:1,31',
             'scheduled_times' => 'nullable|array|max:24', 'scheduled_times.*' => 'date_format:H:i', 'is_sticky' => 'required|boolean',
         ]);
         $data['color'] = strtolower($data['color']);
+        $data['emoji'] = filled($data['emoji'] ?? null) ? $data['emoji'] : TaskDefinition::DEFAULT_EMOJI;
         $data['options'] = collect($data['options'] ?? [])->unique()->values()->all() ?: null;
         $data['scheduled_times'] = collect($data['scheduled_times'] ?? [])->unique()->sort()->values()->all() ?: null;
         $data['recurrence_days'] = collect($data['recurrence_days'] ?? [])->map(fn ($day) => (int) $day)->unique()->sort()->values()->all() ?: null;
@@ -122,7 +125,7 @@ class ChatActionExecutor
     {
         $log = $this->dailyLog($user, $action['date']);
         $block = $log->blocks()->create([
-            'type' => 'text', 'content' => $action['content'], 'position' => ($log->blocks()->max('position') ?? 0) + 1,
+            'type' => 'text', 'emoji' => filled($action['emoji'] ?? null) ? $action['emoji'] : LogBlock::defaultEmojiForType('text'), 'content' => $action['content'], 'position' => ($log->blocks()->max('position') ?? 0) + 1,
             'occurred_at' => Carbon::createFromFormat('Y-m-d H:i', $action['date'].' '.$action['time']),
             'metadata' => ['created_by' => 'smart_chat'],
         ]);
@@ -133,7 +136,7 @@ class ChatActionExecutor
     private function createEvent(User $user, array $action): array
     {
         $event = TaskDefinition::create([
-            'user_id' => $user->id, 'name' => $action['name'], 'color' => $action['color'], 'options' => $action['options'],
+            'user_id' => $user->id, 'name' => $action['name'], 'emoji' => $action['emoji'], 'color' => $action['color'], 'options' => $action['options'],
             'recurrence_type' => $action['recurrence_type'], 'recurrence_days' => $action['recurrence_days'], 'scheduled_times' => $action['scheduled_times'],
             'is_sticky' => $action['is_sticky'], 'is_active' => true,
         ]);
@@ -153,7 +156,7 @@ class ChatActionExecutor
         $log = $this->dailyLog($user, $action['date']);
         $occurredAt = Carbon::createFromFormat('Y-m-d H:i', $action['date'].' '.$action['time']);
         $block = $log->blocks()->create([
-            'type' => 'event', 'content' => $action['notes'], 'position' => ($log->blocks()->max('position') ?? 0) + 1,
+            'type' => 'event', 'emoji' => filled($action['emoji'] ?? null) ? $action['emoji'] : $definition->emoji, 'content' => $action['notes'], 'position' => ($log->blocks()->max('position') ?? 0) + 1,
             'occurred_at' => $occurredAt, 'metadata' => ['created_by' => 'smart_chat'],
         ]);
         $event = TaskEvent::create([

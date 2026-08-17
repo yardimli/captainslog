@@ -29,6 +29,7 @@ class User extends Authenticatable
         'default_chat_model',
         'is_guest',
         'guest_token_hash',
+        'demo_seed_version',
     ];
 
     /**
@@ -53,6 +54,7 @@ class User extends Authenticatable
         'openrouter_api_key' => 'encrypted',
         'is_guest' => 'boolean',
         'week_starts_on' => 'integer',
+        'demo_seed_version' => 'integer',
     ];
 
     public function dailyLogs()

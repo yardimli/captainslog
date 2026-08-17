@@ -15,8 +15,10 @@ class LogBlockController extends Controller
         $data = $request->validate([
             'type' => 'required|in:text',
             'content' => 'required|string|max:100000',
+            'emoji' => 'nullable|string|max:32',
             'occurred_at' => 'nullable|date_format:H:i',
         ]);
+        $data['emoji'] = filled($data['emoji'] ?? null) ? $data['emoji'] : LogBlock::defaultEmojiForType($data['type']);
         $data['occurred_at'] = $dailyLog->log_date->copy()->setTimeFromTimeString($data['occurred_at'] ?? now()->format('H:i'));
         $block = $dailyLog->blocks()->create($data + ['position' => ($dailyLog->blocks()->max('position') ?? 0) + 1]);
 
@@ -29,10 +31,14 @@ class LogBlockController extends Controller
         abort_if($block->type === 'event', 422, 'Edit event notes from the event editor.');
         $data = $request->validate([
             'content' => 'nullable|string|max:100000',
+            'emoji' => 'nullable|string|max:32',
             'occurred_at' => 'sometimes|required|date_format:H:i',
         ]);
         if (isset($data['occurred_at'])) {
             $data['occurred_at'] = $block->dailyLog->log_date->copy()->setTimeFromTimeString($data['occurred_at']);
+        }
+        if (array_key_exists('emoji', $data)) {
+            $data['emoji'] = filled($data['emoji']) ? $data['emoji'] : LogBlock::defaultEmojiForType($block->type);
         }
         $block->update($data);
 

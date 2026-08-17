@@ -22,6 +22,7 @@
             <form method="POST" action="{{ route('tasks.store') }}" class="mt-5 space-y-4" data-recurrence-form>
                 @csrf
                 <div id="new-event-name-field"><label class="label">Friendly name</label><input class="input" name="name" value="{{ old('name') }}" required placeholder="Dog medication"></div>
+                @include('partials.emoji-picker', ['pickerId' => 'new-event-emoji', 'name' => 'emoji', 'value' => old('emoji', \App\Models\TaskDefinition::DEFAULT_EMOJI), 'label' => 'Event emoji'])
                 <div id="new-event-color-field">
                     <label class="label" for="new-task-color">Button color</label>
                     <div id="new-event-color-control" class="flex items-center gap-3"><span id="new-task-preview" class="h-7 w-7 shrink-0 rounded-md border border-slate-300 shadow-sm dark:border-slate-600" style="background-color:{{ old('color', '#4f46e5') }}"></span><input id="new-task-color" data-color-input="new-task-preview" type="color" name="color" value="{{ old('color', '#4f46e5') }}" class="h-11 w-full cursor-pointer rounded-xl border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-950"></div>
@@ -56,6 +57,7 @@
                 <details class="panel" @if($loop->first) open @endif>
                     <summary class="flex cursor-pointer list-none items-start gap-3">
                         <span class="mt-0.5 h-5 w-5 shrink-0 rounded-md border border-slate-300 shadow-sm dark:border-slate-600" style="background-color:{{ $task->color_hex }}"></span>
+                        <span class="text-xl" aria-hidden="true">{{ $task->emoji }}</span>
                         <span><strong class="block">{{ $task->name }}</strong><span class="text-xs text-slate-500">{{ $task->schedule_summary }}</span></span>
                         <span class="ml-auto rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-500 dark:bg-slate-800">{{ $task->is_sticky ? 'Sticky' : 'Dropdown' }}</span>
                     </summary>
@@ -63,6 +65,7 @@
                     <form method="POST" action="{{ route('tasks.update', $task) }}" class="mt-5 grid gap-4 sm:grid-cols-2" data-recurrence-form>
                         @csrf @method('PATCH')
                         <div class="event-definition-name"><label class="label">Friendly name</label><input class="input" name="name" value="{{ $task->name }}" required></div>
+                        @include('partials.emoji-picker', ['pickerId' => 'event-emoji-'.$task->id, 'name' => 'emoji', 'value' => $task->emoji, 'label' => 'Event emoji'])
                         <div class="event-definition-color"><label class="label">Color</label><div class="event-definition-color-control flex items-center gap-2"><span id="task-preview-{{ $task->id }}" class="h-7 w-7 shrink-0 rounded-md border border-slate-300" style="background-color:{{ $task->color_hex }}"></span><input aria-label="{{ $task->name }} color" data-color-input="task-preview-{{ $task->id }}" type="color" name="color" value="{{ $task->color_hex }}" class="h-11 w-full cursor-pointer rounded-xl border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-950"></div></div>
                         <div class="event-definition-recurrence sm:col-span-2"><label class="label">Repeats</label><select class="input" name="recurrence_type" data-recurrence-select><option value="daily" @selected($task->recurrence_type === 'daily')>Every day</option><option value="weekly" @selected($task->recurrence_type === 'weekly')>Selected weekdays</option><option value="monthly" @selected($task->recurrence_type === 'monthly')>Selected days of the month</option></select></div>
                         <fieldset data-recurrence-weekly class="hidden rounded-xl border border-slate-200 p-3 dark:border-slate-700 sm:col-span-2"><legend class="px-1 text-sm font-semibold">Weekdays</legend><div class="event-definition-weekdays grid grid-cols-4 gap-2 text-sm">@foreach(['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] as $index => $weekday)<label class="flex items-center gap-1.5"><input type="checkbox" name="weekdays[]" value="{{ $index + 1 }}" @checked(in_array($index + 1, $task->recurrence_days ?? []))>{{ $weekday }}</label>@endforeach</div></fieldset>

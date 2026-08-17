@@ -241,6 +241,76 @@ function initComposerMediaPanel(panel) {
 
 document.querySelectorAll('[data-composer-media-panel]').forEach(initComposerMediaPanel);
 
+function setEmojiPickerValue(picker, value, dispatch = false) {
+    if (!picker) return;
+    const input = picker.querySelector('[data-emoji-input]');
+    const preview = picker.querySelector('[data-emoji-preview]');
+    if (!input || !value) return;
+    input.value = value;
+    if (preview) preview.textContent = value;
+    if (dispatch) {
+        input.dispatchEvent(new Event('input', {bubbles:true}));
+        input.dispatchEvent(new Event('change', {bubbles:true}));
+    }
+}
+
+function initEmojiPicker(picker) {
+    if (picker.dataset.emojiInitialized === 'true') return;
+    picker.dataset.emojiInitialized = 'true';
+    const toggle = picker.querySelector('[data-emoji-toggle]');
+    const menu = picker.querySelector('[data-emoji-menu]');
+    const search = picker.querySelector('[data-emoji-search]');
+    const categories = Array.from(picker.querySelectorAll('[data-emoji-category]'));
+    const options = Array.from(picker.querySelectorAll('[data-emoji-option]'));
+    const empty = picker.querySelector('[data-emoji-empty]');
+    let activeCategory = categories[0]?.dataset.emojiCategory || 'recent';
+    const close = () => { menu?.classList.add('hidden'); toggle?.setAttribute('aria-expanded', 'false'); };
+    const render = () => {
+        const query = (search?.value || '').trim().toLocaleLowerCase();
+        let visible = 0;
+        options.forEach(option => {
+            const matchesSearch = !query || `${option.dataset.emojiName} ${option.dataset.emojiValue}`.toLocaleLowerCase().includes(query);
+            const matchesCategory = query || option.dataset.emojiCategoryName === activeCategory;
+            const show = Boolean(matchesSearch && matchesCategory);
+            option.classList.toggle('hidden', !show);
+            if (show) visible++;
+        });
+        empty?.classList.toggle('hidden', visible > 0);
+    };
+    toggle?.addEventListener('click', () => {
+        const opens = menu?.classList.contains('hidden');
+        document.querySelectorAll('[data-emoji-menu]:not(.hidden)').forEach(other => { if (other !== menu) { other.classList.add('hidden'); other.closest('[data-emoji-picker]')?.querySelector('[data-emoji-toggle]')?.setAttribute('aria-expanded', 'false'); } });
+        menu?.classList.toggle('hidden', !opens);
+        toggle.setAttribute('aria-expanded', opens ? 'true' : 'false');
+        if (opens) { render(); setTimeout(() => search?.focus(), 0); }
+    });
+    categories.forEach(category => category.addEventListener('click', () => {
+        activeCategory = category.dataset.emojiCategory;
+        if (search) search.value = '';
+        categories.forEach(item => {
+            const active = item === category;
+            item.classList.toggle('bg-indigo-100', active); item.classList.toggle('text-indigo-700', active);
+            item.classList.toggle('dark:bg-indigo-950', active); item.classList.toggle('dark:text-indigo-200', active);
+            item.classList.toggle('text-slate-500', !active);
+        });
+        render();
+    }));
+    options.forEach(option => option.addEventListener('click', () => { setEmojiPickerValue(picker, option.dataset.emojiValue, true); close(); }));
+    search?.addEventListener('input', render);
+    render();
+}
+
+document.querySelectorAll('[data-emoji-picker]').forEach(initEmojiPicker);
+
+document.addEventListener('click', event => {
+    document.querySelectorAll('[data-emoji-picker]').forEach(picker => {
+        if (!picker.contains(event.target)) {
+            picker.querySelector('[data-emoji-menu]')?.classList.add('hidden');
+            picker.querySelector('[data-emoji-toggle]')?.setAttribute('aria-expanded', 'false');
+        }
+    });
+});
+
 document.addEventListener('change', event => {
     const source = event.target.closest('[data-shared-time-source]'); if (!source) return;
     document.querySelectorAll(`[data-shared-time-field="${source.dataset.sharedTimeSource}"]`).forEach(field => { field.value = source.value; });
@@ -279,11 +349,12 @@ function scheduleEventAutosave(form, delay = 650) {
         const status = form.querySelector('[data-autosave-status]');
         const notes = form.querySelector('textarea[name="notes"]')?.value ?? '';
         const occurredAt = form.querySelector('[name="occurred_at"]')?.value;
+        const emoji = form.querySelector('[name="emoji"]')?.value;
         const revision = (eventAutosaveRevisions.get(form) || 0) + 1;
         eventAutosaveRevisions.set(form, revision);
         if (status) { status.classList.remove('hidden', 'text-emerald-600', 'dark:text-emerald-400', 'text-rose-600', 'dark:text-rose-400'); status.classList.add('text-indigo-600', 'dark:text-indigo-400'); status.textContent = 'Saving…'; }
         try {
-            const body = await ajax(form.action, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({notes, occurred_at:occurredAt})});
+            const body = await ajax(form.action, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({notes, emoji, occurred_at:occurredAt})});
             if (eventAutosaveRevisions.get(form) !== revision) return;
             if (status) { status.classList.remove('text-indigo-600', 'dark:text-indigo-400'); status.classList.add('text-emerald-600', 'dark:text-emerald-400'); status.textContent = 'Saved automatically.'; }
             const updatedLabel = form.closest('[data-overlay="composer"]')?.querySelector('[data-composer-updated]');
@@ -296,7 +367,7 @@ function scheduleEventAutosave(form, delay = 650) {
     }, delay));
 }
 
-function configureComposer({time, mode = 'create', kind = 'block', action = '', content = '', updated = '', hideUrl = '', deleteUrl = '', isHidden = false, hasMedia = false, media = [], blockId = ''} = {}) {
+function configureComposer({time, mode = 'create', kind = 'block', action = '', content = '', emoji = '📝', updated = '', hideUrl = '', deleteUrl = '', isHidden = false, hasMedia = false, media = [], blockId = ''} = {}) {
     const root = document.querySelector('[data-overlay="composer"]');
     const timeInput = root?.querySelector('[data-composer-time]');
     const form = root?.querySelector('[data-composer-note-form]');
@@ -317,6 +388,7 @@ function configureComposer({time, mode = 'create', kind = 'block', action = '', 
     textarea.name = kind === 'event' ? 'notes' : 'content';
     textarea.value = content || '';
     textarea.required = mode === 'create';
+    setEmojiPickerValue(form.querySelector('[data-emoji-picker]'), emoji || (kind === 'event' ? '✅' : '📝'));
     root.querySelector('[data-composer-title]').textContent = mode === 'edit' ? 'Edit log entry' : 'Add to this log';
     if (updatedLabel) { updatedLabel.textContent = updated ? `Updated ${updated}` : ''; updatedLabel.classList.toggle('hidden', mode !== 'edit' || !updated); }
     root.querySelector('[data-note-heading]').textContent = kind === 'event' ? 'Event notes' : (mode === 'edit' ? 'Edit note' : 'Write a note');
@@ -329,10 +401,12 @@ function configureComposer({time, mode = 'create', kind = 'block', action = '', 
     const entryActions = root.querySelector('[data-composer-entry-actions]');
     const visibility = root.querySelector('[data-composer-visibility]');
     const deleteButton = root.querySelector('[data-composer-delete]');
-    const showActions = mode === 'edit' && Boolean(hideUrl) && Boolean(deleteUrl);
+    const showVisibility = mode === 'edit' && Boolean(hideUrl);
+    const showDelete = mode === 'edit' && Boolean(deleteUrl);
+    const showActions = showVisibility || showDelete;
     entryActions?.classList.toggle('hidden', !showActions); entryActions?.classList.toggle('grid', showActions);
-    if (visibility) { visibility.textContent = isHidden ? 'Restore' : 'Hide'; visibility.dataset.plannerVisibility = hideUrl; visibility.dataset.method = 'PATCH'; visibility.dataset.payload = JSON.stringify({hidden:!isHidden}); }
-    if (deleteButton) deleteButton.dataset.delete = deleteUrl;
+    if (visibility) { visibility.classList.toggle('hidden', !showVisibility); visibility.textContent = isHidden ? 'Restore' : 'Hide'; visibility.dataset.plannerVisibility = hideUrl; visibility.dataset.method = 'PATCH'; visibility.dataset.payload = JSON.stringify({hidden:!isHidden}); }
+    if (deleteButton) { deleteButton.classList.toggle('hidden', !showDelete); deleteButton.dataset.delete = deleteUrl; }
     const mediaPanel = root.querySelector('[data-composer-media-panel]');
     if (mediaPanel) mediaPanel.open = mode === 'edit' && hasMedia;
     const existingMedia = root.querySelector('[data-composer-existing-media]');
@@ -351,6 +425,7 @@ function configureComposer({time, mode = 'create', kind = 'block', action = '', 
     syncComposerTime();
     form.dataset.originalContent = textarea.value;
     form.dataset.originalTime = timeInput.value;
+    form.dataset.originalEmoji = form.querySelector('[name="emoji"]')?.value || '';
     openOverlay('composer');
     setTimeout(() => textarea.focus(), 320);
 }
@@ -365,11 +440,12 @@ async function saveComposerDraft(root, {close = true, refresh = true} = {}) {
     const status = form.querySelector('[data-autosave-status]');
     const textarea = form.querySelector('[data-composer-content]');
     const occurredAt = form.querySelector('[name="occurred_at"]')?.value;
-    if (textarea.value === form.dataset.originalContent && occurredAt === form.dataset.originalTime) {
+    const emoji = form.querySelector('[name="emoji"]')?.value || '';
+    if (textarea.value === form.dataset.originalContent && occurredAt === form.dataset.originalTime && emoji === form.dataset.originalEmoji) {
         if (close) closeOverlay(root);
         return true;
     }
-    const payload = {[textarea.name]: textarea.value, occurred_at: occurredAt};
+    const payload = {[textarea.name]: textarea.value, emoji, occurred_at: occurredAt};
     form.dataset.saving = 'true';
     if (status) { status.classList.remove('hidden', 'text-emerald-600', 'dark:text-emerald-400', 'text-rose-600', 'dark:text-rose-400'); status.classList.add('text-indigo-600', 'dark:text-indigo-400'); status.textContent = 'Saving…'; }
     try {
@@ -379,6 +455,7 @@ async function saveComposerDraft(root, {close = true, refresh = true} = {}) {
         if (updatedLabel && body.updated_time) { updatedLabel.textContent = `Updated ${body.updated_time}`; updatedLabel.classList.remove('hidden'); }
         form.dataset.originalContent = textarea.value;
         form.dataset.originalTime = occurredAt;
+        form.dataset.originalEmoji = emoji;
         if (close) closeOverlay(root);
         if (refresh) await refreshDayViewOrReload();
         return true;
@@ -421,7 +498,7 @@ document.addEventListener('input', event => {
 
 document.addEventListener('change', event => {
     const form = event.target.closest('[data-event-autosave-form]');
-    if (form && event.target.matches('[name="occurred_at"]')) scheduleEventAutosave(form, 0);
+    if (form && event.target.matches('[name="occurred_at"], [name="emoji"]')) scheduleEventAutosave(form, 0);
 });
 
 document.addEventListener('submit', async e => {
@@ -487,7 +564,7 @@ document.addEventListener('click', async e => {
     const timelineItem = e.target.closest('.timeline-item');
     const nestedAction = e.target.closest('button, a, input, textarea, select, form, audio, video');
     if (timelineItem && !composerTrigger && !e.target.closest('[data-task-event]') && (!nestedAction || nestedAction === timelineItem)) {
-        if (timelineItem.matches('[data-timeline-edit]')) configureComposer({time: timelineItem.dataset.timelineTime, mode:'edit', kind:timelineItem.dataset.editKind, action:timelineItem.dataset.editUrl, content:timelineItem.dataset.editContent, updated:timelineItem.dataset.editUpdated, hideUrl:timelineItem.dataset.hideUrl, deleteUrl:timelineItem.dataset.deleteUrl, isHidden:timelineItem.dataset.isHidden === 'true', hasMedia:timelineItem.dataset.hasMedia === 'true', media:JSON.parse(timelineItem.dataset.editMedia || '[]'), blockId:timelineItem.dataset.blockId});
+        if (timelineItem.matches('[data-timeline-edit]')) configureComposer({time: timelineItem.dataset.timelineTime, mode:'edit', kind:timelineItem.dataset.editKind, action:timelineItem.dataset.editUrl, content:timelineItem.dataset.editContent, emoji:timelineItem.dataset.editEmoji, updated:timelineItem.dataset.editUpdated, hideUrl:timelineItem.dataset.hideUrl, deleteUrl:timelineItem.dataset.deleteUrl, isHidden:timelineItem.dataset.isHidden === 'true', hasMedia:timelineItem.dataset.hasMedia === 'true', media:JSON.parse(timelineItem.dataset.editMedia || '[]'), blockId:timelineItem.dataset.blockId});
         else if (timelineItem.matches('[data-time-gap]')) configureComposer({time:timelineItem.dataset.from});
         else configureComposer({time:timelineItem.dataset.timelineTime || timelineItem.dataset.currentTime});
     }
@@ -528,7 +605,7 @@ document.addEventListener('click', async e => {
             toast(body.message);
             await refreshDayViewOrReload();
             const addNotes = body.edit_url && await modal({title:'Event tracked', message:'Would you like to attach notes, a photo, or a recording?', confirmText:'Add notes & media', cancelText:'Done'});
-            if (addNotes) configureComposer({time:body.time, mode:'edit', kind:'event', action:body.edit_url, content:'', hideUrl:body.hide_url, deleteUrl:body.delete_url, blockId:body.block_id});
+            if (addNotes) configureComposer({time:body.time, mode:'edit', kind:'event', action:body.edit_url, content:'', emoji:body.emoji || '✅', hideUrl:body.hide_url, deleteUrl:body.delete_url, blockId:body.block_id});
         }
         catch(error) { toast(error.message,true); } finally { task.disabled = false; }
     }
@@ -714,6 +791,7 @@ document.querySelectorAll('[data-record]').forEach(initRecordingButton);
 function initializeRefreshedMain(root) {
     root.querySelectorAll('[data-time-picker]').forEach(initTimePicker);
     root.querySelectorAll('[data-composer-media-panel]').forEach(initComposerMediaPanel);
+    root.querySelectorAll('[data-emoji-picker]').forEach(initEmojiPicker);
     root.querySelectorAll('[data-model-select]').forEach(loadModels);
     root.querySelectorAll('[data-record]').forEach(initRecordingButton);
     initComposerTimeInput(root);

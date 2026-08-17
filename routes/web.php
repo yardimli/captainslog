@@ -30,6 +30,7 @@ Route::get('/', [GuestDemoController::class, 'index'])->name('demo.index');
 Route::post('/demo/logs/{dailyLog}/blocks', [GuestDemoController::class, 'storeBlock'])->name('demo.blocks.store');
 Route::patch('/demo/blocks/{block}', [GuestDemoController::class, 'updateBlock'])->name('demo.blocks.update');
 Route::delete('/demo/blocks/{block}', [GuestDemoController::class, 'destroyBlock'])->name('demo.blocks.destroy');
+Route::get('/demo/attachments/{attachment}', [GuestDemoController::class, 'showAttachment'])->name('demo.attachments.show');
 Route::post('/demo/logs/{dailyLog}/tasks/{task}/events', [GuestDemoController::class, 'storeEvent'])->name('demo.events.store');
 
 Route::redirect('/dashboard', '/calendar')->middleware(['auth', 'verified'])->name('dashboard');

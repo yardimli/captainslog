@@ -168,6 +168,40 @@ class CaptainsLogTest extends TestCase
         $this->actingAs($user)->post(route('tasks.store'), ['name' => 'Bad color', 'color' => 'javascript:red'])->assertSessionHasErrors('color');
     }
 
+    public function test_log_entries_and_events_have_searchable_category_emoji_pickers_and_defaults(): void
+    {
+        $user = User::factory()->create();
+        $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
+        $this->assertSame('📝', $log->blocks()->create(['type' => 'text', 'content' => 'Default note'])->emoji);
+        $this->assertSame('💬', $log->blocks()->create(['type' => 'chat_user', 'content' => 'Default chat'])->emoji);
+        $this->assertSame('🤖', $log->blocks()->create(['type' => 'chat_assistant', 'content' => 'Default answer'])->emoji);
+        $this->assertSame('🎨', $log->blocks()->create(['type' => 'generated_image', 'content' => 'Default generated image'])->emoji);
+
+        $task = TaskDefinition::create(['user_id' => $user->id, 'name' => 'Yoga flow', 'emoji' => '🧘', 'recurrence_type' => 'daily']);
+        $this->assertSame('✅', TaskDefinition::create(['user_id' => $user->id, 'name' => 'Default event'])->emoji);
+
+        $this->actingAs($user)->get(route('tasks.index'))->assertOk()
+            ->assertSee('data-emoji-picker', false)
+            ->assertSee('data-emoji-search', false)
+            ->assertSee('data-emoji-category="animals"', false)
+            ->assertSee('data-emoji-name="medicine medication pill"', false)
+            ->assertSee('🧘');
+
+        $created = $this->postJson(route('blocks.store', $log), [
+            'type' => 'text', 'content' => 'Custom emoji note', 'emoji' => '🌈', 'occurred_at' => '09:15',
+        ])->assertCreated()->json('block.id');
+        $this->assertDatabaseHas('log_blocks', ['id' => $created, 'emoji' => '🌈']);
+        $this->patchJson(route('blocks.update', $created), ['content' => 'Changed emoji note', 'emoji' => '🚀'])->assertOk();
+        $this->assertDatabaseHas('log_blocks', ['id' => $created, 'emoji' => '🚀']);
+
+        $eventResponse = $this->postJson(route('events.store', [$log, $task]), [])->assertCreated()->assertJsonPath('emoji', '🧘');
+        $this->assertDatabaseHas('log_blocks', ['id' => $eventResponse->json('block_id'), 'emoji' => '🧘']);
+        $this->get(route('logs.show', '2026-08-15'))->assertOk()
+            ->assertSee('data-edit-emoji="🚀"', false)
+            ->assertSee('data-block-emoji', false)
+            ->assertSee('id="composer-entry-emoji-input"', false);
+    }
+
     public function test_tasks_support_daily_weekly_and_monthly_recurrence_with_time_slots(): void
     {
         $user = User::factory()->create();
@@ -400,6 +434,7 @@ class CaptainsLogTest extends TestCase
         $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
         $response = $this->actingAs($user)->postJson(route('attachments.store', $log), ['file' => UploadedFile::fake()->image('horizon.jpg')])->assertCreated();
         $this->assertDatabaseHas('attachments', ['id' => $response->json('attachment.id'), 'type' => 'image', 'disk' => 'local']);
+        $this->assertDatabaseHas('log_blocks', ['id' => $response->json('attachment.log_block_id'), 'emoji' => '🖼️']);
         Storage::disk('local')->assertExists($response->json('attachment.path'));
         $attachment = Attachment::findOrFail($response->json('attachment.id'));
         $this->get(route('logs.show', '2026-08-15'))->assertOk()
@@ -447,7 +482,9 @@ class CaptainsLogTest extends TestCase
         $contextLog = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-01']);
         $contextLog->blocks()->create(['type' => 'text', 'content' => 'Month context signal', 'position' => 1, 'occurred_at' => '2026-08-01 09:00:00']);
         $this->actingAs($user)->postJson(route('openrouter.chat', $log), ['message' => 'Summarize this day.', 'model' => 'test/model'])->assertCreated()->assertJsonPath('kind', 'answer')->assertJsonPath('answer', 'A concise reflection.');
+        $this->assertDatabaseHas('log_blocks', ['daily_log_id' => $log->id, 'type' => 'chat_user', 'emoji' => '💬']);
         $this->assertDatabaseHas('log_blocks', ['daily_log_id' => $log->id, 'type' => 'chat_assistant', 'content' => 'A concise reflection.']);
+        $this->assertDatabaseHas('log_blocks', ['daily_log_id' => $log->id, 'type' => 'chat_assistant', 'emoji' => '🤖']);
         $this->assertDatabaseHas('api_calls', ['daily_log_id' => $log->id, 'operation' => 'chat', 'total_tokens' => 17]);
         $this->assertSame('0.00120000', ApiCall::where('operation', 'chat')->first()->cost);
         Http::assertSent(fn ($request) => data_get($request->data(), 'response_format') === null && str_contains(json_encode($request->data('messages')), 'Month context signal'));
@@ -477,6 +514,7 @@ class CaptainsLogTest extends TestCase
             && $request['prompt'] === 'a coffee mug with a lid');
         $attachment = Attachment::where('daily_log_id', $log->id)->where('type', 'image')->firstOrFail();
         Storage::disk('local')->assertExists($attachment->path);
+        $this->assertDatabaseHas('log_blocks', ['id' => $attachment->log_block_id, 'type' => 'generated_image', 'emoji' => '🎨']);
         $this->assertDatabaseHas('api_calls', [
             'daily_log_id' => $log->id,
             'operation' => 'image',
@@ -493,9 +531,9 @@ class CaptainsLogTest extends TestCase
             $content = $schema === 'captains_log_intent'
                 ? ['intent' => 'action', 'normalized_request' => 'Create and record a wellness event.']
                 : ['actions' => [
-                    ['type' => 'add_log_entry', 'date' => '2026-08-17', 'time' => '08:15', 'content' => 'Prepared for the morning mission.', 'event_name' => null, 'value' => null, 'notes' => null, 'name' => null, 'color' => null, 'options' => null, 'recurrence_type' => null, 'recurrence_days' => null, 'scheduled_times' => null, 'is_sticky' => null],
-                    ['type' => 'create_event', 'date' => null, 'time' => null, 'content' => null, 'event_name' => null, 'value' => null, 'notes' => null, 'name' => 'Wellness level', 'color' => '#4f46e5', 'options' => ['1', '2', '3'], 'recurrence_type' => 'daily', 'recurrence_days' => null, 'scheduled_times' => ['08:00'], 'is_sticky' => true],
-                    ['type' => 'record_event', 'date' => '2026-08-17', 'time' => '09:30', 'content' => null, 'event_name' => 'Wellness level', 'value' => '2', 'notes' => 'A little tense.', 'name' => null, 'color' => null, 'options' => null, 'recurrence_type' => null, 'recurrence_days' => null, 'scheduled_times' => null, 'is_sticky' => null],
+                    ['type' => 'add_log_entry', 'date' => '2026-08-17', 'time' => '08:15', 'content' => 'Prepared for the morning mission.', 'emoji' => '🚀', 'event_name' => null, 'value' => null, 'notes' => null, 'name' => null, 'color' => null, 'options' => null, 'recurrence_type' => null, 'recurrence_days' => null, 'scheduled_times' => null, 'is_sticky' => null],
+                    ['type' => 'create_event', 'date' => null, 'time' => null, 'content' => null, 'emoji' => '💚', 'event_name' => null, 'value' => null, 'notes' => null, 'name' => 'Wellness level', 'color' => '#4f46e5', 'options' => ['1', '2', '3'], 'recurrence_type' => 'daily', 'recurrence_days' => null, 'scheduled_times' => ['08:00'], 'is_sticky' => true],
+                    ['type' => 'record_event', 'date' => '2026-08-17', 'time' => '09:30', 'content' => null, 'emoji' => null, 'event_name' => 'Wellness level', 'value' => '2', 'notes' => 'A little tense.', 'name' => null, 'color' => null, 'options' => null, 'recurrence_type' => null, 'recurrence_days' => null, 'scheduled_times' => null, 'is_sticky' => null],
                 ]];
 
             return Http::response(['id' => 'smart-123', 'model' => 'test/model', 'choices' => [['message' => ['content' => json_encode($content)]]], 'usage' => ['total_tokens' => 20, 'cost' => 0.001]], 200);
@@ -511,8 +549,9 @@ class CaptainsLogTest extends TestCase
         $this->assertDatabaseMissing('log_blocks', ['content' => 'Prepared for the morning mission.']);
 
         $this->postJson($proposal->json('confirm_url'))->assertOk()->assertJsonPath('kind', 'confirmed');
-        $this->assertDatabaseHas('task_definitions', ['user_id' => $user->id, 'name' => 'Wellness level', 'color' => '#4f46e5']);
-        $this->assertDatabaseHas('log_blocks', ['content' => 'Prepared for the morning mission.', 'occurred_at' => '2026-08-17 08:15:00']);
+        $this->assertDatabaseHas('task_definitions', ['user_id' => $user->id, 'name' => 'Wellness level', 'emoji' => '💚', 'color' => '#4f46e5']);
+        $this->assertDatabaseHas('log_blocks', ['content' => 'Prepared for the morning mission.', 'emoji' => '🚀', 'occurred_at' => '2026-08-17 08:15:00']);
+        $this->assertDatabaseHas('log_blocks', ['content' => 'A little tense.', 'emoji' => '💚', 'occurred_at' => '2026-08-17 09:30:00']);
         $this->assertDatabaseHas('task_events', ['task_name' => 'Wellness level', 'selected_value' => '2', 'occurred_at' => '2026-08-17 09:30:00']);
         $this->assertDatabaseHas('chat_action_proposals', ['user_id' => $user->id, 'status' => 'confirmed']);
         Carbon::setTestNow();

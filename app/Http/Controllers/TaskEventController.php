@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\DailyLog;
+use App\Models\LogBlock;
 use App\Models\TaskDefinition;
 use App\Models\TaskEvent;
 use Illuminate\Http\Request;
@@ -20,12 +21,12 @@ class TaskEventController extends Controller
         }
         $event = DB::transaction(function () use ($dailyLog, $task, $data) {
             $occurredAt = $dailyLog->log_date->copy()->setTime(now()->hour, now()->minute, now()->second);
-            $block = $dailyLog->blocks()->create(['type' => 'event', 'position' => ($dailyLog->blocks()->max('position') ?? 0) + 1, 'occurred_at' => $occurredAt]);
+            $block = $dailyLog->blocks()->create(['type' => 'event', 'emoji' => $task->emoji, 'position' => ($dailyLog->blocks()->max('position') ?? 0) + 1, 'occurred_at' => $occurredAt]);
 
             return TaskEvent::create(['daily_log_id' => $dailyLog->id, 'task_definition_id' => $task->id, 'log_block_id' => $block->id, 'task_name' => $task->name, 'selected_value' => $data['value'] ?? null, 'occurred_at' => $occurredAt]);
         });
 
-        return response()->json(['message' => "$task->name logged.", 'event' => $event, 'count' => $dailyLog->taskEvents()->where('task_definition_id', $task->id)->count(), 'edit_url' => route('events.update', $event), 'hide_url' => route('blocks.visibility', $event->log_block_id), 'delete_url' => route('blocks.destroy', $event->log_block_id), 'block_id' => $event->log_block_id, 'time' => $event->occurred_at->format('H:i')], 201);
+        return response()->json(['message' => "$task->name logged.", 'event' => $event, 'count' => $dailyLog->taskEvents()->where('task_definition_id', $task->id)->count(), 'edit_url' => route('events.update', $event), 'hide_url' => route('blocks.visibility', $event->log_block_id), 'delete_url' => route('blocks.destroy', $event->log_block_id), 'block_id' => $event->log_block_id, 'emoji' => $task->emoji, 'time' => $event->occurred_at->format('H:i')], 201);
     }
 
     public function edit(Request $request, TaskEvent $event)
@@ -41,9 +42,13 @@ class TaskEventController extends Controller
         $this->authorizeEvent($request, $event);
         $data = $request->validate([
             'notes' => 'nullable|string|max:100000',
+            'emoji' => 'nullable|string|max:32',
             'occurred_at' => 'sometimes|required|date_format:H:i',
         ]);
         $updates = ['content' => $data['notes'] ?? null];
+        if (array_key_exists('emoji', $data)) {
+            $updates['emoji'] = $data['emoji'] ?: LogBlock::defaultEmojiForType('event');
+        }
         if (isset($data['occurred_at'])) {
             $occurredAt = $event->dailyLog->log_date->copy()->setTimeFromTimeString($data['occurred_at']);
             $event->update(['occurred_at' => $occurredAt]);

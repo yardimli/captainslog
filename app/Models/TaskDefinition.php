@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TaskDefinition extends Model
 {
+    public const DEFAULT_EMOJI = '✅';
+
     private const LEGACY_COLORS = [
         'indigo' => '#4f46e5',
         'emerald' => '#059669',
@@ -17,7 +19,7 @@ class TaskDefinition extends Model
         'sky' => '#0284c7',
     ];
 
-    protected $fillable = ['user_id', 'name', 'color', 'is_sticky', 'recurrence_type', 'recurrence_days', 'scheduled_times', 'options', 'is_active'];
+    protected $fillable = ['user_id', 'name', 'emoji', 'color', 'is_sticky', 'recurrence_type', 'recurrence_days', 'scheduled_times', 'options', 'is_active'];
 
     protected $casts = [
         'is_sticky' => 'boolean',
@@ -26,6 +28,13 @@ class TaskDefinition extends Model
         'scheduled_times' => 'array',
         'options' => 'array',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (TaskDefinition $task) {
+            $task->emoji = filled($task->emoji) ? $task->emoji : self::DEFAULT_EMOJI;
+        });
+    }
 
     public function occursOn(CarbonInterface $day): bool
     {

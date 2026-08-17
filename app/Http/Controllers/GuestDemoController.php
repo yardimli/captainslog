@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Attachment;
 use App\Models\DailyLog;
 use App\Models\LogBlock;
 use App\Models\TaskDefinition;
@@ -10,6 +11,7 @@ use App\Services\GuestDemoService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class GuestDemoController extends Controller
 {
@@ -34,8 +36,9 @@ class GuestDemoController extends Controller
     {
         $user = $this->demo->account($request);
         abort_unless($dailyLog->user_id === $user->id, 403);
-        $data = $request->validate(['content' => 'required|string|max:100000']);
-        $block = $dailyLog->blocks()->create(['type' => 'text', 'content' => $data['content'], 'metadata' => ['demo' => true], 'position' => ($dailyLog->blocks()->max('position') ?? 0) + 1]);
+        $data = $request->validate(['content' => 'required|string|max:100000', 'emoji' => 'nullable|string|max:32', 'occurred_at' => 'nullable|date_format:H:i']);
+        $occurredAt = $dailyLog->log_date->copy()->setTimeFromTimeString($data['occurred_at'] ?? now()->format('H:i'));
+        $block = $dailyLog->blocks()->create(['type' => 'text', 'emoji' => $data['emoji'] ?? LogBlock::defaultEmojiForType('text'), 'content' => $data['content'], 'occurred_at' => $occurredAt, 'metadata' => ['demo' => true], 'position' => ($dailyLog->blocks()->max('position') ?? 0) + 1]);
 
         return response()->json(['message' => 'Demo entry added.', 'block' => $block, 'reload' => true], 201);
     }
@@ -44,7 +47,11 @@ class GuestDemoController extends Controller
     {
         $this->authorizeBlock($request, $block);
         abort_if($block->type === 'event', 422, 'Event entries cannot be edited in the demo.');
-        $block->update($request->validate(['content' => 'required|string|max:100000']));
+        $data = $request->validate(['content' => 'required|string|max:100000', 'emoji' => 'nullable|string|max:32', 'occurred_at' => 'nullable|date_format:H:i']);
+        if (isset($data['occurred_at'])) {
+            $data['occurred_at'] = $block->dailyLog->log_date->copy()->setTimeFromTimeString($data['occurred_at']);
+        }
+        $block->update($data);
 
         return response()->json(['message' => 'Demo entry updated.']);
     }
@@ -52,6 +59,12 @@ class GuestDemoController extends Controller
     public function destroyBlock(Request $request, LogBlock $block)
     {
         $this->authorizeBlock($request, $block);
+        $block->attachments->each(function ($attachment) {
+            if (! data_get($attachment->metadata, 'shared_demo_asset')) {
+                Storage::disk($attachment->disk)->delete($attachment->path);
+            }
+            $attachment->delete();
+        });
         $block->delete();
 
         return response()->json(['message' => 'Demo entry deleted.']);
@@ -67,12 +80,21 @@ class GuestDemoController extends Controller
             abort(422, 'Choose a valid value.');
         }
         $event = DB::transaction(function () use ($dailyLog, $task, $data) {
-            $block = $dailyLog->blocks()->create(['type' => 'event', 'metadata' => ['demo' => true], 'position' => ($dailyLog->blocks()->max('position') ?? 0) + 1]);
+            $block = $dailyLog->blocks()->create(['type' => 'event', 'emoji' => $task->emoji, 'metadata' => ['demo' => true], 'position' => ($dailyLog->blocks()->max('position') ?? 0) + 1]);
 
             return TaskEvent::create(['daily_log_id' => $dailyLog->id, 'task_definition_id' => $task->id, 'log_block_id' => $block->id, 'task_name' => $task->name, 'selected_value' => $data['value'] ?? null, 'occurred_at' => now()]);
         });
 
-        return response()->json(['message' => "$task->name logged in your private demo.", 'event' => $event, 'count' => $dailyLog->taskEvents()->where('task_definition_id', $task->id)->count()], 201);
+        return response()->json(['message' => "$task->name logged in your private demo.", 'event' => $event, 'emoji' => $task->emoji, 'count' => $dailyLog->taskEvents()->where('task_definition_id', $task->id)->count()], 201);
+    }
+
+    public function showAttachment(Request $request, Attachment $attachment)
+    {
+        $user = $this->demo->account($request);
+        abort_unless($attachment->user_id === $user->id, 403);
+        abort_unless(Storage::disk($attachment->disk)->exists($attachment->path), 404);
+
+        return response()->file(Storage::disk($attachment->disk)->path($attachment->path), ['Content-Type' => $attachment->mime_type]);
     }
 
     private function authorizeBlock(Request $request, LogBlock $block): void

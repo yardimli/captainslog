@@ -22,7 +22,13 @@ class AttachmentController extends Controller
         $file = $data['file'];
         $type = Str::before($file->getMimeType(), '/');
         $occurredAt = $dailyLog->log_date->copy()->setTimeFromTimeString($data['occurred_at'] ?? now()->format('H:i'));
-        $block = empty($data['block_id']) ? $dailyLog->blocks()->create(['type' => 'media', 'position' => ($dailyLog->blocks()->max('position') ?? 0) + 1, 'occurred_at' => $occurredAt]) : LogBlock::findOrFail($data['block_id']);
+        $mediaEmoji = match ($type) {
+            'image' => '🖼️',
+            'audio' => '🎙️',
+            'video' => '🎥',
+            default => LogBlock::defaultEmojiForType('media'),
+        };
+        $block = empty($data['block_id']) ? $dailyLog->blocks()->create(['type' => 'media', 'emoji' => $mediaEmoji, 'position' => ($dailyLog->blocks()->max('position') ?? 0) + 1, 'occurred_at' => $occurredAt]) : LogBlock::findOrFail($data['block_id']);
         abort_unless($block->daily_log_id === $dailyLog->id, 403);
         $block->update(['occurred_at' => $occurredAt]);
         $block->taskEvent?->update(['occurred_at' => $occurredAt]);

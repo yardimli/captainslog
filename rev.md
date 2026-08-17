@@ -184,16 +184,57 @@ Deleting the entry closes the aside and refreshes the complete day timeline thro
 
 **Browser verification:** Confirmed that an image timeline entry displays only its time and media label, opens with one thumbnail in the aside, and disappears after confirming **Delete entry**. A database and storage check confirmed that both the attachment record and image file were removed.
 
+## 14. Searchable emoji fields for log entries and events
+
+**Status:** Implemented, migrated, regression-tested, and browser-verified.
+
+Log blocks and event definitions now store their emoji in dedicated database fields. The Blade-owned picker supports category browsing, text search, outside-click dismissal, and selection without a keyboard. It is available when creating or editing notes, tracked events, and repeating event definitions. Custom event emojis are copied to recorded event entries and smart-chat actions can assign emojis when creating notes or events.
+
+Existing records were backfilled with semantic defaults: 📝 text, 🖼️ uploaded images, 🎨 generated images, 💬 user chat, 🤖 assistant chat, and ✅ events. New audio and video entries default to 🎙️ and 🎥. A database audit after migration found no log or event rows with empty emojis.
+
+**Files:**
+
+- `database/migrations/2026_08_17_000009_add_emojis_to_logs_and_events.php` — adds both fields and backfills existing records.
+- `app/Models/LogBlock.php` and `app/Models/TaskDefinition.php` — provide semantic defaults for new records.
+- `resources/views/partials/emoji-picker.blade.php` — provides the searchable category picker HTML.
+- `resources/views/logs/show.blade.php`, `resources/views/logs/partials/composer.blade.php`, `resources/views/logs/partials/block.blade.php`, `resources/views/events/edit.blade.php`, and `resources/views/tasks/index.blade.php` — expose, edit, and render emojis.
+- `resources/js/app.js` — filters categories/search results, selects emojis, tracks dirty state, and persists changes through AJAX.
+- `app/Http/Controllers` and `app/Services/ChatActionExecutor.php` — validate and persist custom/default emojis through manual, media, event, and smart-chat flows.
+- `tests/Feature/CaptainsLogTest.php` — verifies defaults, custom values, picker markup, uploads, chat, image generation, and smart-chat propagation.
+
+## 15. Guest demo upgraded with emojis, side editing, and image entries
+
+**Status:** Implemented, migrated, regression-tested, and browser-verified.
+
+The landing-page simulation now demonstrates the current note workflow instead of the older inline form and edit/delete links. Notes open in the right-side editor with visual time selection, searchable emoji categories, close-to-save behavior, Cancel, and the bottom Delete action. Seeded event buttons and timeline entries display their custom/default emojis.
+
+Two original fictional science-fiction illustrations were added to the hero and database-backed timeline: an observation-deck yoga session and an evening pet-medication briefing. Each guest receives attachment records that point to shared read-only demo assets through a guest-authorized media route. Deleting an image entry removes that guest's block and attachment record without deleting the shared source image.
+
+A seed-version field upgrades existing guest cookies exactly once. This adds the new image entries and refreshed emoji data while preserving subsequent guest edits and deletions; deleted demo images are not recreated on refresh.
+
+**Files:**
+
+- `public/images/demo-yoga-observation-deck.png` and `public/images/demo-pet-medication.png` — original generated demo artwork.
+- `database/migrations/2026_08_17_000010_add_demo_seed_version_to_users.php` — tracks one-time guest seed upgrades.
+- `app/Services/GuestDemoService.php` — seeds custom event/entry emojis, image blocks, and attachment records, and upgrades existing guest accounts once.
+- `app/Http/Controllers/GuestDemoController.php` and `routes/web.php` — persist emoji/time changes, authorize demo images, and delete guest attachment records safely.
+- `config/filesystems.php` — provides the shared read-only-style demo asset disk.
+- `resources/views/welcome.blade.php` — renders hero previews, timeline images and emojis, and the current side editor.
+- `resources/js/app.js` — permits a delete-only action footer when Hide is unavailable in the guest simulation.
+- `tests/Feature/GuestDemoTest.php` — verifies seeded artwork, emoji-aware notes/events, isolation, authorized image delivery, deletion, and no reseeding after deletion.
+
+**Browser verification:** Both hero images loaded at 1536×1024, today's generated-image timeline entry rendered with 🎨, clicking it opened an aside thumbnail, and the aside exposed Delete without a Hide control. The new-note editor also returned the 🚀 result for the search term “rocket.”
+
 ## Final verification
 
 **Result: All requested revisions above are verified in the current working tree.**
 
 Final checks run on 2026-08-17:
 
-- `php artisan test` — **PASS:** 56 tests, 315 assertions.
+- `php artisan test` — **PASS:** 58 tests, 363 assertions.
 - `php artisan view:cache` — **PASS:** every Blade template compiled successfully.
 - `npm.cmd run build` — **PASS:** Vite produced the production CSS/JavaScript bundle. Vite emitted the existing non-blocking `postcss.config.js` module-type warning.
-- `vendor/bin/pint --test` — **PASS:** 106 PHP files satisfy the configured Laravel formatting rules.
+- `vendor/bin/pint --test` — **PASS:** 108 PHP files satisfy the configured Laravel formatting rules.
 - `git diff --check` — **PASS:** no whitespace errors or conflict markers.
 - Blade component audit — **PASS:** no `<x-...>` tags and no files remain in `resources/views/components/`.
 - JavaScript HTML-construction audit — **PASS:** no `createElement`, `innerHTML` assignment, or `insertAdjacentHTML` remains in `resources/js/app.js`; reusable HTML is supplied by the Blade `<template>` partial.
@@ -208,3 +249,4 @@ Relevant browser verification performed during implementation also confirmed:
 - repeated open-slot clicks use the same exact slot start time;
 - computed `scrollbar-gutter` is `stable`;
 - image entries omit filenames and per-image delete links, show their thumbnails in the edit aside, and delete the log block, attachment row, and stored image together.
+- the guest demo loads both original illustrations, exposes image thumbnails and bottom deletion in the aside, and provides searchable emoji/time controls for new notes.

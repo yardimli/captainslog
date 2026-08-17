@@ -69,6 +69,7 @@ class TaskController extends Controller
     {
         $data = $request->validate([
             'name' => 'required|string|max:80',
+            'emoji' => 'nullable|string|max:32',
             'color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'options_text' => 'nullable|string|max:1000',
             'recurrence_type' => 'required|in:daily,weekly,monthly',
@@ -100,6 +101,7 @@ class TaskController extends Controller
 
         return [
             'name' => $data['name'],
+            'emoji' => filled($data['emoji'] ?? null) ? $data['emoji'] : TaskDefinition::DEFAULT_EMOJI,
             'color' => strtolower($data['color']),
             'is_sticky' => $request->boolean('is_sticky'),
             'recurrence_type' => $data['recurrence_type'],
