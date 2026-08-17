@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\DailyLog;
 use App\Models\LogBlock;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class LogBlockController extends Controller
 {
@@ -41,7 +42,10 @@ class LogBlockController extends Controller
     public function destroy(Request $request, LogBlock $block)
     {
         $this->authorizeBlock($request, $block);
-        $block->attachments->each(fn ($attachment) => \Storage::disk($attachment->disk)->delete($attachment->path));
+        $block->attachments->each(function ($attachment) {
+            Storage::disk($attachment->disk)->delete($attachment->path);
+            $attachment->delete();
+        });
         $block->delete();
 
         return response()->json(['message' => 'Entry deleted.']);

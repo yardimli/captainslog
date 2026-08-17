@@ -9,6 +9,7 @@ use App\Http\Controllers\LogBlockController;
 use App\Http\Controllers\OpenRouterController;
 use App\Http\Controllers\PlannerVisibilityController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SessionKeepAliveController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\TaskEventController;
@@ -34,6 +35,8 @@ Route::post('/demo/logs/{dailyLog}/tasks/{task}/events', [GuestDemoController::c
 Route::redirect('/dashboard', '/calendar')->middleware(['auth', 'verified'])->name('dashboard');
 
 Route::middleware('auth')->group(function () {
+    Route::post('/session/keep-alive', SessionKeepAliveController::class)->name('session.keep-alive');
+
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');

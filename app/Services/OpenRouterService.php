@@ -35,7 +35,10 @@ class OpenRouterService
     public function image(User $user, DailyLog $log, LogBlock $block, string $model, string $prompt): array
     {
         return $this->request($user, 'image', $log, $block, $model,
-            fn ($http) => $http->timeout(180)->post(self::BASE_URL.'/images', compact('model', 'prompt'))
+            fn ($http) => $http->timeout(180)->post(self::BASE_URL.'/images', [
+                'model' => $model,
+                'prompt' => $prompt,
+            ])
         );
     }
 
@@ -44,7 +47,7 @@ class OpenRouterService
         return $this->request($user, 'transcription', $log, $block, $model,
             fn ($http) => $http->timeout(180)->post(self::BASE_URL.'/audio/transcriptions', [
                 'model' => $model,
-                'input_audio' => compact('data', 'format'),
+                'input_audio' => ['data' => $data, 'format' => $format],
             ])
         );
     }

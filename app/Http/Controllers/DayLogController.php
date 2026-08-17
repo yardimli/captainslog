@@ -97,6 +97,8 @@ class DayLogController extends Controller
             $cursor = $position;
         }
 
-        return view('logs.show', compact('day', 'log', 'tasks', 'counts', 'timeline', 'showHidden'));
+        $mainFragment = $request->header('X-Day-View') === 'main';
+
+        return view('logs.show', compact('day', 'log', 'tasks', 'counts', 'timeline', 'showHidden', 'mainFragment'));
     }
 }

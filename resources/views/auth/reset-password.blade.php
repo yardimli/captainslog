@@ -1,25 +1,20 @@
-<x-guest-layout>
-    <x-slot name="eyebrow">Account recovery</x-slot>
-    <x-slot name="title">Choose a new password</x-slot>
-    <x-slot name="subtitle">Set a fresh password to securely return to your captain's log.</x-slot>
+@extends('layouts.guest')
+@section('eyebrow', 'Account recovery')
+@section('title', 'Choose a new password')
+@section('subtitle', "Set a fresh password to securely return to your captain's log.")
+@section('content')
     <form method="POST" action="{{ route('password.store') }}" class="space-y-5">
         @csrf
         <input type="hidden" name="token" value="{{ $request->route('token') }}">
-        <div>
-            <x-input-label for="email" :value="__('Email')" />
-            <x-text-input id="email" class="mt-2 block w-full" type="email" name="email" :value="old('email', $request->email)" required autofocus autocomplete="username" />
-            <x-input-error :messages="$errors->get('email')" class="mt-2" />
+        <div id="reset-email-field">
+            <label for="email" class="label">{{ __('Email') }}</label><input id="email" class="input mt-2 block w-full" type="email" name="email" value="{{ old('email', $request->email) }}" required autofocus autocomplete="username">@if($errors->get('email'))<ul class="mt-2 space-y-1 text-sm font-medium text-rose-600 dark:text-rose-400">@foreach($errors->get('email') as $message)<li>{{ $message }}</li>@endforeach</ul>@endif
         </div>
-        <div>
-            <x-input-label for="password" :value="__('Password')" />
-            <x-text-input id="password" class="mt-2 block w-full" type="password" name="password" required autocomplete="new-password" />
-            <x-input-error :messages="$errors->get('password')" class="mt-2" />
+        <div id="reset-password-field">
+            <label for="password" class="label">{{ __('Password') }}</label><input id="password" class="input mt-2 block w-full" type="password" name="password" required autocomplete="new-password">@if($errors->get('password'))<ul class="mt-2 space-y-1 text-sm font-medium text-rose-600 dark:text-rose-400">@foreach($errors->get('password') as $message)<li>{{ $message }}</li>@endforeach</ul>@endif
         </div>
-        <div>
-            <x-input-label for="password_confirmation" :value="__('Confirm Password')" />
-            <x-text-input id="password_confirmation" class="mt-2 block w-full" type="password" name="password_confirmation" required autocomplete="new-password" />
-            <x-input-error :messages="$errors->get('password_confirmation')" class="mt-2" />
+        <div id="reset-password-confirmation-field">
+            <label for="password_confirmation" class="label">{{ __('Confirm Password') }}</label><input id="password_confirmation" class="input mt-2 block w-full" type="password" name="password_confirmation" required autocomplete="new-password">@if($errors->get('password_confirmation'))<ul class="mt-2 space-y-1 text-sm font-medium text-rose-600 dark:text-rose-400">@foreach($errors->get('password_confirmation') as $message)<li>{{ $message }}</li>@endforeach</ul>@endif
         </div>
-        <x-primary-button class="w-full justify-center">{{ __('Reset Password') }}</x-primary-button>
+        <button type="submit" class="btn w-full justify-center">{{ __('Reset Password') }}</button>
     </form>
-</x-guest-layout>
+@endsection

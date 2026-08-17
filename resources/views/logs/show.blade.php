@@ -1,15 +1,16 @@
-<x-app-layout>
-    <x-slot name="header">
-        <div class="flex flex-wrap items-center gap-3 overflow-visible">
-            <div><p class="text-xs font-semibold uppercase tracking-wide text-indigo-600">Daily log</p><h1 class="text-2xl font-bold">{{ $day->format('l, F j, Y') }}</h1></div>
-            <div class="ml-auto flex flex-wrap items-center gap-2">
+@extends('layouts.app')
+
+@section('header')
+        <div id="daily-log-page-heading" class="flex flex-wrap items-center gap-3 overflow-visible" data-day-view-fragment>
+            <div id="daily-log-heading-copy"><p class="text-xs font-semibold uppercase tracking-wide text-indigo-600">Daily log</p><h1 class="text-2xl font-bold">{{ $day->format('l, F j, Y') }}</h1></div>
+            <div id="daily-log-heading-actions" class="ml-auto flex flex-wrap items-center gap-2">
                 <a class="btn-secondary" href="{{ route('logs.show', $day->copy()->subDay()->toDateString()) }}" aria-label="Previous day">&larr; Previous</a>
                 <a class="btn-secondary" href="{{ route('logs.show', today()->toDateString()) }}">Today</a>
                 <a class="btn-secondary" href="{{ route('logs.show', $day->copy()->addDay()->toDateString()) }}" aria-label="Next day">Next &rarr;</a>
                 @if($tasks->where('is_sticky', false)->isNotEmpty())
                     <details class="relative z-50" data-events-menu>
                         <summary class="btn-secondary cursor-pointer">More events</summary>
-                        <div class="absolute right-0 mt-2 grid w-72 gap-1 rounded-xl border bg-white p-2 shadow-2xl dark:border-slate-700 dark:bg-slate-900" style="z-index:70">
+                        <div id="more-events-menu" class="absolute right-0 mt-2 grid w-72 gap-1 rounded-xl border bg-white p-2 shadow-2xl dark:border-slate-700 dark:bg-slate-900" style="z-index:70">
                             @foreach($tasks->where('is_sticky', false) as $task)
                                 <button class="flex items-center rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800" data-task-event="{{ route('events.store', [$log, $task]) }}" data-name="{{ $task->name }}" data-options='@json($task->options ?? [])'><span class="mr-2 h-4 w-4 shrink-0 rounded-sm border border-slate-300 dark:border-slate-600" style="background-color:{{ $task->color_hex }}"></span><span class="min-w-0"><strong>{{ $task->name }}</strong> <span class="rounded-full bg-slate-100 px-1.5 dark:bg-slate-800" data-count>{{ $counts[$task->id] ?? 0 }}</span><small class="block text-slate-500">{{ collect($task->scheduled_times ?? [])->map(fn ($time) => auth()->user()->formatClock($time))->implode(', ') ?: 'Any time' }}</small></span></button>
                             @endforeach
@@ -18,9 +19,10 @@
                 @endif
             </div>
         </div>
-    </x-slot>
+@endsection
 
-    <div class="mx-auto max-w-5xl space-y-5 p-4 sm:p-6 lg:p-8">
+@section('content')
+    <div id="daily-log-page-container" class="mx-auto max-w-5xl space-y-5 p-4 sm:p-6 lg:p-8" data-day-view-fragment>
         <section id="timeline" class="space-y-2" data-log-date="{{ $day->toDateString() }}">
             @foreach($timeline as $item)
                 @if($item['kind'] === 'gap')
@@ -39,37 +41,42 @@
                     </div>
                 @else
                     @php $block = $item['block']; @endphp
-                    <div class="timeline-item flex min-w-0 cursor-pointer items-start gap-3 {{ $item['is_hidden'] ? 'opacity-60' : '' }}" data-recorded-time="{{ $item['time'] }}" data-timeline-time="{{ $item['time'] }}" data-timeline-edit data-edit-kind="{{ $block->taskEvent ? 'event' : 'block' }}" data-edit-url="{{ $block->taskEvent ? route('events.update', $block->taskEvent) : route('blocks.update', $block) }}" data-edit-content="{{ $block->content }}" data-edit-updated="{{ auth()->user()->formatTime($block->updated_at) }}" data-hide-url="{{ route('blocks.visibility', $block) }}" data-delete-url="{{ route('blocks.destroy', $block) }}" data-is-hidden="{{ $block->is_hidden ? 'true' : 'false' }}" data-block-id="{{ $block->id }}" @if($item['is_hidden']) data-hidden-planner-item @endif><time class="w-20 shrink-0 pt-4 text-center font-mono text-xs font-bold text-slate-500">{{ auth()->user()->formatClock($item['time']) }}</time><div class="min-w-0 flex-1">@include('logs.partials.block', ['block' => $block])</div></div>
+                    <div class="timeline-item flex min-w-0 cursor-pointer items-start gap-3 {{ $item['is_hidden'] ? 'opacity-60' : '' }}" data-recorded-time="{{ $item['time'] }}" data-timeline-time="{{ $item['time'] }}" data-timeline-edit data-edit-kind="{{ $block->taskEvent ? 'event' : 'block' }}" data-edit-url="{{ $block->taskEvent ? route('events.update', $block->taskEvent) : route('blocks.update', $block) }}" data-edit-content="{{ $block->content }}" data-edit-updated="{{ auth()->user()->formatTime($block->updated_at) }}" data-edit-media="{{ $block->attachments->where('type', 'image')->map(fn ($attachment) => ['url' => $attachment->url])->values()->toJson() }}" data-hide-url="{{ route('blocks.visibility', $block) }}" data-delete-url="{{ route('blocks.destroy', $block) }}" data-is-hidden="{{ $block->is_hidden ? 'true' : 'false' }}" data-has-media="{{ $block->attachments->isNotEmpty() ? 'true' : 'false' }}" data-block-id="{{ $block->id }}" @if($item['is_hidden']) data-hidden-planner-item @endif><time class="w-20 shrink-0 pt-4 text-center font-mono text-xs font-bold text-slate-500">{{ auth()->user()->formatClock($item['time']) }}</time><div class="timeline-entry-card min-w-0 flex-1">@include('logs.partials.block', ['block' => $block])</div></div>
                 @endif
             @endforeach
         </section>
     </div>
 
-    <div class="fixed inset-0 hidden" style="z-index:80" data-overlay="composer" role="dialog" aria-modal="true" aria-label="Edit this log">
+    <div id="log-composer-overlay" class="fixed inset-0 hidden" style="z-index:80" data-overlay="composer" role="dialog" aria-modal="true" aria-label="Edit this log">
         <button type="button" class="absolute inset-0 bg-slate-950/55 opacity-0 transition-opacity" data-overlay-backdrop data-overlay-close="composer" aria-label="Close log composer"></button>
         <aside class="absolute inset-y-0 right-0 w-full max-w-md translate-x-full overflow-y-auto bg-slate-100 p-4 shadow-2xl transition-transform duration-300 dark:bg-slate-950 sm:p-6" data-overlay-panel>
-            <div class="mb-4 flex items-start"><div><p class="text-xs font-bold uppercase tracking-wider text-indigo-600">{{ $day->format('M j, Y') }}</p><h2 class="text-2xl font-black" data-composer-title>Add to this log</h2><p class="mt-1 hidden text-xs text-slate-500" data-composer-updated></p></div><button type="button" class="btn-secondary ml-auto" data-overlay-close="composer">Close</button></div>
-            <label class="label">Entry time</label><div class="mb-4" data-time-picker><button type="button" class="btn-secondary w-full justify-center text-lg font-bold" data-time-picker-open></button><input type="hidden" name="composer_time" required data-composer-time data-time-picker-input value="{{ $day->isToday() ? now()->format('H:i') : '12:00' }}"></div>
+            <div id="log-composer-heading" class="mb-4 flex items-start gap-2"><div id="log-composer-heading-copy"><p class="text-xs font-bold uppercase tracking-wider text-indigo-600">{{ $day->format('M j, Y') }}</p><h2 class="text-2xl font-black" data-composer-title>Add to this log</h2><p class="mt-1 hidden text-xs text-slate-500" data-composer-updated></p></div><div id="log-composer-heading-actions" class="ml-auto flex items-center gap-2"><button type="button" class="btn-secondary hidden border-rose-300 text-rose-700 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950" data-composer-cancel>Cancel</button><button type="button" class="btn-secondary" data-overlay-close="composer">Close</button></div></div>
+            <label class="label">Entry time</label><div id="composer-time-picker" class="mb-4" data-time-picker><button type="button" class="btn-secondary w-full justify-center text-lg font-bold" data-time-picker-open></button><input type="hidden" name="composer_time" required data-composer-time data-time-picker-input value="{{ $day->isToday() ? now()->format('H:i') : '12:00' }}"></div>
             @include('logs.partials.composer')
-            <div class="mt-6 hidden grid-cols-2 gap-2 border-t border-slate-200 pt-4 dark:border-slate-800" data-composer-entry-actions><button type="button" class="btn-secondary text-amber-700 dark:text-amber-300" data-composer-visibility>Hide</button><button type="button" class="btn-secondary text-rose-600" data-composer-delete>Delete</button></div>
+            <div id="composer-entry-actions" class="mt-6 hidden grid-cols-2 gap-2 border-t border-slate-200 pt-4 dark:border-slate-800" data-composer-entry-actions><button type="button" class="btn-secondary text-amber-700 dark:text-amber-300" data-composer-visibility>Hide</button><button type="button" class="btn-secondary text-rose-600" data-composer-delete>Delete</button></div>
         </aside>
     </div>
 
-    <div class="fixed inset-0 hidden place-items-end p-3 sm:place-items-center" style="z-index:80" data-overlay="chat" role="dialog" aria-modal="true" aria-labelledby="chat-panel-title">
+    <div id="chat-overlay" class="fixed inset-0 hidden place-items-end p-3 sm:place-items-center" style="z-index:80" data-overlay="chat" role="dialog" aria-modal="true" aria-labelledby="chat-panel-title">
         <button type="button" class="absolute inset-0 bg-slate-950/55 opacity-0 transition-opacity" data-overlay-backdrop data-overlay-close="chat" aria-label="Close chat"></button>
         <section class="relative w-full max-w-xl translate-y-5 rounded-3xl bg-white p-5 opacity-0 shadow-2xl transition-all dark:bg-slate-900 sm:p-7" data-overlay-panel>
-            <div class="flex items-center"><div><p class="text-xs font-bold uppercase tracking-wider text-indigo-600">Past-month context</p><h2 id="chat-panel-title" class="text-2xl font-black">Chat with the log</h2></div><button type="button" class="btn-secondary ml-auto" data-overlay-close="chat">Close</button></div>
+            <div id="chat-panel-heading" class="flex items-center"><div id="chat-panel-heading-copy"><p class="text-xs font-bold uppercase tracking-wider text-indigo-600">Past-month context</p><h2 id="chat-panel-title" class="text-2xl font-black">Chat with the log</h2></div><button type="button" class="btn-secondary ml-auto" data-overlay-close="chat">Close</button></div>
             <p class="mt-3 text-sm text-slate-500">Ask about the last month, add log entries, create event buttons, or record an event. Changes always require your confirmation.</p>
-            <div class="mt-4 hidden rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm dark:border-slate-700 dark:bg-slate-950" data-chat-result aria-live="polite"></div>
-            <form data-smart-chat-form method="POST" action="{{ route('openrouter.chat', $log) }}" class="mt-5 space-y-3">@csrf<label class="label">Model</label><select class="input text-sm" name="model" data-model-select="chat" data-models-url="{{ route('openrouter.models') }}" data-selected="{{ auth()->user()->default_chat_model }}" required><option>Loading models...</option></select><textarea class="input" name="message" rows="6" placeholder="Ask a question or tell Captain's Log what to add..." required></textarea>@if($log->attachments->where('type','image')->isNotEmpty())<details><summary class="cursor-pointer text-sm text-indigo-600">Include images</summary><div class="mt-2 space-y-1">@foreach($log->attachments->where('type','image') as $image)<label class="flex items-center gap-2 text-xs"><input type="checkbox" name="attachment_ids[]" value="{{ $image->id }}">{{ $image->original_name }}</label>@endforeach</div></details>@endif<button class="btn w-full" type="submit">Send</button></form>
+            <div id="chat-result" class="mt-4 hidden rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm dark:border-slate-700 dark:bg-slate-950" data-chat-result aria-live="polite">
+                <p class="font-semibold text-indigo-600 dark:text-indigo-400" data-chat-view="status">Classifying your message, then preparing the response...</p>
+                <div id="chat-answer-result" class="hidden" data-chat-view="answer"><p class="mb-2 font-bold">Answer</p><div id="chat-answer-content" class="whitespace-pre-wrap leading-relaxed" data-chat-answer></div></div>
+                <div id="chat-action-result" class="hidden" data-chat-view="action"><p class="font-bold text-amber-700 dark:text-amber-300">Confirm these actions</p><pre class="mt-2 whitespace-pre-wrap font-sans leading-relaxed" data-chat-summary></pre><div id="chat-action-buttons" class="mt-4 grid grid-cols-2 gap-2"><button type="button" class="btn-secondary" data-chat-cancel>Not now</button><button type="button" class="btn" data-chat-confirm>Confirm &amp; run</button></div></div>
+                <p class="hidden text-rose-600" data-chat-view="error" data-chat-error></p>
+            </div>
+            <form data-smart-chat-form method="POST" action="{{ route('openrouter.chat', $log) }}" class="mt-5 space-y-3">@csrf<label class="label">Model</label><select class="input text-sm" name="model" data-model-select="chat" data-models-url="{{ route('openrouter.models') }}" data-selected="{{ auth()->user()->default_chat_model }}" required><option>Loading models...</option></select><textarea class="input" name="message" rows="6" placeholder="Ask a question or tell Captain's Log what to add..." required></textarea>@if($log->attachments->where('type','image')->isNotEmpty())<details><summary class="cursor-pointer text-sm text-indigo-600">Include images</summary><div id="chat-image-options" class="mt-2 space-y-1">@foreach($log->attachments->where('type','image') as $image)<label class="flex items-center gap-2 text-xs"><input type="checkbox" name="attachment_ids[]" value="{{ $image->id }}">{{ $image->original_name }}</label>@endforeach</div></details>@endif<button class="btn w-full gap-2" type="submit" data-busy-label="Waiting for response"><svg class="hidden h-4 w-4 animate-spin" data-button-spinner viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" stroke-width="4"></circle><path class="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v4a5 5 0 0 1 5 5h4Z"></path></svg><span data-button-label>Send</span></button></form>
         </section>
     </div>
 
-    <div class="fixed inset-0 hidden place-items-end p-3 sm:place-items-center" style="z-index:80" data-overlay="image" role="dialog" aria-modal="true" aria-labelledby="image-panel-title">
+    <div id="image-generator-overlay" class="fixed inset-0 hidden place-items-end p-3 sm:place-items-center" style="z-index:80" data-overlay="image" role="dialog" aria-modal="true" aria-labelledby="image-panel-title">
         <button type="button" class="absolute inset-0 bg-slate-950/55 opacity-0 transition-opacity" data-overlay-backdrop data-overlay-close="image" aria-label="Close image generator"></button>
         <section class="relative w-full max-w-xl translate-y-5 rounded-3xl bg-white p-5 opacity-0 shadow-2xl transition-all dark:bg-slate-900 sm:p-7" data-overlay-panel>
-            <div class="flex items-center"><div><p class="text-xs font-bold uppercase tracking-wider text-emerald-600">Visual log</p><h2 id="image-panel-title" class="text-2xl font-black">Generate an image</h2></div><button type="button" class="btn-secondary ml-auto" data-overlay-close="image">Close</button></div>
-            <form data-ajax method="POST" action="{{ route('openrouter.images', $log) }}" class="mt-5 space-y-3"><label class="label">Model</label><select class="input text-sm" name="model" data-model-select="image" data-models-url="{{ route('openrouter.models') }}" required><option>Loading image models...</option></select><textarea class="input" name="prompt" rows="6" placeholder="Describe the image..." required></textarea><button class="btn w-full">Generate & attach</button></form>
+            <div id="image-generator-heading" class="flex items-center"><div id="image-generator-heading-copy"><p class="text-xs font-bold uppercase tracking-wider text-emerald-600">Visual log</p><h2 id="image-panel-title" class="text-2xl font-black">Generate an image</h2></div><button type="button" class="btn-secondary ml-auto" data-overlay-close="image">Close</button></div>
+            <form data-ajax method="POST" action="{{ route('openrouter.images', $log) }}" class="mt-5 space-y-3"><label class="label">Model</label><select class="input text-sm" name="model" data-model-select="image" data-models-url="{{ route('openrouter.models') }}" required><option>Loading image models...</option></select><textarea class="input" name="prompt" rows="6" placeholder="Describe the image..." required></textarea><button class="btn w-full gap-2" type="submit" data-busy-label="Generating image"><svg class="hidden h-4 w-4 animate-spin" data-button-spinner viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" stroke-width="4"></circle><path class="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v4a5 5 0 0 1 5 5h4Z"></path></svg><span data-button-label>Generate &amp; attach</span></button></form>
         </section>
     </div>
-</x-app-layout>
+@endsection

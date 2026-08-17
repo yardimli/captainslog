@@ -9,12 +9,9 @@
         </p>
     </header>
 
-    <x-danger-button
-        x-data=""
-        x-on:click.prevent="$dispatch('open-modal', 'confirm-user-deletion')"
-    >{{ __('Delete Account') }}</x-danger-button>
+    <button type="button" class="inline-flex items-center rounded-xl border border-transparent bg-rose-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white transition hover:bg-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2" data-account-delete-open>{{ __('Delete Account') }}</button>
 
-    <x-modal name="confirm-user-deletion" :show="$errors->userDeletion->isNotEmpty()" focusable>
+    <dialog class="w-full max-w-2xl rounded-2xl bg-white p-0 text-slate-900 shadow-xl backdrop:bg-slate-950/60 dark:bg-slate-900 dark:text-slate-100" data-account-delete-dialog @if($errors->userDeletion->isNotEmpty()) data-open="true" @endif>
         <form method="post" action="{{ route('profile.destroy') }}" class="p-6">
             @csrf
             @method('delete')
@@ -27,29 +24,16 @@
                 {{ __('Once your account is deleted, all of its resources and data will be permanently deleted. Please enter your password to confirm you would like to permanently delete your account.') }}
             </p>
 
-            <div class="mt-6">
-                <x-input-label for="password" value="{{ __('Password') }}" class="sr-only" />
-
-                <x-text-input
-                    id="password"
-                    name="password"
-                    type="password"
-                    class="mt-1 block w-3/4"
-                    placeholder="{{ __('Password') }}"
-                />
-
-                <x-input-error :messages="$errors->userDeletion->get('password')" class="mt-2" />
+            <div id="account-deletion-password-field" class="mt-6">
+                <label for="delete_account_password" class="sr-only">{{ __('Password') }}</label>
+                <input id="delete_account_password" name="password" type="password" class="input mt-1 block w-3/4" placeholder="{{ __('Password') }}">
+                @if($errors->userDeletion->get('password'))<ul class="mt-2 space-y-1 text-sm font-medium text-rose-600 dark:text-rose-400">@foreach($errors->userDeletion->get('password') as $message)<li>{{ $message }}</li>@endforeach</ul>@endif
             </div>
 
-            <div class="mt-6 flex justify-end">
-                <x-secondary-button x-on:click="$dispatch('close')">
-                    {{ __('Cancel') }}
-                </x-secondary-button>
-
-                <x-danger-button class="ms-3">
-                    {{ __('Delete Account') }}
-                </x-danger-button>
+            <div id="account-deletion-actions" class="mt-6 flex justify-end">
+                <button type="button" class="btn-secondary" data-account-delete-close>{{ __('Cancel') }}</button>
+                <button type="submit" class="ms-3 inline-flex items-center rounded-xl border border-transparent bg-rose-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white transition hover:bg-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2">{{ __('Delete Account') }}</button>
             </div>
         </form>
-    </x-modal>
+    </dialog>
 </section>

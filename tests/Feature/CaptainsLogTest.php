@@ -44,7 +44,7 @@ class CaptainsLogTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $this->actingAs($user)->get('/logs/2026-08-16')->assertOk()
+        $this->actingAs($user)->get(route('logs.show', today()->toDateString()))->assertOk()
             ->assertSee('data-mobile-nav-toggle', false)
             ->assertSee('data-panel-open="chat"', false)
             ->assertSee('data-panel-open="image"', false)
@@ -121,6 +121,10 @@ class CaptainsLogTest extends TestCase
         $this->actingAs($user)->get(route('tasks.index'))->assertOk()
             ->assertSee('data-time-slots', false)
             ->assertSee('data-time-slot-add', false)
+            ->assertSee('max-h-[80dvh]', false)
+            ->assertSee('data-time-dialog-cancel', false)
+            ->assertDontSee('data-time-keyboard-toggle', false)
+            ->assertDontSee('data-time-dialog-apply', false)
             ->assertSee('data-values=\'["08:00","14:30"]\'', false)
             ->assertSee('+ Add time slot')
             ->assertSee('Each slot can be removed with ×.');
@@ -303,6 +307,17 @@ class CaptainsLogTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_open_timeline_slots_always_default_to_their_start_time(): void
+    {
+        $script = file_get_contents(resource_path('js/app.js'));
+
+        $this->assertStringContainsString(
+            'configureComposer({time:timelineItem.dataset.from})',
+            $script
+        );
+        $this->assertStringNotContainsString('function gapTime', $script);
+    }
+
     public function test_recorded_planner_entries_can_be_hidden_but_scheduled_controls_cannot(): void
     {
         Carbon::setTestNow('2026-08-16 14:00:00');
@@ -386,6 +401,17 @@ class CaptainsLogTest extends TestCase
         $response = $this->actingAs($user)->postJson(route('attachments.store', $log), ['file' => UploadedFile::fake()->image('horizon.jpg')])->assertCreated();
         $this->assertDatabaseHas('attachments', ['id' => $response->json('attachment.id'), 'type' => 'image', 'disk' => 'local']);
         Storage::disk('local')->assertExists($response->json('attachment.path'));
+        $attachment = Attachment::findOrFail($response->json('attachment.id'));
+        $this->get(route('logs.show', '2026-08-15'))->assertOk()
+            ->assertSee('data-edit-media=', false)
+            ->assertSee('composer-image-preview-template', false)
+            ->assertDontSee('<span class="truncate">horizon.jpg</span>', false)
+            ->assertDontSee('data-delete="'.route('attachments.destroy', $attachment).'"', false);
+
+        $this->deleteJson(route('blocks.destroy', $attachment->log_block_id))->assertOk();
+        Storage::disk('local')->assertMissing($response->json('attachment.path'));
+        $this->assertDatabaseMissing('attachments', ['id' => $attachment->id]);
+        $this->assertDatabaseMissing('log_blocks', ['id' => $attachment->log_block_id]);
     }
 
     public function test_recording_controls_expose_visible_status_and_supported_browser_formats(): void
@@ -425,6 +451,38 @@ class CaptainsLogTest extends TestCase
         $this->assertDatabaseHas('api_calls', ['daily_log_id' => $log->id, 'operation' => 'chat', 'total_tokens' => 17]);
         $this->assertSame('0.00120000', ApiCall::where('operation', 'chat')->first()->cost);
         Http::assertSent(fn ($request) => data_get($request->data(), 'response_format') === null && str_contains(json_encode($request->data('messages')), 'Month context signal'));
+    }
+
+    public function test_openrouter_image_generation_sends_the_selected_model_and_prompt(): void
+    {
+        Storage::fake('local');
+        Http::fake([
+            'https://openrouter.ai/api/v1/images' => Http::response([
+                'id' => 'image-123',
+                'model' => 'bytedance-seed/seedream-5-0-lite',
+                'data' => [['b64_json' => base64_encode('fake-png-data')]],
+                'usage' => ['cost' => 0.0042],
+            ], 200),
+        ]);
+        $user = User::factory()->create(['openrouter_api_key' => 'sk-test']);
+        $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
+
+        $this->actingAs($user)->postJson(route('openrouter.images', $log), [
+            'model' => 'bytedance-seed/seedream-5-0-lite',
+            'prompt' => 'a coffee mug with a lid',
+        ])->assertCreated()->assertJsonPath('message', 'Image generated and added.');
+
+        Http::assertSent(fn ($request) => $request->url() === 'https://openrouter.ai/api/v1/images'
+            && $request['model'] === 'bytedance-seed/seedream-5-0-lite'
+            && $request['prompt'] === 'a coffee mug with a lid');
+        $attachment = Attachment::where('daily_log_id', $log->id)->where('type', 'image')->firstOrFail();
+        Storage::disk('local')->assertExists($attachment->path);
+        $this->assertDatabaseHas('api_calls', [
+            'daily_log_id' => $log->id,
+            'operation' => 'image',
+            'model' => 'bytedance-seed/seedream-5-0-lite',
+            'error' => null,
+        ]);
     }
 
     public function test_smart_chat_previews_actions_and_only_executes_them_after_confirmation(): void
@@ -482,6 +540,8 @@ class CaptainsLogTest extends TestCase
         $user = User::factory()->create();
         $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
         $log->blocks()->create(['type' => 'text', 'content' => 'Editable bridge note', 'position' => 1, 'occurred_at' => '2026-08-15 09:35:00']);
+        $mediaBlock = $log->blocks()->create(['type' => 'media', 'position' => 2, 'occurred_at' => '2026-08-15 10:00:00']);
+        Attachment::create(['user_id' => $user->id, 'daily_log_id' => $log->id, 'log_block_id' => $mediaBlock->id, 'type' => 'audio', 'disk' => 'local', 'path' => 'test.webm', 'original_name' => 'test.webm', 'mime_type' => 'audio/webm', 'size' => 1]);
 
         $this->actingAs($user)->get(route('logs.show', '2026-08-15'))->assertOk()
             ->assertSee('data-timeline-edit', false)
@@ -490,12 +550,35 @@ class CaptainsLogTest extends TestCase
             ->assertSee('data-edit-updated=', false)
             ->assertSee('data-hide-url=', false)
             ->assertSee('data-delete-url=', false)
+            ->assertSee('data-has-media="false"', false)
+            ->assertSee('data-has-media="true"', false)
             ->assertSee('data-composer-entry-actions', false)
             ->assertSee('data-composer-updated', false)
             ->assertDontSee('Recorded 09:35')
             ->assertSee('data-composer-time', false)
             ->assertSee('data-composer-note-form', false)
             ->assertSee('data-autosave-status', false)
-            ->assertSee('data-composer-media-form', false);
+            ->assertSee('data-composer-cancel', false)
+            ->assertSee('data-composer-media-panel', false)
+            ->assertSee('data-composer-media-form', false)
+            ->assertSee('data-day-view-fragment', false)
+            ->assertSee('data-busy-label="Waiting for response"', false)
+            ->assertSee('data-busy-label="Generating image"', false)
+            ->assertSee('data-button-spinner', false);
+
+        $this->withHeader('X-Day-View', 'main')->get(route('logs.show', '2026-08-15'))->assertOk()
+            ->assertSee('<main id="page-content">', false)
+            ->assertDontSee('<html', false)
+            ->assertDontSee('primary-navigation-content', false);
+
+        $script = file_get_contents(resource_path('js/app.js'));
+        $templates = file_get_contents(resource_path('views/partials/javascript-templates.blade.php'));
+        $this->assertStringContainsString("'X-Day-View': 'main'", $script);
+        $this->assertStringContainsString('currentMain.replaceWith(replacement)', $script);
+        $this->assertStringContainsString('await refreshDayViewOrReload()', $script);
+        $this->assertStringContainsString('Changes save when you close this panel.', $script);
+        $this->assertStringContainsString('textarea.value === form.dataset.originalContent', $script);
+        $this->assertStringNotContainsString("submit.textContent = mode === 'edit' ? 'Save changes'", $script);
+        $this->assertStringContainsString('style="z-index:120"', $templates);
     }
 }
