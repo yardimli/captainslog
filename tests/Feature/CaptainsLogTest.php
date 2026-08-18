@@ -174,7 +174,19 @@ class CaptainsLogTest extends TestCase
             ->assertSee('aria-label="Sign in"', false)
             ->assertSee('aria-label="Register"', false)
             ->assertSee('aria-label="Toggle theme"', false)
+            ->assertSee('data-theme-option="light"', false)
+            ->assertSee('data-theme-option="paper"', false)
+            ->assertSee('data-theme-option="blue"', false)
+            ->assertSee('data-theme-option="red"', false)
+            ->assertSee('data-theme-option="dark"', false)
+            ->assertSee('Paper garden')
+            ->assertSee('Blue horizon')
+            ->assertSee('Red alert')
             ->assertDontSee('data-mobile-nav-toggle', false);
+
+        $script = file_get_contents(resource_path('js/app.js'));
+        $this->assertStringContainsString("document.documentElement.dataset.theme = selected", $script);
+        $this->assertStringContainsString("icon.dataset.themeIcon !== selected", $script);
     }
 
     public function test_task_buttons_accept_custom_browser_colors_and_legacy_colors_still_render(): void
@@ -212,9 +224,19 @@ class CaptainsLogTest extends TestCase
         $this->actingAs($user)->get(route('tasks.index'))->assertOk()
             ->assertSee('data-emoji-picker', false)
             ->assertSee('data-emoji-search', false)
-            ->assertSee('data-emoji-category="animals"', false)
-            ->assertSee('data-emoji-name="medicine medication pill"', false)
+            ->assertSee('data-emoji-source="'.asset('data/data-by-group.json').'"', false)
+            ->assertSee('data-emoji-category-template', false)
+            ->assertSee('data-emoji-option-template', false)
+            ->assertSee('z-[100]', false)
+            ->assertSee('max-h-[300px]', false)
             ->assertSee('🧘');
+
+        $emojiGroups = json_decode(file_get_contents(public_path('data/data-by-group.json')), true, flags: JSON_THROW_ON_ERROR);
+        $allEmojis = collect($emojiGroups)->flatMap(fn ($group) => $group['emojis']);
+        $this->assertGreaterThan(1800, $allEmojis->count());
+        $this->assertSame('💻', $allEmojis->firstWhere('name', 'laptop')['emoji']);
+        $this->assertCount(9, $emojiGroups);
+        $this->assertStringContainsString('emoji-picker-host-active', file_get_contents(resource_path('js/app.js')));
 
         $created = $this->postJson(route('blocks.store', $log), [
             'type' => 'text', 'content' => 'Custom emoji note', 'emoji' => '🌈', 'occurred_at' => '09:15',

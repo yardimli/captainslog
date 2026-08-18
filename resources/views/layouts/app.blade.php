@@ -12,7 +12,7 @@
 
         <title>{{ config('app.name', "Captain's Log") }}</title>
         <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
-        <script>if(localStorage.getItem('captainslog.theme')==='dark'||(!localStorage.getItem('captainslog.theme')&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')</script>
+        <script>(()=>{const themes=['light','paper','blue','red','dark'],saved=localStorage.getItem('captainslog.theme'),theme=themes.includes(saved)?saved:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.dataset.theme=theme;document.documentElement.classList.toggle('dark',theme==='dark'||theme==='red')})()</script>
 
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])

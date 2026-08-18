@@ -6,7 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Captain's Log · Live guest demo</title>
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
-    <script>if(localStorage.getItem('captainslog.theme')==='dark'||(!localStorage.getItem('captainslog.theme')&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')</script>
+    <script>(()=>{const themes=['light','paper','blue','red','dark'],saved=localStorage.getItem('captainslog.theme'),theme=themes.includes(saved)?saved:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.dataset.theme=theme;document.documentElement.classList.toggle('dark',theme==='dark'||theme==='red')})()</script>
     @vite(['resources/css/app.css','resources/js/app.js'])
 </head>
 <body class="min-h-screen overflow-x-hidden bg-slate-100 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
@@ -18,7 +18,7 @@
             <a href="{{ route('demo.index') }}" class="flex items-center gap-2 font-black">@include('partials.logo', ['class' => 'h-9 w-9'])<span>Captain's Log</span></a>
             <span class="hidden rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200 sm:inline">Live guest simulation</span>
             <div id="guest-navigation-actions" class="ml-auto flex items-center gap-1">
-                <button type="button" data-theme-toggle class="nav-link p-2" aria-label="Toggle theme" title="Toggle theme"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3a6 6 0 1 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
+                @include('partials.theme-selector')
                 @auth<a class="nav-link p-2" href="{{ route('calendar') }}" aria-label="Open my log" title="Open my log"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 5h18v16H3zM16 3v4M8 3v4M3 10h18"/></svg></a>@else<a class="nav-link p-2" href="{{ route('login') }}" aria-label="Sign in" title="Sign in"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 7l5 5-5 5M19 12H7M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5"/></svg></a><a class="nav-link p-2" href="{{ route('register') }}" aria-label="Register" title="Register"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M8 11a4 4 0 1 0 0-8M19 8v6M22 11h-6"/></svg></a>@endauth
             </div>
         </nav>

@@ -45,7 +45,7 @@
             </div>
         @endif
 
-        <button type="button" data-theme-toggle class="nav-link ml-auto p-2" aria-label="Toggle theme" title="Toggle theme"><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3a6 6 0 1 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
+        @include('partials.theme-selector', ['class' => 'ml-auto'])
         <form method="POST" action="{{ route('logout') }}">@csrf<button class="nav-link p-2" aria-label="Sign out" title="Sign out"><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg></button></form>
         <button type="button" class="nav-link p-2" data-mobile-nav-toggle aria-expanded="false" aria-controls="account-navigation" aria-label="Open navigation" title="Menu"><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
     </div>

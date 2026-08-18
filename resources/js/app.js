@@ -135,6 +135,22 @@ function setMobileNavigation(open) {
     toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
 
+const colorThemes = ['light', 'paper', 'blue', 'red', 'dark'];
+function applyTheme(theme) {
+    const selected = colorThemes.includes(theme) ? theme : 'light';
+    document.documentElement.dataset.theme = selected;
+    document.documentElement.classList.toggle('dark', selected === 'dark' || selected === 'red');
+    localStorage.setItem('captainslog.theme', selected);
+    document.querySelectorAll('[data-theme-icon]').forEach(icon => icon.classList.toggle('hidden', icon.dataset.themeIcon !== selected));
+    document.querySelectorAll('[data-theme-option]').forEach(option => {
+        const active = option.dataset.themeOption === selected;
+        option.setAttribute('aria-checked', active ? 'true' : 'false');
+        option.querySelector('[data-theme-check]')?.classList.toggle('opacity-0', !active);
+    });
+}
+
+applyTheme(document.documentElement.dataset.theme || 'light');
+
 function openOverlay(name) {
     const root = document.querySelector(`[data-overlay="${name}"]`); if (!root) return;
     document.querySelectorAll('[data-overlay][data-open="true"]').forEach(item => closeOverlay(item, true));
@@ -274,17 +290,32 @@ function setEmojiPickerValue(picker, value, dispatch = false) {
     }
 }
 
+const emojiDataRequests = new Map();
+function loadEmojiGroups(url) {
+    if (!emojiDataRequests.has(url)) {
+        emojiDataRequests.set(url, fetch(url, {headers:{Accept:'application/json'}}).then(response => {
+            if (!response.ok) throw new Error('The emoji library could not be loaded.');
+            return response.json();
+        }));
+    }
+    return emojiDataRequests.get(url);
+}
+
 function initEmojiPicker(picker) {
     if (picker.dataset.emojiInitialized === 'true') return;
     picker.dataset.emojiInitialized = 'true';
     const toggle = picker.querySelector('[data-emoji-toggle]');
     const menu = picker.querySelector('[data-emoji-menu]');
     const search = picker.querySelector('[data-emoji-search]');
-    const categories = Array.from(picker.querySelectorAll('[data-emoji-category]'));
-    const options = Array.from(picker.querySelectorAll('[data-emoji-option]'));
+    const categoryList = picker.querySelector('[data-emoji-categories]');
+    const grid = picker.querySelector('[data-emoji-grid]');
+    const categoryTemplate = picker.querySelector('[data-emoji-category-template]');
+    const optionTemplate = picker.querySelector('[data-emoji-option-template]');
+    const loading = picker.querySelector('[data-emoji-loading]');
     const empty = picker.querySelector('[data-emoji-empty]');
-    let activeCategory = categories[0]?.dataset.emojiCategory || 'recent';
-    const close = () => { menu?.classList.add('hidden'); toggle?.setAttribute('aria-expanded', 'false'); };
+    const host = picker.closest('.panel');
+    let categories = [], options = [], activeCategory = '', hydrated = false;
+    const close = () => { menu?.classList.add('hidden'); menu?.classList.remove('flex'); host?.classList.remove('emoji-picker-host-active'); toggle?.setAttribute('aria-expanded', 'false'); };
     const render = () => {
         const query = (search?.value || '').trim().toLocaleLowerCase();
         let visible = 0;
@@ -293,18 +324,12 @@ function initEmojiPicker(picker) {
             const matchesCategory = query || option.dataset.emojiCategoryName === activeCategory;
             const show = Boolean(matchesSearch && matchesCategory);
             option.classList.toggle('hidden', !show);
+            option.classList.toggle('flex', show);
             if (show) visible++;
         });
         empty?.classList.toggle('hidden', visible > 0);
     };
-    toggle?.addEventListener('click', () => {
-        const opens = menu?.classList.contains('hidden');
-        document.querySelectorAll('[data-emoji-menu]:not(.hidden)').forEach(other => { if (other !== menu) { other.classList.add('hidden'); other.closest('[data-emoji-picker]')?.querySelector('[data-emoji-toggle]')?.setAttribute('aria-expanded', 'false'); } });
-        menu?.classList.toggle('hidden', !opens);
-        toggle.setAttribute('aria-expanded', opens ? 'true' : 'false');
-        if (opens) { render(); setTimeout(() => search?.focus(), 0); }
-    });
-    categories.forEach(category => category.addEventListener('click', () => {
+    const selectCategory = category => {
         activeCategory = category.dataset.emojiCategory;
         if (search) search.value = '';
         categories.forEach(item => {
@@ -312,12 +337,51 @@ function initEmojiPicker(picker) {
             item.classList.toggle('bg-indigo-100', active); item.classList.toggle('text-indigo-700', active);
             item.classList.toggle('dark:bg-indigo-950', active); item.classList.toggle('dark:text-indigo-200', active);
             item.classList.toggle('text-slate-500', !active);
+            item.setAttribute('aria-selected', active ? 'true' : 'false');
         });
         render();
-    }));
-    options.forEach(option => option.addEventListener('click', () => { setEmojiPickerValue(picker, option.dataset.emojiValue, true); close(); }));
+    };
+    const hydrate = async () => {
+        if (hydrated) return;
+        try {
+            const groups = await loadEmojiGroups(picker.dataset.emojiSource);
+            const categoryNodes = [], optionNodes = [];
+            groups.forEach(group => {
+                const categoryName = group.slug || group.name.toLocaleLowerCase().replace(/[^a-z0-9]+/g, '_');
+                const category = categoryTemplate.content.firstElementChild.cloneNode(true);
+                category.dataset.emojiCategory = categoryName;
+                category.textContent = group.name;
+                category.addEventListener('click', () => selectCategory(category));
+                categoryNodes.push(category);
+                (group.emojis || []).forEach(emoji => {
+                    const option = optionTemplate.content.firstElementChild.cloneNode(true);
+                    option.dataset.emojiCategoryName = categoryName;
+                    option.dataset.emojiName = `${emoji.name || ''} ${(emoji.slug || '').replaceAll('_', ' ')}`.trim();
+                    option.dataset.emojiValue = emoji.emoji;
+                    option.textContent = emoji.emoji;
+                    option.setAttribute('aria-label', emoji.name || emoji.slug || emoji.emoji);
+                    option.addEventListener('click', () => { setEmojiPickerValue(picker, option.dataset.emojiValue, true); close(); });
+                    optionNodes.push(option);
+                });
+            });
+            categoryList.replaceChildren(...categoryNodes);
+            grid.replaceChildren(...optionNodes);
+            categories = categoryNodes; options = optionNodes; activeCategory = categories[0]?.dataset.emojiCategory || '';
+            hydrated = true;
+            if (categories[0]) selectCategory(categories[0]); else render();
+        } catch (error) {
+            if (loading) loading.textContent = error.message;
+        }
+    };
+    toggle?.addEventListener('click', async () => {
+        const opens = menu?.classList.contains('hidden');
+        document.querySelectorAll('[data-emoji-menu]:not(.hidden)').forEach(other => { if (other !== menu) { other.classList.add('hidden'); other.classList.remove('flex'); const otherPicker = other.closest('[data-emoji-picker]'); otherPicker?.closest('.panel')?.classList.remove('emoji-picker-host-active'); otherPicker?.querySelector('[data-emoji-toggle]')?.setAttribute('aria-expanded', 'false'); } });
+        if (!opens) { close(); return; }
+        menu?.classList.remove('hidden'); menu?.classList.add('flex'); host?.classList.add('emoji-picker-host-active');
+        toggle.setAttribute('aria-expanded', opens ? 'true' : 'false');
+        if (opens) { await hydrate(); render(); setTimeout(() => search?.focus(), 0); }
+    });
     search?.addEventListener('input', render);
-    render();
 }
 
 document.querySelectorAll('[data-emoji-picker]').forEach(initEmojiPicker);
@@ -382,7 +446,10 @@ function configureEventDefinition(data = null) {
 document.addEventListener('click', event => {
     document.querySelectorAll('[data-emoji-picker]').forEach(picker => {
         if (!picker.contains(event.target)) {
-            picker.querySelector('[data-emoji-menu]')?.classList.add('hidden');
+            const menu = picker.querySelector('[data-emoji-menu]');
+            menu?.classList.add('hidden');
+            menu?.classList.remove('flex');
+            picker.closest('.panel')?.classList.remove('emoji-picker-host-active');
             picker.querySelector('[data-emoji-toggle]')?.setAttribute('aria-expanded', 'false');
         }
     });
@@ -728,6 +795,9 @@ document.addEventListener('click', async e => {
     document.querySelectorAll('[data-events-menu][open]').forEach(menu => {
         if (!menu.contains(e.target)) menu.removeAttribute('open');
     });
+    document.querySelectorAll('[data-theme-menu][open]').forEach(menu => {
+        if (!menu.contains(e.target)) menu.removeAttribute('open');
+    });
     const mobileToggle = e.target.closest('[data-mobile-nav-toggle]');
     if (mobileToggle) setMobileNavigation(mobileToggle.getAttribute('aria-expanded') !== 'true');
     else if (!e.target.closest('[data-mobile-nav-menu]')) setMobileNavigation(false);
@@ -752,7 +822,11 @@ document.addEventListener('click', async e => {
         if (overlay?.dataset.overlay === 'composer') await saveComposerDraft(overlay);
         else closeOverlay(overlay);
     }
-    if (e.target.closest('[data-theme-toggle]')) { document.documentElement.classList.toggle('dark'); localStorage.setItem('captainslog.theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light'); }
+    const themeOption = e.target.closest('[data-theme-option]');
+    if (themeOption) {
+        applyTheme(themeOption.dataset.themeOption);
+        themeOption.closest('[data-theme-menu]')?.removeAttribute('open');
+    }
     const timelineItem = e.target.closest('.timeline-item');
     const nestedAction = e.target.closest('button, a, input, textarea, select, form, audio, video');
     if (timelineItem && !composerTrigger && !e.target.closest('[data-task-event]') && (!nestedAction || nestedAction === timelineItem)) {
