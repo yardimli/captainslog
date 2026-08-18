@@ -48,7 +48,10 @@ class DayLogController extends Controller
             ]);
         }
 
-        $plannerTasks = $tasks->where('is_sticky', true)->filter(fn (TaskDefinition $task) => $task->isPlannerVisible($day, now()));
+        $incompleteStickyTasks = $tasks->where('is_sticky', true)->filter(fn (TaskDefinition $task) =>
+            (int) ($counts[$task->id] ?? 0) < $task->daily_default_count
+        );
+        $plannerTasks = $incompleteStickyTasks->filter(fn (TaskDefinition $task) => $task->isPlannerVisible($day, now()));
         foreach ($plannerTasks as $task) {
             $times = $task->scheduled_times ?: ['00:00'];
             foreach ($times as $time) {
@@ -65,7 +68,7 @@ class DayLogController extends Controller
         }
 
         $nextStickyVisibility = $day->isToday()
-            ? $tasks->where('is_sticky', true)
+            ? $incompleteStickyTasks
                 ->pluck('visible_after')
                 ->filter(fn ($time) => $time && $time > now()->format('H:i'))
                 ->sort()

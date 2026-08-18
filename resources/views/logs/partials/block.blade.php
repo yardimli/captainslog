@@ -34,7 +34,13 @@
     @foreach($block->attachments as $attachment)
         <div class="block-attachment mt-3 overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-950">
             @if($attachment->type === 'image')
-                <img src="{{ $attachment->url }}" alt="Image attachment" class="max-h-[32rem] w-full object-contain" loading="lazy">
+                <div class="block-image-frame group/image relative h-[512px] max-h-[512px]">
+                    <img src="{{ $attachment->url }}" alt="Image attachment" class="h-[512px] max-h-[512px] w-full object-contain" loading="lazy">
+                    <div class="block-image-controls absolute right-3 top-3 flex gap-2 opacity-100 transition sm:opacity-0 sm:group-hover/image:opacity-100 sm:focus-within:opacity-100">
+                        <button type="button" class="grid h-10 w-10 place-items-center rounded-xl bg-slate-950/80 text-white shadow-lg backdrop-blur hover:bg-indigo-600" data-image-preview-open data-image-url="{{ $attachment->url }}" data-image-name="{{ $attachment->original_name }}" aria-label="Open image" title="Open image"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 3h6v6M14 10l7-7M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg></button>
+                        <a href="{{ $attachment->url }}" download="{{ $attachment->original_name }}" class="grid h-10 w-10 place-items-center rounded-xl bg-slate-950/80 text-white shadow-lg backdrop-blur hover:bg-indigo-600" aria-label="Download image" title="Download image"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></a>
+                    </div>
+                </div>
             @elseif($attachment->type === 'audio')
                 <audio class="w-full" controls src="{{ $attachment->url }}"></audio>
                 <form data-ajax method="POST" action="{{ route('openrouter.transcribe', $attachment) }}" class="flex gap-2 p-2"><input class="input text-xs" name="model" value="openai/whisper-large-v3"><button class="btn-secondary">Transcribe</button></form>

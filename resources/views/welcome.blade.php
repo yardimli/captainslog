@@ -56,7 +56,15 @@
                             <time class="w-20 shrink-0 pt-4 text-center font-mono text-xs font-bold text-slate-500">{{ $recordedAt->format('g:i A') }}</time>
                             <article class="panel group min-w-0 flex-1">
                                 <div class="demo-block-content whitespace-pre-wrap text-[1.02rem] leading-relaxed"><span class="mr-2 inline-block align-middle text-xl" data-block-emoji aria-hidden="true">{{ $block->emoji }}</span><span class="mr-2 inline-flex align-middle rounded-lg bg-slate-100 px-2 py-1 text-xs font-bold uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ str_replace('_',' ', $block->type) }}</span>@if($block->taskEvent)<strong class="text-lg">{{ $block->taskEvent->task_name }} <span class="text-indigo-600">· {{ $block->taskEvent->selected_value }}</span></strong>@endif @if($block->content){{ $block->content }}@endif</div>
-                                @foreach($block->attachments->where('type', 'image') as $attachment)<img src="{{ route('demo.attachments.show', $attachment) }}" alt="Image attached to this demo log entry" class="mt-4 max-h-[34rem] w-full rounded-xl bg-slate-100 object-contain dark:bg-slate-950" loading="lazy">@endforeach
+                                @foreach($block->attachments->where('type', 'image') as $attachment)
+                                    <div class="block-image-attachment group/image relative mt-4 h-[512px] max-h-[512px] overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-950">
+                                        <img src="{{ route('demo.attachments.show', $attachment) }}" alt="Image attached to this demo log entry" class="h-[512px] max-h-[512px] w-full object-contain" loading="lazy">
+                                        <div class="block-image-controls absolute right-3 top-3 flex gap-2 opacity-100 transition sm:opacity-0 sm:group-hover/image:opacity-100 sm:focus-within:opacity-100">
+                                            <button type="button" class="grid h-10 w-10 place-items-center rounded-xl bg-slate-950/80 text-white shadow-lg backdrop-blur hover:bg-indigo-600" data-image-preview-open data-image-url="{{ route('demo.attachments.show', $attachment) }}" data-image-name="{{ $attachment->original_name }}" aria-label="Open image" title="Open image"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 3h6v6M14 10l7-7M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg></button>
+                                            <a href="{{ route('demo.attachments.show', $attachment) }}" download="{{ $attachment->original_name }}" class="grid h-10 w-10 place-items-center rounded-xl bg-slate-950/80 text-white shadow-lg backdrop-blur hover:bg-indigo-600" aria-label="Download image" title="Download image"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg></a>
+                                        </div>
+                                    </div>
+                                @endforeach
                             </article>
                         </div>
                     @endforeach

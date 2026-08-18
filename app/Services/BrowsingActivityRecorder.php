@@ -17,7 +17,7 @@ class BrowsingActivityRecorder
 
     public function record(Sensor $sensor, string $url, string $clientId, ?string $observedAt = null): BrowsingActivity
     {
-        $domain = $this->registrableDomain($url);
+        $domain = $this->fullHostname($url);
         $observed = filled($observedAt) ? Carbon::parse($observedAt) : now();
         $observed->setTimezone(config('app.timezone'));
         if ($observed->diffInSeconds(now(), true) > 300) {
@@ -156,18 +156,14 @@ class BrowsingActivityRecorder
         return $minutes < 60 ? $minutes.' min' : intdiv($minutes, 60).'h '.($minutes % 60).'m';
     }
 
-    private function registrableDomain(string $url): string
+    private function fullHostname(string $url): string
     {
         $host = strtolower((string) parse_url($url, PHP_URL_HOST));
         $host = trim($host, '.');
         if ($host === '' || filter_var($host, FILTER_VALIDATE_IP)) {
             throw ValidationException::withMessages(['url' => 'Send an HTTP or HTTPS URL with a domain name.']);
         }
-        $labels = explode('.', preg_replace('/^www\./', '', $host));
-        $publicSuffixPairs = ['co.uk', 'org.uk', 'ac.uk', 'com.au', 'net.au', 'org.au', 'co.jp', 'co.nz', 'com.br', 'com.tw'];
-        $lastTwo = implode('.', array_slice($labels, -2));
-        $take = count($labels) >= 3 && in_array($lastTwo, $publicSuffixPairs, true) ? 3 : 2;
 
-        return implode('.', array_slice($labels, -$take));
+        return $host;
     }
 }

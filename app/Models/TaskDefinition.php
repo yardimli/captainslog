@@ -19,10 +19,11 @@ class TaskDefinition extends Model
         'sky' => '#0284c7',
     ];
 
-    protected $fillable = ['user_id', 'name', 'emoji', 'color', 'is_sticky', 'recurrence_type', 'recurrence_days', 'scheduled_times', 'visible_after', 'options', 'is_active'];
+    protected $fillable = ['user_id', 'name', 'emoji', 'color', 'is_sticky', 'daily_default_count', 'recurrence_type', 'recurrence_days', 'scheduled_times', 'visible_after', 'options', 'is_active'];
 
     protected $casts = [
         'is_sticky' => 'boolean',
+        'daily_default_count' => 'integer',
         'is_active' => 'boolean',
         'recurrence_days' => 'array',
         'scheduled_times' => 'array',

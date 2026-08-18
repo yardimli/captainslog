@@ -82,8 +82,8 @@ The integration follows OpenRouter's APIs for [chat completions](https://openrou
 ### Automatic sensors
 
 - Link GitHub to add commit project names at their commit times. Commits for the same project and hour share one timeline entry, with every individual commit available in its side panel.
-- Install the included Manifest V3 Chrome extension from `public/captainslog-chrome-extension` to track active browsing domains.
-- Browsing activity is grouped into one log entry per hour, with domain totals available from the entry's side panel.
+- Install the included Manifest V3 Chrome extension from `public/captainslog-chrome-extension` to track active browsing hostnames, including subdomains.
+- Browsing activity is grouped into one log entry per hour, with full-hostname totals available from the entry's side panel.
 - The extension sends a one-minute heartbeat while Chrome is active; three minutes without activity closes the session.
 - Pairing uses a random extension key opened against the configured Captain's Log URL. Laravel stores only its SHA-256 hash.
 - The extension defaults to `http://127.0.0.1:8016/`, and its options page supports a different app URL.

@@ -37,6 +37,7 @@ async function sendActiveBrowsing() {
     if (!tab) return;
     const browsingUrl = new URL(tab.url);
     if (browsingUrl.origin === new URL(appUrl).origin) return;
+    const browsingOrigin = `${browsingUrl.protocol}//${browsingUrl.hostname}`;
 
     const response = await fetch(new URL('api/sensors/browser/activity', appUrl), {
       method: 'POST',
@@ -46,7 +47,7 @@ async function sendActiveBrowsing() {
         'X-CaptainsLog-Key': config.pairingKey
       },
       body: JSON.stringify({
-        url: browsingUrl.origin,
+        url: browsingOrigin,
         observed_at: new Date().toISOString(),
         client_id: config.clientId
       })

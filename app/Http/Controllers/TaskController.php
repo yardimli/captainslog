@@ -88,6 +88,7 @@ class TaskController extends Controller
             'scheduled_times' => 'nullable|array|max:24',
             'scheduled_times.*' => 'date_format:H:i',
             'visible_after' => 'nullable|date_format:H:i',
+            'daily_default_count' => 'nullable|integer|min:1|max:999',
         ]);
         $options = collect(preg_split('/[\r\n,]+/', $data['options_text'] ?? ''))->map(fn ($v) => trim($v))->filter()->unique()->values()->all();
         $recurrenceDays = match ($data['recurrence_type']) {
@@ -109,6 +110,7 @@ class TaskController extends Controller
             'emoji' => filled($data['emoji'] ?? null) ? $data['emoji'] : TaskDefinition::DEFAULT_EMOJI,
             'color' => strtolower($data['color']),
             'is_sticky' => $request->boolean('is_sticky'),
+            'daily_default_count' => $data['daily_default_count'] ?? 1,
             'recurrence_type' => $data['recurrence_type'],
             'recurrence_days' => $recurrenceDays ?: null,
             'scheduled_times' => $scheduledTimes->all() ?: null,

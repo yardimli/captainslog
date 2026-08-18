@@ -20,6 +20,16 @@
 <template id="select-option-template"><option></option></template>
 <template id="ajax-method-template"><input type="hidden" name="_method"></template>
 
+<template id="image-preview-overlay-template">
+    <div id="image-preview-overlay" class="fixed inset-0 hidden place-items-center p-3 sm:p-6" style="z-index:110" data-overlay="image-preview" role="dialog" aria-modal="true" aria-labelledby="image-preview-title">
+        <button type="button" class="absolute inset-0 bg-slate-950/80 opacity-0 transition-opacity" data-overlay-backdrop data-overlay-close="image-preview" aria-label="Close image preview"></button>
+        <section class="relative flex max-h-[calc(100dvh-1.5rem)] w-full max-w-6xl translate-y-5 flex-col overflow-hidden rounded-2xl bg-white opacity-0 shadow-2xl transition-all dark:bg-slate-900 sm:max-h-[calc(100dvh-3rem)]" data-overlay-panel>
+            <header class="flex items-center gap-3 border-b border-slate-200 p-3 dark:border-slate-700"><h2 id="image-preview-title" class="font-bold">Image preview</h2><a class="btn-secondary ml-auto" data-image-preview-download>Download</a><button type="button" class="btn-secondary" data-overlay-close="image-preview">Close</button></header>
+            <img class="min-h-0 flex-1 bg-slate-100 object-contain dark:bg-slate-950" data-image-preview-image>
+        </section>
+    </div>
+</template>
+
 <template id="browsing-domain-row-template">
     <div class="block-browsing-domain-row flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
         <span class="min-w-0 truncate font-semibold" data-browsing-domain-name></span>

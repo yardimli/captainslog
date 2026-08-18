@@ -332,6 +332,28 @@ class CaptainsLogTest extends TestCase
             ->assertSee('data-timeline-time="17:00"', false);
     }
 
+    public function test_sticky_event_disappears_after_reaching_its_daily_default_count(): void
+    {
+        $user = User::factory()->create();
+        $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
+        $task = TaskDefinition::create([
+            'user_id' => $user->id,
+            'name' => 'Dog medication',
+            'is_sticky' => true,
+            'daily_default_count' => 2,
+            'recurrence_type' => 'daily',
+            'scheduled_times' => ['08:00'],
+        ]);
+
+        $this->actingAs($user)->get('/logs/2026-08-15')->assertOk()->assertSee('data-scheduled-event', false);
+        $this->postJson(route('events.store', [$log, $task]))->assertCreated()->assertJsonPath('count', 1);
+        $this->get('/logs/2026-08-15')->assertOk()->assertSee('data-scheduled-event', false);
+        $this->postJson(route('events.store', [$log, $task]))->assertCreated()->assertJsonPath('count', 2);
+        $this->get('/logs/2026-08-15')->assertOk()
+            ->assertDontSee('data-scheduled-event', false)
+            ->assertSee('data-task-event="'.route('events.store', [$log, $task]).'"', false);
+    }
+
     public function test_sticky_event_visibility_time_only_delays_todays_planner_button(): void
     {
         Carbon::setTestNow('2026-08-17 17:45:00');
@@ -532,8 +554,19 @@ class CaptainsLogTest extends TestCase
         $this->get(route('logs.show', '2026-08-15'))->assertOk()
             ->assertSee('data-edit-media=', false)
             ->assertSee('composer-image-preview-template', false)
+            ->assertSee('image-preview-overlay-template', false)
+            ->assertSee('h-[512px]', false)
+            ->assertSee('max-h-[512px]', false)
+            ->assertSee('data-image-preview-open', false)
+            ->assertSee('aria-label="Download image"', false)
+            ->assertSee('download="horizon.jpg"', false)
             ->assertDontSee('<span class="truncate">horizon.jpg</span>', false)
             ->assertDontSee('data-delete="'.route('attachments.destroy', $attachment).'"', false);
+
+        $script = file_get_contents(resource_path('js/app.js'));
+        $this->assertStringContainsString('const scrollPosition = {x: window.scrollX, y: window.scrollY}', $script);
+        $this->assertStringContainsString('sessionStorage.setItem(reloadScrollKey', $script);
+        $this->assertStringContainsString("openOverlay('image-preview')", $script);
 
         $this->deleteJson(route('blocks.destroy', $attachment->log_block_id))->assertOk();
         Storage::disk('local')->assertMissing($response->json('attachment.path'));

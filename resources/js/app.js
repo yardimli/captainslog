@@ -55,13 +55,33 @@ async function refreshDayView() {
     const nextDocument = new DOMParser().parseFromString(await response.text(), 'text/html');
     const replacement = nextDocument.querySelector('#page-content');
     if (!replacement) throw new Error('The entry was saved, but the day view could not be refreshed.');
+    const scrollPosition = {x: window.scrollX, y: window.scrollY};
     currentMain.replaceWith(replacement);
     initializeRefreshedMain(replacement);
+    window.requestAnimationFrame(() => window.scrollTo(scrollPosition.x, scrollPosition.y));
     return true;
 }
 
+const reloadScrollKey = `captainslog.reload-scroll:${window.location.pathname}${window.location.search}`;
+function reloadAtCurrentScroll() {
+    try { sessionStorage.setItem(reloadScrollKey, JSON.stringify({x:window.scrollX, y:window.scrollY})); } catch (_) {}
+    window.location.reload();
+}
+
+function restoreReloadScrollPosition() {
+    let saved = null;
+    try { saved = sessionStorage.getItem(reloadScrollKey); sessionStorage.removeItem(reloadScrollKey); } catch (_) {}
+    if (!saved) return;
+    try {
+        const position = JSON.parse(saved);
+        window.requestAnimationFrame(() => window.scrollTo(Number(position.x) || 0, Number(position.y) || 0));
+    } catch (_) {}
+}
+
+restoreReloadScrollPosition();
+
 async function refreshDayViewOrReload() {
-    if (!await refreshDayView()) window.location.reload();
+    if (!await refreshDayView()) reloadAtCurrentScroll();
 }
 
 function startSessionKeepAlive() {
@@ -339,6 +359,7 @@ function configureEventDefinition(data = null) {
     form.querySelectorAll('[name="weekdays[]"]').forEach(input => { input.checked = days.includes(Number(input.value)); });
     form.querySelector('[name="month_days_text"]').value = recurrence.value === 'monthly' ? days.join(', ') : '';
     form.querySelector('[name="options_text"]').value = data?.options_text || '';
+    form.querySelector('[name="daily_default_count"]').value = data?.daily_default_count || 1;
     form.querySelector('[name="is_sticky"]').checked = Boolean(data?.is_sticky);
     const visibleAfter = form.querySelector('[name="visible_after"]');
     const visibleAfterToggle = form.querySelector('[data-visible-after-toggle]');
@@ -547,6 +568,24 @@ function openGithubDetails(item) {
     openOverlay('github');
 }
 
+function openImagePreview(trigger) {
+    let root = document.querySelector('[data-overlay="image-preview"]');
+    if (!root) {
+        root = cloneTemplate('image-preview-overlay-template');
+        document.body.append(root);
+    }
+
+    const url = trigger.dataset.imageUrl;
+    const name = trigger.dataset.imageName || 'image';
+    const image = root.querySelector('[data-image-preview-image]');
+    const download = root.querySelector('[data-image-preview-download]');
+    image.src = url;
+    image.alt = name;
+    download.href = url;
+    download.download = name;
+    openOverlay('image-preview');
+}
+
 async function saveComposerDraft(root, {close = true, refresh = true} = {}) {
     const form = root?.querySelector('[data-composer-note-form]');
     if (!form || form.dataset.composerMode !== 'edit') {
@@ -597,7 +636,7 @@ document.addEventListener('submit', async e => {
         if (await refreshDayView()) {
             const overlay = form.closest('[data-overlay]');
             if (overlay) closeOverlay(overlay);
-        } else if (body.reload || form.matches('[data-composer-note-form]')) window.location.reload();
+        } else if (body.reload || form.matches('[data-composer-note-form]')) reloadAtCurrentScroll();
         else form.reset();
     }
     catch (error) { toast(error.message, true); } finally { setButtonBusy(button, false); }
@@ -696,6 +735,7 @@ document.addEventListener('click', async e => {
     const composerTrigger = e.target.closest('[data-composer-open]');
     const eventDefinitionCreate = e.target.closest('[data-event-definition-create]');
     const eventDefinitionOpen = e.target.closest('[data-event-definition-open]');
+    const imagePreview = e.target.closest('[data-image-preview-open]');
     const overlayClose = e.target.closest('[data-overlay-close]');
     const composerCancel = e.target.closest('[data-composer-cancel]');
     if (overlayTrigger) { setMobileNavigation(false); openOverlay(overlayTrigger.dataset.panelOpen); }
@@ -705,6 +745,7 @@ document.addEventListener('click', async e => {
         const source = document.getElementById(eventDefinitionOpen.dataset.eventDefinitionOpen);
         if (source) configureEventDefinition(JSON.parse(source.textContent));
     }
+    if (imagePreview) openImagePreview(imagePreview);
     if (composerCancel) closeOverlay(composerCancel.closest('[data-overlay="composer"]'));
     if (overlayClose) {
         const overlay = overlayClose.closest('[data-overlay]');

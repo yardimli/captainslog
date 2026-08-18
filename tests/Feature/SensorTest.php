@@ -246,30 +246,31 @@ class SensorTest extends TestCase
             ]);
         };
 
-        $send('https://docs.github.com/en/rest?private=query')->assertCreated()->assertJsonPath('domain', 'github.com');
+        $send('https://docs.github.com/en/rest?private=query')->assertCreated()->assertJsonPath('domain', 'docs.github.com');
         Carbon::setTestNow('2026-08-17 10:01:00');
         $send('https://github.com/yardimli/captainslog')->assertCreated()->assertJsonPath('domain', 'github.com');
         Carbon::setTestNow('2026-08-17 10:02:00');
-        $send('https://news.ycombinator.com/item?id=1')->assertCreated()->assertJsonPath('domain', 'ycombinator.com');
+        $send('https://news.ycombinator.com/item?id=1')->assertCreated()->assertJsonPath('domain', 'news.ycombinator.com');
 
         $this->assertDatabaseCount('daily_logs', 1);
-        $this->assertDatabaseCount('browsing_activities', 2);
+        $this->assertDatabaseCount('browsing_activities', 3);
         $this->assertDatabaseCount('log_blocks', 1);
         $github = BrowsingActivity::where('domain', 'github.com')->firstOrFail();
         $this->assertNotNull($github->ended_at);
-        $this->assertSame(120, $github->duration_seconds);
+        $this->assertSame(60, $github->duration_seconds);
 
         Carbon::setTestNow('2026-08-17 10:06:00');
         $page = $this->actingAs($user)->get('/logs/2026-08-17')->assertOk()
             ->assertSee('data-timeline-browsing', false)
+            ->assertSee('docs.github.com')
             ->assertSee('github.com')
-            ->assertSee('ycombinator.com')
+            ->assertSee('news.ycombinator.com')
             ->assertSee('data-browsing-domain-list', false)
             ->assertDontSee('/en/rest?private=query');
-        $this->assertNotNull(BrowsingActivity::where('domain', 'ycombinator.com')->firstOrFail()->ended_at);
+        $this->assertNotNull(BrowsingActivity::where('domain', 'news.ycombinator.com')->firstOrFail()->ended_at);
 
         Carbon::setTestNow('2026-08-17 11:00:00');
-        $send('https://mail.google.com/mail/u/0/')->assertCreated()->assertJsonPath('domain', 'google.com');
+        $send('https://mail.google.com/mail/u/0/')->assertCreated()->assertJsonPath('domain', 'mail.google.com');
         $this->assertDatabaseCount('log_blocks', 2);
         $this->assertDatabaseHas('log_blocks', ['type' => 'sensor_browser']);
         Carbon::setTestNow();
@@ -287,10 +288,19 @@ class SensorTest extends TestCase
         $manifest = json_decode(file_get_contents($manifestPath), true, flags: JSON_THROW_ON_ERROR);
         $this->assertSame(3, $manifest['manifest_version']);
         $this->assertSame('service-worker.js', $manifest['background']['service_worker']);
+        $this->assertSame(file_get_contents(public_path('favicon.svg')), file_get_contents(public_path('captainslog-chrome-extension/favicon.svg')));
+        foreach ([16, 32, 48, 128] as $size) {
+            $iconPath = public_path("captainslog-chrome-extension/icons/icon-{$size}.png");
+            $this->assertFileExists($iconPath);
+            $this->assertSame([$size, $size], array_slice(getimagesize($iconPath), 0, 2));
+            $this->assertSame("icons/icon-{$size}.png", $manifest['icons'][(string) $size]);
+        }
         $this->assertFileExists(public_path('captainslog-chrome-extension/options.html'));
         $worker = file_get_contents(public_path('captainslog-chrome-extension/service-worker.js'));
         $this->assertStringContainsString('http://127.0.0.1:8016/', $worker);
         $this->assertStringContainsString('api/sensors/browser/activity', $worker);
         $this->assertStringContainsString('sensors/browser/pair/', $worker);
+        $this->assertStringContainsString('browsingUrl.hostname', $worker);
+        $this->assertSame('1.1.0', $manifest['version']);
     }
 }
