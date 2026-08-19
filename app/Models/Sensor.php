@@ -12,6 +12,8 @@ class Sensor extends Model
 
     public const BROWSER = 'browser';
 
+    public const GOOGLE_CALENDAR = 'google_calendar';
+
     protected $fillable = ['user_id', 'type', 'username', 'token', 'pairing_key_hash', 'enabled', 'settings', 'last_checked_at', 'last_error'];
 
     protected $hidden = ['token', 'pairing_key_hash'];
@@ -31,5 +33,10 @@ class Sensor extends Model
     public function daySyncs(): HasMany
     {
         return $this->hasMany(SensorDaySync::class);
+    }
+
+    public function googleCalendarEvents(): HasMany
+    {
+        return $this->hasMany(GoogleCalendarEvent::class);
     }
 }

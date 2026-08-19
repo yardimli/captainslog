@@ -5,12 +5,18 @@ namespace App\Http\Controllers;
 use App\Models\DailyLog;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use App\Services\GoogleCalendarSync;
 
 class CalendarController extends Controller
 {
+    public function __construct(private GoogleCalendarSync $googleCalendar) {}
+
     public function index(Request $request, ?string $date = null)
     {
         $focus = rescue(fn () => Carbon::parse($date ?: now()), now(), false)->startOfDay();
+        if ($focus->format('Y-m') === now()->format('Y-m')) {
+            $this->googleCalendar->syncUser($request->user());
+        }
         $view = in_array($request->query('view'), ['day', 'week', 'month'], true) ? $request->query('view') : 'week';
         $weekStart = $request->user()->week_starts_on ?? 1;
         $weekEnd = ($weekStart + 6) % 7;

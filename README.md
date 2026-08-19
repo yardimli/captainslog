@@ -82,6 +82,8 @@ The integration follows OpenRouter's APIs for [chat completions](https://openrou
 ### Automatic sensors
 
 - Link GitHub to add commit project names at their commit times. Commits for the same project and hour share one timeline entry, with every individual commit available in its side panel.
+- Connect a Google account with read-only Calendar OAuth to mirror the primary calendar into the current month. Recurring instances are expanded, and renamed, moved, or removed Google events update their matching log entries.
+- Google Calendar refresh tokens are encrypted. The current month refreshes hourly and is also checked, with a fifteen-minute throttle, when its calendar or daily logs are opened.
 - Install the included Manifest V3 Chrome extension from `public/captainslog-chrome-extension` to track active browsing hostnames, including subdomains.
 - Browsing activity is grouped into one log entry per hour, with full-hostname totals available from the entry's side panel.
 - The extension sends a one-minute heartbeat while Chrome is active; three minutes without activity closes the session.
@@ -164,6 +166,19 @@ Run the Laravel migrations:
 
 ```bash
 php artisan migrate
+```
+
+To enable Google Calendar, create a Google OAuth 2.0 **Web application** client, enable Google Calendar API, and add `http://127.0.0.1:8016/sensors/google-calendar/callback` as an authorized redirect URI. Then add the credentials to `.env`:
+
+```dotenv
+GOOGLE_CALENDAR_CLIENT_ID=your_client_id
+GOOGLE_CALENDAR_CLIENT_SECRET=your_client_secret
+```
+
+For regular sensor updates, run Laravel's scheduler every minute. During local development this can remain open in another terminal:
+
+```bash
+php artisan schedule:work
 ```
 
 ### 3. Build and run

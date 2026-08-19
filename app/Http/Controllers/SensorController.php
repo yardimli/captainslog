@@ -18,6 +18,8 @@ class SensorController extends Controller
         return view('sensors.index', [
             'githubSensor' => $request->user()->sensors()->where('type', Sensor::GITHUB)->first(),
             'browserSensor' => $request->user()->sensors()->where('type', Sensor::BROWSER)->first(),
+            'googleCalendarSensor' => $request->user()->sensors()->where('type', Sensor::GOOGLE_CALENDAR)->first(),
+            'googleCalendarConfigured' => filled(config('services.google_calendar.client_id')) && filled(config('services.google_calendar.client_secret')),
         ]);
     }
 

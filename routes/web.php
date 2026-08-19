@@ -6,6 +6,7 @@ use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\DayLogController;
 use App\Http\Controllers\EmojiController;
 use App\Http\Controllers\GuestDemoController;
+use App\Http\Controllers\GoogleCalendarSensorController;
 use App\Http\Controllers\LogBlockController;
 use App\Http\Controllers\LongTextAttachmentController;
 use App\Http\Controllers\OpenRouterController;
@@ -73,6 +74,11 @@ Route::middleware('auth')->group(function () {
     Route::delete('/sensors/github', [SensorController::class, 'unlinkGithub'])->name('sensors.github.unlink');
     Route::get('/sensors/browser/pair/{key}', [SensorController::class, 'pairBrowser'])->name('sensors.browser.pair');
     Route::delete('/sensors/browser', [SensorController::class, 'unlinkBrowser'])->name('sensors.browser.unlink');
+    Route::get('/sensors/google-calendar/connect', [GoogleCalendarSensorController::class, 'connect'])->name('sensors.google-calendar.connect');
+    Route::get('/sensors/google-calendar/callback', [GoogleCalendarSensorController::class, 'callback'])->name('sensors.google-calendar.callback');
+    Route::patch('/sensors/google-calendar', [GoogleCalendarSensorController::class, 'toggle'])->name('sensors.google-calendar.toggle');
+    Route::post('/sensors/google-calendar/sync', [GoogleCalendarSensorController::class, 'sync'])->name('sensors.google-calendar.sync');
+    Route::delete('/sensors/google-calendar', [GoogleCalendarSensorController::class, 'unlink'])->name('sensors.google-calendar.unlink');
 
     Route::get('/settings', [SettingsController::class, 'edit'])->name('settings.edit');
     Route::get('/api-usage', [ApiUsageController::class, 'index'])->name('api-usage.index');

@@ -20,6 +20,7 @@ class LogBlock extends Model
         'sensor_github' => '💻',
         'sensor_browser' => '🌐',
         'sensor_kindle' => '📖',
+        'sensor_google_calendar' => '📅',
     ];
 
     protected $fillable = ['daily_log_id', 'type', 'emoji', 'content', 'metadata', 'position', 'occurred_at', 'is_hidden'];
@@ -66,5 +67,10 @@ class LogBlock extends Model
     public function kindleReadingProgress(): HasMany
     {
         return $this->hasMany(KindleReadingProgress::class);
+    }
+
+    public function googleCalendarEvent(): HasOne
+    {
+        return $this->hasOne(GoogleCalendarEvent::class);
     }
 }

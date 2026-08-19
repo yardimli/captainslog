@@ -51,4 +51,9 @@ class DailyLog extends Model
     {
         return $this->hasMany(KindleReadingProgress::class);
     }
+
+    public function googleCalendarEvents(): HasMany
+    {
+        return $this->hasMany(GoogleCalendarEvent::class);
+    }
 }

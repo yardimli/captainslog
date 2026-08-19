@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\BrowsingActivity;
 use App\Models\DailyLog;
 use App\Models\KindleReadingProgress;
+use App\Models\GoogleCalendarEvent;
 use App\Models\Sensor;
 use App\Models\User;
 use Carbon\Carbon;
@@ -347,6 +348,109 @@ class SensorTest extends TestCase
         $this->assertDatabaseHas('log_blocks', ['type' => 'sensor_kindle', 'content' => 'The Left Hand of Darkness · 39% read']);
         $this->assertSame('39.00', KindleReadingProgress::latest('observed_at')->firstOrFail()->percentage_read);
         $this->actingAs($user)->get('/logs/2026-08-18')->assertOk()->assertSee('Kindle')->assertSee('The Left Hand of Darkness');
+        Carbon::setTestNow();
+    }
+
+    public function test_google_calendar_oauth_links_account_and_syncs_current_month_events(): void
+    {
+        Carbon::setTestNow('2026-08-19 09:00:00');
+        config([
+            'services.google_calendar.client_id' => 'google-client-id',
+            'services.google_calendar.client_secret' => 'google-client-secret',
+        ]);
+        $user = User::factory()->create();
+        Http::fake([
+            'https://oauth2.googleapis.com/token' => Http::sequence()
+                ->push(['access_token' => 'oauth-access', 'refresh_token' => 'refresh-secret'])
+                ->push(['access_token' => 'sync-access']),
+            'https://openidconnect.googleapis.com/v1/userinfo' => Http::response(['sub' => 'google-user-1', 'email' => 'captain@example.com']),
+            'https://www.googleapis.com/calendar/v3/calendars/primary/events*' => Http::response(['items' => [[
+                'id' => 'timed-event',
+                'status' => 'confirmed',
+                'summary' => 'Yoga with the admiral',
+                'description' => '<b>Breathe before engaging.</b>',
+                'location' => 'Holodeck 2',
+                'htmlLink' => 'https://calendar.google.com/calendar/event?eid=timed',
+                'start' => ['dateTime' => '2026-08-19T10:30:00+08:00'],
+                'end' => ['dateTime' => '2026-08-19T11:30:00+08:00'],
+            ], [
+                'id' => 'all-day-event',
+                'status' => 'confirmed',
+                'summary' => 'Dog medication inventory',
+                'start' => ['date' => '2026-08-20'],
+                'end' => ['date' => '2026-08-21'],
+            ]]]),
+        ]);
+
+        $connect = $this->actingAs($user)->get(route('sensors.google-calendar.connect'))->assertRedirect();
+        $authorizeUrl = $connect->headers->get('Location');
+        $this->assertStringStartsWith('https://accounts.google.com/o/oauth2/v2/auth?', $authorizeUrl);
+        parse_str((string) parse_url($authorizeUrl, PHP_URL_QUERY), $query);
+        $this->assertSame('offline', $query['access_type']);
+        $this->assertStringContainsString('calendar.readonly', $query['scope']);
+
+        $this->get(route('sensors.google-calendar.callback', ['state' => $query['state'], 'code' => 'authorization-code']))
+            ->assertRedirect(route('sensors.index'))
+            ->assertSessionHas('status');
+
+        $sensor = Sensor::where('user_id', $user->id)->where('type', Sensor::GOOGLE_CALENDAR)->firstOrFail();
+        $this->assertSame('captain@example.com', $sensor->username);
+        $this->assertSame('refresh-secret', $sensor->token);
+        $this->assertNotSame('refresh-secret', DB::table('sensors')->where('id', $sensor->id)->value('token'));
+        $this->assertTrue($sensor->enabled);
+        $this->assertDatabaseCount('google_calendar_events', 2);
+        $this->assertDatabaseHas('log_blocks', ['type' => 'sensor_google_calendar', 'content' => 'Yoga with the admiral']);
+        $this->assertSame('Breathe before engaging.', GoogleCalendarEvent::where('google_event_id', 'timed-event')->firstOrFail()->description);
+        $this->actingAs($user)->get('/logs/2026-08-19')->assertOk()
+            ->assertSee('data-timeline-google-calendar', false)
+            ->assertSee('Yoga with the admiral')
+            ->assertSee('Holodeck 2')
+            ->assertSee('data-overlay="google-calendar"', false);
+        Carbon::setTestNow();
+    }
+
+    public function test_google_calendar_resync_moves_updates_and_removes_events(): void
+    {
+        Carbon::setTestNow('2026-08-19 09:00:00');
+        config([
+            'services.google_calendar.client_id' => 'google-client-id',
+            'services.google_calendar.client_secret' => 'google-client-secret',
+        ]);
+        $user = User::factory()->create();
+        $sensor = Sensor::create(['user_id' => $user->id, 'type' => Sensor::GOOGLE_CALENDAR, 'username' => 'captain@example.com', 'token' => 'refresh-secret', 'enabled' => true, 'settings' => ['calendar_id' => 'primary']]);
+        Http::fake([
+            'https://oauth2.googleapis.com/token' => Http::response(['access_token' => 'sync-access']),
+            'https://www.googleapis.com/calendar/v3/calendars/primary/events*' => Http::sequence()
+                ->push(['items' => [[
+                    'id' => 'moving-event', 'summary' => 'Bridge meeting',
+                    'start' => ['dateTime' => '2026-08-19T10:00:00+08:00'], 'end' => ['dateTime' => '2026-08-19T11:00:00+08:00'],
+                ], [
+                    'id' => 'removed-event', 'summary' => 'Cancelled briefing',
+                    'start' => ['dateTime' => '2026-08-19T12:00:00+08:00'], 'end' => ['dateTime' => '2026-08-19T12:30:00+08:00'],
+                ]]])
+                ->push(['items' => [[
+                    'id' => 'moving-event', 'summary' => 'Updated bridge meeting',
+                    'start' => ['dateTime' => '2026-08-20T15:00:00+08:00'], 'end' => ['dateTime' => '2026-08-20T16:00:00+08:00'],
+                ]]]),
+        ]);
+
+        $sync = app(\App\Services\GoogleCalendarSync::class);
+        $this->assertTrue($sync->syncSensor($sensor, true));
+        $movingBlockId = GoogleCalendarEvent::where('google_event_id', 'moving-event')->firstOrFail()->log_block_id;
+        $this->assertTrue($sync->syncSensor($sensor->fresh(), true));
+
+        $this->assertDatabaseCount('google_calendar_events', 1);
+        $moving = GoogleCalendarEvent::where('google_event_id', 'moving-event')->firstOrFail();
+        $this->assertSame($movingBlockId, $moving->log_block_id);
+        $this->assertSame('2026-08-20', $moving->dailyLog->log_date->toDateString());
+        $this->assertSame('Updated bridge meeting', $moving->logBlock->content);
+        $this->assertDatabaseMissing('google_calendar_events', ['google_event_id' => 'removed-event']);
+        $this->assertDatabaseMissing('log_blocks', ['content' => 'Cancelled briefing']);
+
+        $this->actingAs($user)->patchJson(route('sensors.google-calendar.toggle'), ['enabled' => false])->assertOk();
+        $this->delete(route('sensors.google-calendar.unlink'))->assertRedirect();
+        $this->assertDatabaseMissing('sensors', ['id' => $sensor->id]);
+        $this->assertDatabaseHas('log_blocks', ['id' => $movingBlockId, 'content' => 'Updated bridge meeting']);
         Carbon::setTestNow();
     }
 }

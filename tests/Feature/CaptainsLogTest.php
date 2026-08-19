@@ -845,6 +845,7 @@ class CaptainsLogTest extends TestCase
             ->assertSee('data-composer-updated', false)
             ->assertDontSee('Recorded 09:35')
             ->assertSee('data-composer-time', false)
+            ->assertSee('data-composer-time-now', false)
             ->assertSee('data-composer-note-form', false)
             ->assertSee('data-autosave-status', false)
             ->assertSee('data-composer-cancel', false)
@@ -866,6 +867,8 @@ class CaptainsLogTest extends TestCase
         $this->assertStringContainsString('currentMain.replaceWith(replacement)', $script);
         $this->assertStringContainsString('await refreshDayViewOrReload()', $script);
         $this->assertStringContainsString('Changes save when you close this panel.', $script);
+        $this->assertStringContainsString("root.querySelector('[data-composer-time-now]')?.classList.toggle('hidden', mode !== 'edit')", $script);
+        $this->assertStringContainsString('composerTimeInput.dispatchEvent', $script);
         $this->assertStringContainsString('textarea.value === form.dataset.originalContent', $script);
         $this->assertStringNotContainsString("submit.textContent = mode === 'edit' ? 'Save changes'", $script);
         $this->assertStringContainsString('style="z-index:120"', $templates);

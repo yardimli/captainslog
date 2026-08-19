@@ -6,12 +6,13 @@ use App\Models\DailyLog;
 use App\Models\TaskDefinition;
 use App\Services\GithubSensorSync;
 use App\Services\BrowsingActivityRecorder;
+use App\Services\GoogleCalendarSync;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class DayLogController extends Controller
 {
-    public function __construct(private GithubSensorSync $githubSensor, private BrowsingActivityRecorder $browsingRecorder) {}
+    public function __construct(private GithubSensorSync $githubSensor, private BrowsingActivityRecorder $browsingRecorder, private GoogleCalendarSync $googleCalendar) {}
 
     public function show(Request $request, string $date)
     {
@@ -19,6 +20,10 @@ class DayLogController extends Controller
         $log = DailyLog::where('user_id', $request->user()->id)->whereDate('log_date', $day)->first();
         if (! $log) {
             $log = DailyLog::create(['user_id' => $request->user()->id, 'log_date' => $day]);
+        }
+        if ($day->format('Y-m') === now()->format('Y-m')) {
+            $this->googleCalendar->syncUser($request->user());
+            $log = $log->fresh();
         }
         $this->githubSensor->sync($request->user(), $log, $day);
         $this->browsingRecorder->finalizeStale($request->user());

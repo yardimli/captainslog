@@ -586,6 +586,7 @@ function configureComposer({time, mode = 'create', kind = 'block', action = '', 
     const autosaveStatus = form.querySelector('[data-autosave-status]');
     if (autosaveStatus) { autosaveStatus.classList.toggle('hidden', mode !== 'edit'); autosaveStatus.textContent = mode === 'edit' ? 'Changes save when you close this panel.' : ''; }
     root.querySelector('[data-composer-cancel]')?.classList.toggle('hidden', mode !== 'edit');
+    root.querySelector('[data-composer-time-now]')?.classList.toggle('hidden', mode !== 'edit');
     const entryActions = root.querySelector('[data-composer-entry-actions]');
     const visibility = root.querySelector('[data-composer-visibility]');
     const deleteButton = root.querySelector('[data-composer-delete]');
@@ -662,6 +663,26 @@ function openGithubDetails(item) {
     });
     root.querySelector('[data-github-event-list]').replaceChildren(...rows);
     openOverlay('github');
+}
+
+function openGoogleCalendarDetails(item) {
+    const root = document.querySelector('[data-overlay="google-calendar"]');
+    if (!root) return;
+    const event = JSON.parse(item.dataset.googleCalendarEvent || '{}');
+    root.querySelector('[data-google-calendar-title]').textContent = event.title || 'Calendar event';
+    root.querySelector('[data-google-calendar-start]').textContent = event.start || '';
+    root.querySelector('[data-google-calendar-end]').textContent = event.end || '';
+    root.querySelector('[data-google-calendar-end-wrap]').classList.toggle('hidden', !event.end);
+    const location = root.querySelector('[data-google-calendar-location]');
+    location.textContent = event.location || '';
+    location.parentElement.classList.toggle('hidden', !event.location);
+    const description = root.querySelector('[data-google-calendar-description]');
+    description.textContent = event.description || '';
+    description.parentElement.classList.toggle('hidden', !event.description);
+    const link = root.querySelector('[data-google-calendar-link]');
+    link.classList.toggle('hidden', !event.url);
+    if (event.url) link.href = event.url;
+    openOverlay('google-calendar');
 }
 
 function openImagePreview(trigger) {
@@ -861,6 +882,7 @@ document.addEventListener('click', async e => {
     if (timelineItem && !composerTrigger && !e.target.closest('[data-task-event]') && (!nestedAction || nestedAction === timelineItem)) {
         if (timelineItem.matches('[data-timeline-github]')) openGithubDetails(timelineItem);
         else if (timelineItem.matches('[data-timeline-browsing]')) openBrowsingDetails(timelineItem);
+        else if (timelineItem.matches('[data-timeline-google-calendar]')) openGoogleCalendarDetails(timelineItem);
         else if (timelineItem.matches('[data-timeline-edit]')) configureComposer({time: timelineItem.dataset.timelineTime, mode:'edit', kind:timelineItem.dataset.editKind, action:timelineItem.dataset.editUrl, content:timelineItem.dataset.editContent, emoji:timelineItem.dataset.editEmoji, updated:timelineItem.dataset.editUpdated, hideUrl:timelineItem.dataset.hideUrl, deleteUrl:timelineItem.dataset.deleteUrl, isHidden:timelineItem.dataset.isHidden === 'true', hasMedia:timelineItem.dataset.hasMedia === 'true', media:JSON.parse(timelineItem.dataset.editMedia || '[]'), location:JSON.parse(timelineItem.dataset.editLocation || 'null'), blockId:timelineItem.dataset.blockId});
         else if (timelineItem.matches('[data-time-gap]')) configureComposer({time:timelineItem.dataset.from});
         else configureComposer({time:timelineItem.dataset.timelineTime || timelineItem.dataset.currentTime});
@@ -925,6 +947,13 @@ function initComposerTimeInput(root = document) {
     const composerTimeInput = root.querySelector('[data-composer-time]');
     composerTimeInput?.addEventListener('input', syncComposerTime);
     composerTimeInput?.addEventListener('change', syncComposerTime);
+    root.querySelector('[data-composer-time-now]')?.addEventListener('click', () => {
+        if (!composerTimeInput) return;
+        const now = new Date();
+        composerTimeInput.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        composerTimeInput.dispatchEvent(new Event('input', {bubbles:true}));
+        composerTimeInput.dispatchEvent(new Event('change', {bubbles:true}));
+    });
 }
 
 initComposerTimeInput();
