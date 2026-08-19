@@ -207,7 +207,7 @@ function openTimePicker(root) {
     periodLabel.classList.toggle('hidden', !usesTwelveHours); periodWheel.classList.toggle('hidden', !usesTwelveHours);
     hour24.classList.toggle('hidden', usesTwelveHours); hour12.classList.toggle('hidden', !usesTwelveHours);
     const wheelControls = [];
-    let dismissed = false, initializing = true, hourClicked = false, minuteClicked = false;
+    let dismissed = false, initializing = true;
     const updateInput = value => {
         anchor.textContent = formatClock(value);
         if (input.value === value) return;
@@ -222,9 +222,7 @@ function openTimePicker(root) {
             choose(values[index]);
             list.scrollTo({top:index * 48, behavior:'smooth'});
             render(true);
-            if (kind === 'hour') hourClicked = true;
-            if (kind === 'minute') minuteClicked = true;
-            if (hourClicked && minuteClicked) dismiss();
+            if (kind === 'minute') dismiss();
         }));
         let scrollTimer;
         list.addEventListener('scroll', () => { clearTimeout(scrollTimer); scrollTimer = setTimeout(() => { if (dismissed) return; const index = Math.max(0, Math.min(values.length - 1, Math.round(list.scrollTop / 48))); choose(values[index]); list.scrollTo({top:index * 48, behavior:'smooth'}); render(!initializing); }, 80); });
@@ -290,15 +288,18 @@ function setEmojiPickerValue(picker, value, dispatch = false) {
     }
 }
 
-const emojiDataRequests = new Map();
-function loadEmojiGroups(url) {
-    if (!emojiDataRequests.has(url)) {
-        emojiDataRequests.set(url, fetch(url, {headers:{Accept:'application/json'}}).then(response => {
+const emojiApiRequests = new Map();
+function loadEmojiPage(baseUrl, params = {}) {
+    const url = new URL(baseUrl, window.location.origin);
+    Object.entries(params).forEach(([key, value]) => { if (value) url.searchParams.set(key, value); });
+    const key = url.toString();
+    if (!emojiApiRequests.has(key)) {
+        emojiApiRequests.set(key, fetch(key, {headers:{Accept:'application/json', 'X-Requested-With':'XMLHttpRequest'}}).then(response => {
             if (!response.ok) throw new Error('The emoji library could not be loaded.');
             return response.json();
-        }));
+        }).catch(error => { emojiApiRequests.delete(key); throw error; }));
     }
-    return emojiDataRequests.get(url);
+    return emojiApiRequests.get(key);
 }
 
 function initEmojiPicker(picker) {
@@ -312,26 +313,25 @@ function initEmojiPicker(picker) {
     const categoryTemplate = picker.querySelector('[data-emoji-category-template]');
     const optionTemplate = picker.querySelector('[data-emoji-option-template]');
     const loading = picker.querySelector('[data-emoji-loading]');
+    const loadingMessage = picker.querySelector('[data-emoji-loading-message]');
+    const loadingSpinner = picker.querySelector('[data-emoji-loading-spinner]');
     const empty = picker.querySelector('[data-emoji-empty]');
     const host = picker.closest('.panel');
-    let categories = [], options = [], activeCategory = '', hydrated = false;
+    let categories = [], activeCategory = '', hydrated = false, searchTimer, requestRevision = 0;
     const close = () => { menu?.classList.add('hidden'); menu?.classList.remove('flex'); host?.classList.remove('emoji-picker-host-active'); toggle?.setAttribute('aria-expanded', 'false'); };
-    const render = () => {
-        const query = (search?.value || '').trim().toLocaleLowerCase();
-        let visible = 0;
-        options.forEach(option => {
-            const matchesSearch = !query || `${option.dataset.emojiName} ${option.dataset.emojiValue}`.toLocaleLowerCase().includes(query);
-            const matchesCategory = query || option.dataset.emojiCategoryName === activeCategory;
-            const show = Boolean(matchesSearch && matchesCategory);
-            option.classList.toggle('hidden', !show);
-            option.classList.toggle('flex', show);
-            if (show) visible++;
-        });
-        empty?.classList.toggle('hidden', visible > 0);
+    const setLoading = busy => {
+        loading?.classList.toggle('hidden', !busy);
+        loading?.classList.toggle('grid', busy);
+        grid?.classList.toggle('opacity-40', busy);
+        grid?.classList.toggle('pointer-events-none', busy);
+        if (busy) {
+            if (loadingMessage) loadingMessage.textContent = 'Loading emojis…';
+            loadingSpinner?.classList.remove('hidden');
+        }
+        if (busy) empty?.classList.add('hidden');
     };
-    const selectCategory = category => {
+    const markCategory = category => {
         activeCategory = category.dataset.emojiCategory;
-        if (search) search.value = '';
         categories.forEach(item => {
             const active = item === category;
             item.classList.toggle('bg-indigo-100', active); item.classList.toggle('text-indigo-700', active);
@@ -339,38 +339,59 @@ function initEmojiPicker(picker) {
             item.classList.toggle('text-slate-500', !active);
             item.setAttribute('aria-selected', active ? 'true' : 'false');
         });
-        render();
     };
-    const hydrate = async () => {
-        if (hydrated) return;
+    const renderOptions = (emojis, revision) => {
+        const nodes = (emojis || []).map(emoji => {
+            const option = optionTemplate.content.firstElementChild.cloneNode(true);
+            option.dataset.emojiValue = emoji.emoji;
+            option.dataset.emojiName = emoji.name || emoji.slug || emoji.emoji;
+            option.textContent = emoji.emoji;
+            option.setAttribute('aria-label', emoji.name || emoji.slug || emoji.emoji);
+            option.title = emoji.name || emoji.slug || emoji.emoji;
+            option.classList.remove('hidden'); option.classList.add('flex');
+            option.addEventListener('click', () => { setEmojiPickerValue(picker, option.dataset.emojiValue, true); close(); });
+            return option;
+        });
+        window.requestAnimationFrame(() => {
+            if (revision !== requestRevision) return;
+            grid.replaceChildren(...nodes);
+            setLoading(false);
+            empty?.classList.toggle('hidden', nodes.length > 0);
+        });
+    };
+    const requestEmojis = async params => {
+        const revision = ++requestRevision;
+        setLoading(true);
         try {
-            const groups = await loadEmojiGroups(picker.dataset.emojiSource);
-            const categoryNodes = [], optionNodes = [];
-            groups.forEach(group => {
-                const categoryName = group.slug || group.name.toLocaleLowerCase().replace(/[^a-z0-9]+/g, '_');
+            const body = await loadEmojiPage(picker.dataset.emojiUrl, params);
+            if (revision !== requestRevision) return;
+            if (!hydrated) {
+                const categoryNodes = (body.categories || []).map(group => {
                 const category = categoryTemplate.content.firstElementChild.cloneNode(true);
-                category.dataset.emojiCategory = categoryName;
+                    category.dataset.emojiCategory = group.slug;
                 category.textContent = group.name;
-                category.addEventListener('click', () => selectCategory(category));
-                categoryNodes.push(category);
-                (group.emojis || []).forEach(emoji => {
-                    const option = optionTemplate.content.firstElementChild.cloneNode(true);
-                    option.dataset.emojiCategoryName = categoryName;
-                    option.dataset.emojiName = `${emoji.name || ''} ${(emoji.slug || '').replaceAll('_', ' ')}`.trim();
-                    option.dataset.emojiValue = emoji.emoji;
-                    option.textContent = emoji.emoji;
-                    option.setAttribute('aria-label', emoji.name || emoji.slug || emoji.emoji);
-                    option.addEventListener('click', () => { setEmojiPickerValue(picker, option.dataset.emojiValue, true); close(); });
-                    optionNodes.push(option);
+                    category.addEventListener('click', async () => {
+                        clearTimeout(searchTimer);
+                        if (search) search.value = '';
+                        markCategory(category);
+                        await requestEmojis({group:category.dataset.emojiCategory});
                 });
-            });
-            categoryList.replaceChildren(...categoryNodes);
-            grid.replaceChildren(...optionNodes);
-            categories = categoryNodes; options = optionNodes; activeCategory = categories[0]?.dataset.emojiCategory || '';
-            hydrated = true;
-            if (categories[0]) selectCategory(categories[0]); else render();
+                    return category;
+                });
+                categoryList.replaceChildren(...categoryNodes);
+                categories = categoryNodes;
+                hydrated = true;
+            }
+            const selected = categories.find(category => category.dataset.emojiCategory === (body.group || activeCategory)) || categories[0];
+            if (selected && !params.q) markCategory(selected);
+            renderOptions(body.emojis, revision);
         } catch (error) {
-            if (loading) loading.textContent = error.message;
+            if (revision !== requestRevision) return;
+            if (loading) {
+                loading.classList.remove('hidden'); loading.classList.add('grid');
+                loadingSpinner?.classList.add('hidden');
+                if (loadingMessage) loadingMessage.textContent = error.message;
+            }
         }
     };
     toggle?.addEventListener('click', async () => {
@@ -379,9 +400,13 @@ function initEmojiPicker(picker) {
         if (!opens) { close(); return; }
         menu?.classList.remove('hidden'); menu?.classList.add('flex'); host?.classList.add('emoji-picker-host-active');
         toggle.setAttribute('aria-expanded', opens ? 'true' : 'false');
-        if (opens) { await hydrate(); render(); setTimeout(() => search?.focus(), 0); }
+        if (opens) { if (!hydrated) await requestEmojis({}); setTimeout(() => search?.focus(), 0); }
     });
-    search?.addEventListener('input', render);
+    search?.addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        const query = search.value.trim();
+        searchTimer = window.setTimeout(() => requestEmojis(query ? {q:query} : {group:activeCategory}), 300);
+    });
 }
 
 document.querySelectorAll('[data-emoji-picker]').forEach(initEmojiPicker);
@@ -584,7 +609,11 @@ function configureComposer({time, mode = 'create', kind = 'block', action = '', 
         existingMedia.classList.toggle('hidden', previews.length === 0);
         existingMedia.classList.toggle('grid', previews.length > 0);
     }
-    root.querySelector('[data-composer-block-field]').value = mode === 'edit' ? blockId : '';
+    root.querySelectorAll('[data-composer-block-field]').forEach(field => { field.value = mode === 'edit' ? blockId : ''; });
+    const longTextContent = root.querySelector('[data-long-text-content]');
+    if (longTextContent) longTextContent.value = '';
+    const longTextFormat = root.querySelector('[data-composer-long-text-form] [name="format"]');
+    if (longTextFormat) longTextFormat.value = 'text';
     syncComposerTime();
     form.dataset.originalContent = textarea.value;
     form.dataset.originalTime = timeInput.value;
@@ -697,7 +726,7 @@ document.addEventListener('submit', async e => {
     e.preventDefault(); const button = form.querySelector('[type=submit]'); setButtonBusy(button, true);
     try {
         const composer = form.closest('[data-overlay="composer"]');
-        if (composer && form.matches('[data-composer-media-form]') && !await saveComposerDraft(composer, {close:false, refresh:false})) return;
+        if (composer && form.matches('[data-composer-media-form], [data-composer-long-text-form]') && !await saveComposerDraft(composer, {close:false, refresh:false})) return;
         const body = await ajax(form.action, {method: form.method || 'POST', body: new FormData(form)});
         toast(body.message || 'Saved.');
         if (await refreshDayView()) {
@@ -869,8 +898,12 @@ document.addEventListener('click', async e => {
         const locationPromise = task.hasAttribute('data-capture-location') ? captureBrowserLocation() : Promise.resolve(null);
         task.disabled = true;
         try {
-            const body = await ajax(task.dataset.taskEvent,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value})});
-            document.querySelectorAll(`[data-task-event="${task.dataset.taskEvent}"] [data-count]`).forEach(count => { count.textContent = body.count; });
+            const body = await ajax(task.dataset.taskEvent,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value, scheduled_time:task.dataset.scheduledTime || null})});
+            document.querySelectorAll(`[data-task-event="${task.dataset.taskEvent}"]`).forEach(button => {
+                const count = button.querySelector('[data-count]');
+                if (!count) return;
+                count.textContent = button.dataset.scheduledTime ? (body.slot_counts?.[button.dataset.scheduledTime] || 0) : body.count;
+            });
             toast(body.message);
             const capturedLocation = await locationPromise;
             let savedLocation = null;

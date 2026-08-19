@@ -9,6 +9,8 @@
         <div class="block-github-description flex flex-wrap items-center gap-2 leading-relaxed" data-block-description><span class="text-xl" data-block-emoji aria-hidden="true">{{ $block->emoji }}</span><span class="inline-flex rounded-lg bg-slate-900 px-2 py-1 text-xs font-bold uppercase text-white dark:bg-slate-100 dark:text-slate-900" data-block-type-label>GitHub</span>@if($block->is_hidden)<span class="inline-flex rounded-lg bg-amber-100 px-2 py-1 text-xs font-bold uppercase text-amber-800">Hidden</span>@endif<span class="font-semibold">{{ $block->content }}</span><span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ $githubCommitCount }} {{ Str::plural('commit', $githubCommitCount) }}</span></div>
     @elseif($block->type === 'sensor_browser')
         <div class="block-browser-description flex flex-wrap items-center gap-2 leading-relaxed" data-block-description><span class="text-xl" data-block-emoji aria-hidden="true">{{ $block->emoji }}</span><span class="inline-flex rounded-lg bg-sky-100 px-2 py-1 text-xs font-bold uppercase text-sky-800 dark:bg-sky-950 dark:text-sky-200" data-block-type-label>Browsing</span>@if($block->is_hidden)<span class="inline-flex rounded-lg bg-amber-100 px-2 py-1 text-xs font-bold uppercase text-amber-800">Hidden</span>@endif<span class="font-semibold">{{ $block->content }}</span></div>
+    @elseif($block->type === 'sensor_kindle')
+        <div class="block-kindle-description flex flex-wrap items-center gap-2 leading-relaxed" data-block-description><span class="text-xl" data-block-emoji aria-hidden="true">{{ $block->emoji }}</span><span class="inline-flex rounded-lg bg-amber-100 px-2 py-1 text-xs font-bold uppercase text-amber-900 dark:bg-amber-950 dark:text-amber-200" data-block-type-label>Kindle</span>@if($block->is_hidden)<span class="inline-flex rounded-lg bg-amber-100 px-2 py-1 text-xs font-bold uppercase text-amber-800">Hidden</span>@endif<span class="font-semibold">{{ $block->content }}</span>@if(data_get($block->metadata, 'author'))<span class="text-sm text-slate-500">{{ data_get($block->metadata, 'author') }}</span>@endif</div>
     @elseif($block->taskEvent)
         <div class="block-event-description flex flex-wrap items-center gap-2 leading-relaxed" data-block-description><span class="text-xl" data-block-emoji aria-hidden="true">{{ $block->emoji }}</span><span class="inline-flex rounded-lg px-2 py-1 text-xs font-bold uppercase {{ $typeLabelClass }}" data-block-type-label>{{ str_replace('_',' ', $block->type) }}</span>@if($block->is_hidden)<span class="inline-flex rounded-lg bg-amber-100 px-2 py-1 text-xs font-bold uppercase text-amber-800">Hidden</span>@endif<span class="text-lg font-bold">{{ $block->taskEvent->task_name }} @if($block->taskEvent->selected_value)<span class="text-indigo-600">· {{ $block->taskEvent->selected_value }}</span>@endif</span></div>
         @if($block->content)<div class="block-event-notes mt-2 whitespace-pre-wrap leading-relaxed">{{ $block->content }}</div>@endif
@@ -52,4 +54,14 @@
             @endif
         </div>
     @endforeach
+    @if($block->longText)
+        <details class="block-long-text mt-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-950">
+            <summary class="flex cursor-pointer items-center gap-2 px-4 py-3 font-semibold"><span aria-hidden="true">📄</span><span class="flex-1">Long {{ $block->longText->format === 'markdown' ? 'Markdown' : 'text' }} note</span><span class="text-xs font-normal text-slate-500">{{ number_format(mb_strlen($block->longText->content)) }} characters</span></summary>
+            @if($block->longText->format === 'markdown')
+                <div class="block-long-text-markdown border-t border-slate-200 p-4 leading-relaxed dark:border-slate-700">{!! Str::markdown($block->longText->content, ['html_input' => 'escape', 'allow_unsafe_links' => false]) !!}</div>
+            @else
+                <div class="block-long-text-plain whitespace-pre-wrap break-words border-t border-slate-200 p-4 font-mono text-sm leading-relaxed dark:border-slate-700">{{ $block->longText->content }}</div>
+            @endif
+        </details>
+    @endif
 </article>

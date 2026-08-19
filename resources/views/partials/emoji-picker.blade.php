@@ -3,7 +3,7 @@
     $pickerValue = $value ?? '📝';
 @endphp
 
-<div id="{{ $pickerId }}-field" class="relative {{ $containerClass ?? '' }}" data-emoji-picker data-emoji-source="{{ asset('data/data-by-group.json') }}">
+<div id="{{ $pickerId }}-field" class="relative {{ $containerClass ?? '' }}" data-emoji-picker data-emoji-url="{{ route('emojis.index') }}">
     <label class="label" for="{{ $pickerId }}-input">{{ $pickerLabel }}</label>
     <input id="{{ $pickerId }}-input" type="hidden" name="{{ $name ?? 'emoji' }}" value="{{ $pickerValue }}" data-emoji-input>
     <button type="button" class="input flex items-center gap-3 text-left" data-emoji-toggle aria-expanded="false" aria-controls="{{ $pickerId }}-menu">
@@ -17,8 +17,11 @@
             <input id="{{ $pickerId }}-search" type="search" class="input text-sm" placeholder="Search all emojis…" autocomplete="off" data-emoji-search>
         </div>
         <div id="{{ $pickerId }}-category-tabs" class="block-emoji-picker-category-tabs flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 p-1.5 dark:border-slate-700" role="tablist" aria-label="Emoji categories" data-emoji-categories></div>
-        <div id="{{ $pickerId }}-emoji-grid" class="block-emoji-picker-grid grid min-h-0 flex-1 grid-cols-6 gap-1 overflow-y-auto p-2 sm:grid-cols-8" data-emoji-grid>
-            <p class="col-span-full py-8 text-center text-sm text-slate-500" data-emoji-loading>Loading the complete emoji library…</p>
+        <div id="{{ $pickerId }}-grid-frame" class="block-emoji-picker-grid-frame relative min-h-0 flex-1 overflow-hidden">
+            <div id="{{ $pickerId }}-emoji-grid" class="block-emoji-picker-grid grid h-full min-h-0 grid-cols-6 gap-1 overflow-x-hidden overflow-y-auto p-2 transition-opacity sm:grid-cols-8" data-emoji-grid></div>
+            <div class="block-emoji-picker-loading absolute inset-0 hidden place-items-center bg-white/65 text-indigo-600 backdrop-blur-[1px] dark:bg-slate-900/70 dark:text-indigo-300" data-emoji-loading role="status" aria-live="polite">
+                <span class="flex items-center gap-2 rounded-full bg-white px-3 py-2 text-sm font-semibold shadow-lg dark:bg-slate-800"><svg class="h-5 w-5 animate-spin" data-emoji-loading-spinner viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" stroke-width="4"></circle><path class="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v4a5 5 0 0 1 5 5h4Z"></path></svg><span data-emoji-loading-message>Loading emojis…</span></span>
+            </div>
         </div>
         <p id="{{ $pickerId }}-empty-message" class="hidden px-3 pb-3 text-center text-sm text-slate-500" data-emoji-empty>No emojis match that search.</p>
         <template data-emoji-category-template><button type="button" class="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" role="tab" aria-selected="false" data-emoji-category></button></template>

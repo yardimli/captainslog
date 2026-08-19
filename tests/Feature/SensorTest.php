@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\BrowsingActivity;
 use App\Models\DailyLog;
+use App\Models\KindleReadingProgress;
 use App\Models\Sensor;
 use App\Models\User;
 use Carbon\Carbon;
@@ -157,11 +158,13 @@ class SensorTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_current_day_rechecks_and_replaces_empty_marker_when_a_commit_appears(): void
+    public function test_current_day_rechecks_without_showing_an_empty_marker_then_adds_a_commit(): void
     {
         Carbon::setTestNow('2026-08-17 14:00:00');
         $user = User::factory()->create();
         Sensor::create(['user_id' => $user->id, 'type' => Sensor::GITHUB, 'username' => 'octocat', 'token' => 'secret', 'enabled' => true]);
+        $todayLog = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-17']);
+        $todayLog->blocks()->create(['type' => 'sensor_github', 'content' => 'No Git commits today', 'metadata' => ['sensor' => Sensor::GITHUB, 'empty' => true]]);
         Http::fake(['api.github.com/search/commits*' => Http::sequence()
             ->push(['total_count' => 0, 'items' => []])
             ->push(['total_count' => 1, 'items' => [[
@@ -177,7 +180,8 @@ class SensorTest extends TestCase
                 'commit' => ['author' => ['date' => '2026-08-17T13:45:00Z']],
             ]]])]);
 
-        $this->actingAs($user)->get('/logs/2026-08-17')->assertOk()->assertSee('No Git commits today');
+        $this->actingAs($user)->get('/logs/2026-08-17')->assertOk()->assertDontSee('No Git commits today');
+        $this->assertDatabaseMissing('log_blocks', ['type' => 'sensor_github', 'content' => 'No Git commits today']);
         $secondLoad = $this->get('/logs/2026-08-17')->assertOk();
         $this->assertNull(Sensor::first()->fresh()->last_error, Sensor::first()->fresh()->last_error ?? 'GitHub sync should not fail.');
         $secondLoad->assertSee('today-project')->assertDontSee('No Git commits today');
@@ -301,6 +305,48 @@ class SensorTest extends TestCase
         $this->assertStringContainsString('api/sensors/browser/activity', $worker);
         $this->assertStringContainsString('sensors/browser/pair/', $worker);
         $this->assertStringContainsString('browsingUrl.hostname', $worker);
-        $this->assertSame('1.1.0', $manifest['version']);
+        $this->assertStringContainsString('api/sensors/kindle/progress', $worker);
+        $this->assertStringContainsString('/kindle-library/search', $worker);
+        $this->assertStringContainsString("credentials: 'include'", $worker);
+        $this->assertStringContainsString("active: false", $worker);
+        $this->assertContains('cookies', $manifest['optional_permissions']);
+        $this->assertContains('kindle-tracker.js', $manifest['content_scripts'][0]['js']);
+        $this->assertFileExists(public_path('captainslog-chrome-extension/kindle-tracker.js'));
+        $this->assertSame('1.2.1', $manifest['version']);
+    }
+
+    public function test_kindle_sensor_records_progress_history_in_one_daily_book_entry(): void
+    {
+        Carbon::setTestNow('2026-08-18 20:00:00');
+        $user = User::factory()->create();
+        $key = str_repeat('k', 64);
+        Sensor::create([
+            'user_id' => $user->id,
+            'type' => Sensor::BROWSER,
+            'username' => 'Chrome extension',
+            'pairing_key_hash' => hash('sha256', $key),
+            'enabled' => true,
+        ]);
+
+        $send = fn (float $percentage) => $this->withHeader('X-CaptainsLog-Key', $key)->postJson(route('api.sensors.kindle.progress'), [
+            'title' => '<b>The Left Hand of Darkness</b>',
+            'author' => 'Ursula K. Le Guin',
+            'asin' => 'B000FC1HBY',
+            'percentage_read' => $percentage,
+            'observed_at' => now()->toIso8601String(),
+            'client_id' => 'chrome-kindle-test',
+        ]);
+
+        $send(37)->assertCreated()->assertJsonPath('percentage_read', 37);
+        Carbon::setTestNow('2026-08-18 20:05:00');
+        $send(39)->assertCreated()->assertJsonPath('log_date', '2026-08-18');
+
+        $this->assertDatabaseCount('kindle_reading_progress', 2);
+        $this->assertDatabaseCount('daily_logs', 1);
+        $this->assertDatabaseCount('log_blocks', 1);
+        $this->assertDatabaseHas('log_blocks', ['type' => 'sensor_kindle', 'content' => 'The Left Hand of Darkness · 39% read']);
+        $this->assertSame('39.00', KindleReadingProgress::latest('observed_at')->firstOrFail()->percentage_read);
+        $this->actingAs($user)->get('/logs/2026-08-18')->assertOk()->assertSee('Kindle')->assertSee('The Left Hand of Darkness');
+        Carbon::setTestNow();
     }
 }

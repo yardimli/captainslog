@@ -4,8 +4,10 @@ use App\Http\Controllers\ApiUsageController;
 use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\DayLogController;
+use App\Http\Controllers\EmojiController;
 use App\Http\Controllers\GuestDemoController;
 use App\Http\Controllers\LogBlockController;
+use App\Http\Controllers\LongTextAttachmentController;
 use App\Http\Controllers\OpenRouterController;
 use App\Http\Controllers\PlannerVisibilityController;
 use App\Http\Controllers\ProfileController;
@@ -28,6 +30,7 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::get('/', [GuestDemoController::class, 'index'])->name('demo.index');
+Route::get('/emojis', EmojiController::class)->name('emojis.index');
 Route::post('/demo/logs/{dailyLog}/blocks', [GuestDemoController::class, 'storeBlock'])->name('demo.blocks.store');
 Route::patch('/demo/blocks/{block}', [GuestDemoController::class, 'updateBlock'])->name('demo.blocks.update');
 Route::delete('/demo/blocks/{block}', [GuestDemoController::class, 'destroyBlock'])->name('demo.blocks.destroy');
@@ -53,6 +56,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/logs/{dailyLog}/attachments', [AttachmentController::class, 'store'])->name('attachments.store');
     Route::get('/attachments/{attachment}', [AttachmentController::class, 'show'])->name('attachments.show');
     Route::delete('/attachments/{attachment}', [AttachmentController::class, 'destroy'])->name('attachments.destroy');
+    Route::post('/logs/{dailyLog}/long-texts', [LongTextAttachmentController::class, 'store'])->name('long-texts.store');
 
     Route::get('/tasks', [TaskController::class, 'index'])->name('tasks.index');
     Route::post('/tasks', [TaskController::class, 'store'])->name('tasks.store');

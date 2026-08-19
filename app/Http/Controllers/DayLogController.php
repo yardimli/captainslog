@@ -23,7 +23,7 @@ class DayLogController extends Controller
         $this->githubSensor->sync($request->user(), $log, $day);
         $this->browsingRecorder->finalizeStale($request->user());
         $showHidden = $request->boolean('show_hidden');
-        $log->load(['blocks.attachments', 'blocks.taskEvent', 'blocks.browsingActivities']);
+        $log->load(['blocks.attachments', 'blocks.longText', 'blocks.taskEvent', 'blocks.browsingActivities']);
         $tasks = TaskDefinition::where('user_id', $request->user()->id)
             ->where('is_active', true)
             ->orderBy('name')
@@ -31,6 +31,13 @@ class DayLogController extends Controller
             ->filter(fn (TaskDefinition $task) => $task->occursOn($day))
             ->values();
         $counts = $log->taskEvents()->selectRaw('task_definition_id, count(*) as total')->groupBy('task_definition_id')->pluck('total', 'task_definition_id');
+        $slotCounts = $log->taskEvents()
+            ->whereNotNull('scheduled_time')
+            ->selectRaw('task_definition_id, scheduled_time, count(*) as total')
+            ->groupBy('task_definition_id', 'scheduled_time')
+            ->get()
+            ->groupBy('task_definition_id')
+            ->map(fn ($events) => $events->pluck('total', 'scheduled_time')->map(fn ($count) => (int) $count));
         $timelineItems = collect();
 
         foreach ($log->blocks as $block) {
@@ -48,13 +55,21 @@ class DayLogController extends Controller
             ]);
         }
 
-        $incompleteStickyTasks = $tasks->where('is_sticky', true)->filter(fn (TaskDefinition $task) =>
-            (int) ($counts[$task->id] ?? 0) < $task->daily_default_count
-        );
+        $incompleteStickyTasks = $tasks->where('is_sticky', true)->filter(function (TaskDefinition $task) use ($counts, $slotCounts) {
+            $times = $task->scheduled_times ?? [];
+            if (! $times) {
+                return (int) ($counts[$task->id] ?? 0) < $task->daily_default_count;
+            }
+
+            return collect($times)->contains(fn ($time) => (int) data_get($slotCounts, $task->id.'.'.$time, 0) < $task->daily_default_count);
+        });
         $plannerTasks = $incompleteStickyTasks->filter(fn (TaskDefinition $task) => $task->isPlannerVisible($day, now()));
         foreach ($plannerTasks as $task) {
             $times = $task->scheduled_times ?: ['00:00'];
             foreach ($times as $time) {
+                if (! empty($task->scheduled_times) && (int) data_get($slotCounts, $task->id.'.'.$time, 0) >= $task->daily_default_count) {
+                    continue;
+                }
                 [$hour, $minute] = array_map('intval', explode(':', $time));
                 $timelineItems->push([
                     'kind' => 'schedule',
@@ -117,6 +132,6 @@ class DayLogController extends Controller
 
         $mainFragment = $request->header('X-Day-View') === 'main';
 
-        return view('logs.show', compact('day', 'log', 'tasks', 'counts', 'timeline', 'showHidden', 'mainFragment', 'nextStickyVisibility'));
+        return view('logs.show', compact('day', 'log', 'tasks', 'counts', 'slotCounts', 'timeline', 'showHidden', 'mainFragment', 'nextStickyVisibility'));
     }
 }

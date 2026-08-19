@@ -13,11 +13,13 @@ class LogBlock extends Model
         'event' => '✅',
         'text' => '📝',
         'media' => '📎',
+        'long_text' => '📄',
         'generated_image' => '🎨',
         'chat_user' => '💬',
         'chat_assistant' => '🤖',
         'sensor_github' => '💻',
         'sensor_browser' => '🌐',
+        'sensor_kindle' => '📖',
     ];
 
     protected $fillable = ['daily_log_id', 'type', 'emoji', 'content', 'metadata', 'position', 'occurred_at', 'is_hidden'];
@@ -51,8 +53,18 @@ class LogBlock extends Model
         return $this->hasOne(TaskEvent::class);
     }
 
+    public function longText(): HasOne
+    {
+        return $this->hasOne(LongTextAttachment::class);
+    }
+
     public function browsingActivities(): HasMany
     {
         return $this->hasMany(BrowsingActivity::class);
+    }
+
+    public function kindleReadingProgress(): HasMany
+    {
+        return $this->hasMany(KindleReadingProgress::class);
     }
 }

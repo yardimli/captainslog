@@ -24,6 +24,14 @@ class GithubSensorSync
         }
 
         $existingSensorBlocks = $this->consolidateExistingBlocks($log);
+        if ($day->isToday()) {
+            $existingSensorBlocks
+                ->filter(fn (LogBlock $block) => data_get($block->metadata, 'empty') === true)
+                ->each->delete();
+            $existingSensorBlocks = $existingSensorBlocks
+                ->reject(fn (LogBlock $block) => data_get($block->metadata, 'empty') === true)
+                ->values();
+        }
         $sensor = Sensor::where('user_id', $user->id)->where('type', Sensor::GITHUB)->where('enabled', true)->first();
         if (! $sensor || blank($sensor->username)) {
             return;
@@ -82,7 +90,7 @@ class GithubSensorSync
                     $existingShas[] = $event['sha'];
                 }
 
-                if ($commits->isEmpty() && $blocks->isEmpty()) {
+                if (! $day->isToday() && $commits->isEmpty() && $blocks->isEmpty()) {
                     $log->blocks()->create([
                         'type' => 'sensor_github',
                         'emoji' => '💻',

@@ -79,6 +79,11 @@ class TaskDefinition extends Model
         return $summary;
     }
 
+    public function getDailyTargetCountAttribute(): int
+    {
+        return $this->daily_default_count * max(1, count($this->scheduled_times ?? []));
+    }
+
     public function getColorHexAttribute(): string
     {
         $color = strtolower((string) $this->color);

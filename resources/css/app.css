@@ -57,6 +57,15 @@
     z-index: 95;
 }
 
+.block-emoji-picker-category-tabs {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.block-emoji-picker-category-tabs::-webkit-scrollbar {
+    display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .panel,
     .timeline-item,

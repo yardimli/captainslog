@@ -27,6 +27,11 @@ class DailyLog extends Model
         return $this->hasMany(Attachment::class);
     }
 
+    public function longTexts(): HasMany
+    {
+        return $this->hasMany(LongTextAttachment::class);
+    }
+
     public function apiCalls(): HasMany
     {
         return $this->hasMany(ApiCall::class)->latest();
@@ -40,5 +45,10 @@ class DailyLog extends Model
     public function browsingActivities(): HasMany
     {
         return $this->hasMany(BrowsingActivity::class);
+    }
+
+    public function kindleReadingProgress(): HasMany
+    {
+        return $this->hasMany(KindleReadingProgress::class);
     }
 }

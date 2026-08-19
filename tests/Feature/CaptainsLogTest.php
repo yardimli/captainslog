@@ -151,6 +151,10 @@ class CaptainsLogTest extends TestCase
             ->assertSee('+ Add time slot')
             ->assertSee('Tap a time to slide through hours');
 
+        $timePickerScript = file_get_contents(resource_path('js/app.js'));
+        $this->assertStringContainsString("if (kind === 'minute') dismiss();", $timePickerScript);
+        $this->assertStringNotContainsString('hourClicked && minuteClicked', $timePickerScript);
+
         $response = $this->postJson(route('tasks.store'), [
             'name' => 'Visual slots', 'color' => '#4f46e5', 'recurrence_type' => 'daily',
             'scheduled_times' => ['06:15', '18:45'], 'visible_after' => '05:30', 'is_sticky' => '1',
@@ -224,9 +228,11 @@ class CaptainsLogTest extends TestCase
         $this->actingAs($user)->get(route('tasks.index'))->assertOk()
             ->assertSee('data-emoji-picker', false)
             ->assertSee('data-emoji-search', false)
-            ->assertSee('data-emoji-source="'.asset('data/data-by-group.json').'"', false)
+            ->assertSee('data-emoji-url="'.route('emojis.index').'"', false)
             ->assertSee('data-emoji-category-template', false)
             ->assertSee('data-emoji-option-template', false)
+            ->assertSee('data-emoji-loading-spinner', false)
+            ->assertSee('overflow-x-hidden', false)
             ->assertSee('z-[100]', false)
             ->assertSee('max-h-[300px]', false)
             ->assertSee('🧘');
@@ -236,7 +242,32 @@ class CaptainsLogTest extends TestCase
         $this->assertGreaterThan(1800, $allEmojis->count());
         $this->assertSame('💻', $allEmojis->firstWhere('name', 'laptop')['emoji']);
         $this->assertCount(9, $emojiGroups);
-        $this->assertStringContainsString('emoji-picker-host-active', file_get_contents(resource_path('js/app.js')));
+        $firstPage = $this->getJson(route('emojis.index'))->assertOk()
+            ->assertJsonCount(9, 'categories')
+            ->assertJsonPath('group', 'smileys_emotion')
+            ->assertJsonMissing(['name' => 'laptop']);
+        $this->assertCount(171, $firstPage->json('emojis'));
+        $this->getJson(route('emojis.index', ['group' => 'objects']))->assertOk()
+            ->assertJsonFragment(['emoji' => '💻', 'name' => 'laptop']);
+        $this->getJson(route('emojis.index', ['q' => 'laptop']))->assertOk()
+            ->assertJsonFragment(['emoji' => '💻', 'name' => 'laptop']);
+        $this->getJson(route('emojis.index', ['q' => 'lap']))->assertOk()
+            ->assertJsonFragment(['emoji' => '💻', 'name' => 'laptop']);
+        $this->getJson(route('emojis.index', ['q' => 'aptop']))->assertOk()
+            ->assertJsonMissing(['name' => 'laptop']);
+        $this->getJson(route('emojis.index', ['q' => 'clo fa']))->assertOk()
+            ->assertJsonFragment(['name' => 'clown face']);
+        $this->getJson(route('emojis.index', ['q' => 'own']))->assertOk()
+            ->assertJsonMissing(['name' => 'clown face']);
+        $script = file_get_contents(resource_path('js/app.js'));
+        $this->assertStringContainsString('emoji-picker-host-active', $script);
+        $this->assertStringContainsString('window.setTimeout(() => requestEmojis', $script);
+        $this->assertStringContainsString("loading?.classList.toggle('grid', busy)", $script);
+        $this->assertStringContainsString('option.title = emoji.name', $script);
+        $this->assertStringNotContainsString('data-by-group.json', $script);
+        $styles = file_get_contents(resource_path('css/app.css'));
+        $this->assertStringContainsString('.block-emoji-picker-category-tabs::-webkit-scrollbar', $styles);
+        $this->assertStringContainsString('scrollbar-width: none', $styles);
 
         $created = $this->postJson(route('blocks.store', $log), [
             'type' => 'text', 'content' => 'Custom emoji note', 'emoji' => '🌈', 'occurred_at' => '09:15',
@@ -368,12 +399,44 @@ class CaptainsLogTest extends TestCase
         ]);
 
         $this->actingAs($user)->get('/logs/2026-08-15')->assertOk()->assertSee('data-scheduled-event', false);
-        $this->postJson(route('events.store', [$log, $task]))->assertCreated()->assertJsonPath('count', 1);
+        $this->postJson(route('events.store', [$log, $task]), ['scheduled_time' => '08:00'])->assertCreated()->assertJsonPath('count', 1)->assertJsonPath('slot_count', 1);
         $this->get('/logs/2026-08-15')->assertOk()->assertSee('data-scheduled-event', false);
-        $this->postJson(route('events.store', [$log, $task]))->assertCreated()->assertJsonPath('count', 2);
+        $this->postJson(route('events.store', [$log, $task]), ['scheduled_time' => '08:00'])->assertCreated()->assertJsonPath('count', 2)->assertJsonPath('slot_count', 2);
         $this->get('/logs/2026-08-15')->assertOk()
             ->assertDontSee('data-scheduled-event', false)
             ->assertSee('data-task-event="'.route('events.store', [$log, $task]).'"', false);
+    }
+
+    public function test_each_sticky_time_slot_has_its_own_daily_default_count(): void
+    {
+        $user = User::factory()->create();
+        $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-19']);
+        $task = TaskDefinition::create([
+            'user_id' => $user->id,
+            'name' => 'Dog medication',
+            'is_sticky' => true,
+            'daily_default_count' => 2,
+            'recurrence_type' => 'daily',
+            'scheduled_times' => ['08:00', '20:00'],
+        ]);
+        $url = route('events.store', [$log, $task]);
+
+        $this->actingAs($user)->get('/logs/2026-08-19')->assertOk()
+            ->assertSee('data-scheduled-time="08:00"', false)
+            ->assertSee('data-scheduled-time="20:00"', false);
+        $this->postJson($url, ['scheduled_time' => '08:00'])->assertCreated()->assertJsonPath('slot_count', 1);
+        $this->postJson($url, ['scheduled_time' => '08:00'])->assertCreated()->assertJsonPath('slot_count', 2)->assertJsonPath('count', 2);
+        $this->get('/logs/2026-08-19')->assertOk()
+            ->assertDontSee('data-scheduled-time="08:00"', false)
+            ->assertSee('data-scheduled-time="20:00"', false);
+        $this->postJson($url, ['scheduled_time' => '08:00'])->assertUnprocessable();
+
+        $this->postJson($url, ['scheduled_time' => '20:00'])->assertCreated()->assertJsonPath('slot_count', 1);
+        $this->postJson($url, ['scheduled_time' => '20:00'])->assertCreated()->assertJsonPath('slot_count', 2)->assertJsonPath('count', 4);
+        $this->get('/logs/2026-08-19')->assertOk()
+            ->assertDontSee('data-scheduled-event', false)
+            ->assertSee('data-task-event="'.$url.'"', false);
+        $this->get(route('tasks.index'))->assertOk()->assertSee('Daily target 4')->assertSee('(2 per time slot)');
     }
 
     public function test_sticky_event_visibility_time_only_delays_todays_planner_button(): void
@@ -594,6 +657,46 @@ class CaptainsLogTest extends TestCase
         Storage::disk('local')->assertMissing($response->json('attachment.path'));
         $this->assertDatabaseMissing('attachments', ['id' => $attachment->id]);
         $this->assertDatabaseMissing('log_blocks', ['id' => $attachment->log_block_id]);
+    }
+
+    public function test_long_text_and_markdown_can_be_attached_without_rendering_pasted_html(): void
+    {
+        $user = User::factory()->create();
+        $other = User::factory()->create();
+        $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
+
+        $this->actingAs($user)->get(route('logs.show', '2026-08-15'))->assertOk()
+            ->assertSee('Attach media and text')
+            ->assertSee('data-composer-long-text-form', false)
+            ->assertSee('id="composer-long-text-content"', false)
+            ->assertSee('<option value="markdown">Markdown</option>', false);
+
+        $markdown = "**Mission report**\n\n<script>alert('no')</script>";
+        $response = $this->postJson(route('long-texts.store', $log), [
+            'content' => $markdown,
+            'format' => 'markdown',
+            'occurred_at' => '14:35',
+        ])->assertCreated()->assertJsonPath('long_text.format', 'markdown');
+        $blockId = $response->json('long_text.log_block_id');
+        $this->assertDatabaseHas('long_text_attachments', [
+            'log_block_id' => $blockId,
+            'user_id' => $user->id,
+            'content' => $markdown,
+        ]);
+        $this->assertDatabaseHas('log_blocks', ['id' => $blockId, 'type' => 'long_text', 'emoji' => '📄']);
+
+        $this->get(route('logs.show', '2026-08-15'))->assertOk()
+            ->assertSee('<strong>Mission report</strong>', false)
+            ->assertSee('&lt;script&gt;', false)
+            ->assertDontSee("<script>alert('no')</script>", false);
+
+        $this->actingAs($other)->postJson(route('long-texts.store', $log), [
+            'content' => 'Not your log',
+            'format' => 'text',
+        ])->assertForbidden();
+
+        $this->actingAs($user)->deleteJson(route('blocks.destroy', $blockId))->assertOk();
+        $this->assertDatabaseMissing('long_text_attachments', ['log_block_id' => $blockId]);
     }
 
     public function test_recording_controls_expose_visible_status_and_supported_browser_formats(): void
