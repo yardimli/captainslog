@@ -2,7 +2,7 @@
 
 @section('eyebrow', 'Secure access')
 @section('title', 'Welcome back')
-@section('subtitle', 'Sign in to resume your timeline, recordings, and daily reflections.')
+@section('subtitle', 'Sign in to resume your timeline, notes, and daily reflections.')
 
 @section('content')
     @if(session('status'))<div id="login-status-message" class="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">{{ session('status') }}</div>@endif

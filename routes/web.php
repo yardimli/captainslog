@@ -5,10 +5,16 @@ use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\DayLogController;
 use App\Http\Controllers\EmojiController;
-use App\Http\Controllers\GuestDemoController;
 use App\Http\Controllers\GoogleCalendarSensorController;
+use App\Http\Controllers\GuestDemoController;
 use App\Http\Controllers\LogBlockController;
-use App\Http\Controllers\LongTextAttachmentController;
+use App\Http\Controllers\NoteAiController;
+use App\Http\Controllers\NotebookController;
+use App\Http\Controllers\NoteController;
+use App\Http\Controllers\NoteTagController;
+use App\Http\Controllers\NoteTaskController;
+use App\Http\Controllers\NoteTrashController;
+use App\Http\Controllers\NoteVersionController;
 use App\Http\Controllers\OpenRouterController;
 use App\Http\Controllers\PlannerVisibilityController;
 use App\Http\Controllers\ProfileController;
@@ -48,16 +54,29 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     Route::get('/calendar/{date?}', [CalendarController::class, 'index'])->where('date', '\\d{4}-\\d{2}-\\d{2}')->name('calendar');
+    Route::get('/notes', [NoteController::class, 'index'])->name('notes.index');
+    Route::post('/notebooks', [NotebookController::class, 'store'])->name('notebooks.store');
+    Route::post('/note-tags', [NoteTagController::class, 'store'])->name('note-tags.store');
+    Route::delete('/note-tags/{noteTag}', [NoteTagController::class, 'destroy'])->name('note-tags.destroy');
+    Route::post('/note-tasks', [NoteTaskController::class, 'store'])->name('note-tasks.store');
+    Route::patch('/note-tasks/{noteTask}', [NoteTaskController::class, 'update'])->name('note-tasks.update');
+    Route::delete('/note-tasks/{noteTask}', [NoteTaskController::class, 'destroy'])->name('note-tasks.destroy');
+    Route::get('/notes/create', [NoteController::class, 'create'])->name('notes.create');
+    Route::post('/notes', [NoteController::class, 'store'])->name('notes.store');
+    Route::get('/notes/{note}', [NoteController::class, 'show'])->name('notes.show');
+    Route::patch('/notes/{note}', [NoteController::class, 'update'])->name('notes.update');
+    Route::delete('/notes/{note}', [NoteController::class, 'destroy'])->name('notes.destroy');
+    Route::post('/notes/{noteId}/restore', [NoteTrashController::class, 'restore'])->whereNumber('noteId')->name('notes.restore');
+    Route::delete('/notes/{noteId}/force', [NoteTrashController::class, 'destroy'])->whereNumber('noteId')->name('notes.force-destroy');
+    Route::post('/notes/{note}/ai', NoteAiController::class)->name('notes.ai');
+    Route::post('/notes/{note}/versions/{version}/restore', [NoteVersionController::class, 'restore'])->name('notes.versions.restore');
     Route::get('/logs/{date}', [DayLogController::class, 'show'])->where('date', '\\d{4}-\\d{2}-\\d{2}')->name('logs.show');
     Route::post('/logs/{dailyLog}/blocks', [LogBlockController::class, 'store'])->name('blocks.store');
     Route::patch('/blocks/{block}', [LogBlockController::class, 'update'])->name('blocks.update');
     Route::delete('/blocks/{block}', [LogBlockController::class, 'destroy'])->name('blocks.destroy');
     Route::patch('/blocks/{block}/visibility', [PlannerVisibilityController::class, 'block'])->name('blocks.visibility');
 
-    Route::post('/logs/{dailyLog}/attachments', [AttachmentController::class, 'store'])->name('attachments.store');
     Route::get('/attachments/{attachment}', [AttachmentController::class, 'show'])->name('attachments.show');
-    Route::delete('/attachments/{attachment}', [AttachmentController::class, 'destroy'])->name('attachments.destroy');
-    Route::post('/logs/{dailyLog}/long-texts', [LongTextAttachmentController::class, 'store'])->name('long-texts.store');
 
     Route::get('/tasks', [TaskController::class, 'index'])->name('tasks.index');
     Route::post('/tasks', [TaskController::class, 'store'])->name('tasks.store');
@@ -87,7 +106,6 @@ Route::middleware('auth')->group(function () {
     Route::post('/logs/{dailyLog}/chat', [OpenRouterController::class, 'chat'])->name('openrouter.chat');
     Route::post('/chat-actions/{proposal}/confirm', [OpenRouterController::class, 'confirmChatAction'])->name('openrouter.chat-actions.confirm');
     Route::post('/logs/{dailyLog}/images', [OpenRouterController::class, 'image'])->name('openrouter.images');
-    Route::post('/attachments/{attachment}/transcribe', [OpenRouterController::class, 'transcribe'])->name('openrouter.transcribe');
 });
 
 require __DIR__.'/auth.php';

@@ -45,12 +45,6 @@
     </div>
 </template>
 
-<template id="composer-image-preview-template">
-    <figure class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-        <img class="aspect-square w-full object-cover" alt="Attached image preview" loading="lazy" data-composer-image-preview>
-    </figure>
-</template>
-
 <template id="time-slot-row-template">
     <div class="time-slot-row flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-950">
         <div class="time-slot-picker min-w-0 flex-1" data-time-picker>

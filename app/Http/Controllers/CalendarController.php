@@ -26,7 +26,7 @@ class CalendarController extends Controller
             default => [$focus->copy()->startOfWeek($weekStart), $focus->copy()->endOfWeek($weekEnd)],
         };
         $logs = DailyLog::where('user_id', $request->user()->id)
-            ->whereBetween('log_date', [$start, $end])->withCount(['blocks', 'attachments'])->get()->keyBy(fn ($log) => $log->log_date->toDateString());
+            ->whereBetween('log_date', [$start, $end])->withCount('blocks')->get()->keyBy(fn ($log) => $log->log_date->toDateString());
         $days = collect();
         for ($day = $start->copy(); $day->lte($end); $day->addDay()) {
             $days->push($day->copy());

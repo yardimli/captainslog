@@ -22,7 +22,7 @@
                 <div id="guest-hero-copy" class="mt-20 max-w-xl">
                     <p class="text-xs font-bold uppercase tracking-[.24em] text-indigo-300">Your days, kept with context</p>
                     <h2 class="mt-4 text-5xl font-black leading-[.98]">Return to the bridge.</h2>
-                    <p class="mt-6 max-w-lg text-lg leading-relaxed text-slate-300">Your notes, recurring events, recordings, and reflections stay together in one calm, chronological workspace.</p>
+                    <p class="mt-6 max-w-lg text-lg leading-relaxed text-slate-300">Your daily entries, recurring events, standalone notes, and reflections stay together in one calm workspace.</p>
                 </div>
             </div>
             <div id="guest-capability-grid" class="relative grid gap-3 text-sm text-slate-300 xl:grid-cols-3">

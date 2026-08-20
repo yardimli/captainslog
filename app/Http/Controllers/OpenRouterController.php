@@ -123,21 +123,6 @@ class OpenRouterController extends Controller
         return response()->json(['message' => 'Image generated and added.', 'reload' => true], 201);
     }
 
-    public function transcribe(Request $request, Attachment $attachment)
-    {
-        abort_unless($attachment->user_id === $request->user()->id && $attachment->type === 'audio', 403);
-        $data = $request->validate(['model' => 'required|string|max:200']);
-        $format = match ($attachment->mime_type) {
-            'audio/wav', 'audio/x-wav' => 'wav', 'audio/mpeg' => 'mp3', 'audio/mp4' => 'm4a', default => 'webm'
-        };
-        $block = $attachment->logBlock ?: $attachment->dailyLog->blocks()->create(['type' => 'media', 'position' => ($attachment->dailyLog->blocks()->max('position') ?? 0) + 1]);
-        $result = $this->openRouter->transcribe($request->user(), $attachment->dailyLog, $block, $data['model'], base64_encode(Storage::disk($attachment->disk)->get($attachment->path)), $format);
-        $text = $result['text'] ?? '';
-        $block->update(['content' => trim(($block->content ? $block->content."\n\n" : '')."Transcript:\n".$text), 'metadata' => array_merge($block->metadata ?? [], ['transcription_model' => $data['model']])]);
-
-        return response()->json(['message' => 'Transcript added.', 'text' => $text, 'reload' => true]);
-    }
-
     private function monthContext(Request $request): string
     {
         $blocks = LogBlock::whereHas('dailyLog', fn ($query) => $query->where('user_id', $request->user()->id)

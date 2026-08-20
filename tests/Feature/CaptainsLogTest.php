@@ -10,8 +10,9 @@ use App\Models\TaskEvent;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -626,92 +627,22 @@ class CaptainsLogTest extends TestCase
         $this->assertStringContainsString("body.location_url", $script);
     }
 
-    public function test_media_upload_is_tracked_and_stored_privately(): void
-    {
-        Storage::fake('local');
-        $user = User::factory()->create();
-        $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
-        $response = $this->actingAs($user)->postJson(route('attachments.store', $log), ['file' => UploadedFile::fake()->image('horizon.jpg')])->assertCreated();
-        $this->assertDatabaseHas('attachments', ['id' => $response->json('attachment.id'), 'type' => 'image', 'disk' => 'local']);
-        $this->assertDatabaseHas('log_blocks', ['id' => $response->json('attachment.log_block_id'), 'emoji' => '🖼️']);
-        Storage::disk('local')->assertExists($response->json('attachment.path'));
-        $attachment = Attachment::findOrFail($response->json('attachment.id'));
-        $this->get(route('logs.show', '2026-08-15'))->assertOk()
-            ->assertSee('data-edit-media=', false)
-            ->assertSee('composer-image-preview-template', false)
-            ->assertSee('image-preview-overlay-template', false)
-            ->assertSee('h-[512px]', false)
-            ->assertSee('max-h-[512px]', false)
-            ->assertSee('data-image-preview-open', false)
-            ->assertSee('aria-label="Download image"', false)
-            ->assertSee('download="horizon.jpg"', false)
-            ->assertDontSee('<span class="truncate">horizon.jpg</span>', false)
-            ->assertDontSee('data-delete="'.route('attachments.destroy', $attachment).'"', false);
-
-        $script = file_get_contents(resource_path('js/app.js'));
-        $this->assertStringContainsString('const scrollPosition = {x: window.scrollX, y: window.scrollY}', $script);
-        $this->assertStringContainsString('sessionStorage.setItem(reloadScrollKey', $script);
-        $this->assertStringContainsString("openOverlay('image-preview')", $script);
-
-        $this->deleteJson(route('blocks.destroy', $attachment->log_block_id))->assertOk();
-        Storage::disk('local')->assertMissing($response->json('attachment.path'));
-        $this->assertDatabaseMissing('attachments', ['id' => $attachment->id]);
-        $this->assertDatabaseMissing('log_blocks', ['id' => $attachment->log_block_id]);
-    }
-
-    public function test_long_text_and_markdown_can_be_attached_without_rendering_pasted_html(): void
+    public function test_log_entry_media_long_text_and_recording_features_are_removed(): void
     {
         $user = User::factory()->create();
-        $other = User::factory()->create();
-        $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
-
-        $this->actingAs($user)->get(route('logs.show', '2026-08-15'))->assertOk()
-            ->assertSee('Attach media and text')
-            ->assertSee('data-composer-long-text-form', false)
-            ->assertSee('id="composer-long-text-content"', false)
-            ->assertSee('<option value="markdown">Markdown</option>', false);
-
-        $markdown = "**Mission report**\n\n<script>alert('no')</script>";
-        $response = $this->postJson(route('long-texts.store', $log), [
-            'content' => $markdown,
-            'format' => 'markdown',
-            'occurred_at' => '14:35',
-        ])->assertCreated()->assertJsonPath('long_text.format', 'markdown');
-        $blockId = $response->json('long_text.log_block_id');
-        $this->assertDatabaseHas('long_text_attachments', [
-            'log_block_id' => $blockId,
-            'user_id' => $user->id,
-            'content' => $markdown,
-        ]);
-        $this->assertDatabaseHas('log_blocks', ['id' => $blockId, 'type' => 'long_text', 'emoji' => '📄']);
-
-        $this->get(route('logs.show', '2026-08-15'))->assertOk()
-            ->assertSee('<strong>Mission report</strong>', false)
-            ->assertSee('&lt;script&gt;', false)
-            ->assertDontSee("<script>alert('no')</script>", false);
-
-        $this->actingAs($other)->postJson(route('long-texts.store', $log), [
-            'content' => 'Not your log',
-            'format' => 'text',
-        ])->assertForbidden();
-
-        $this->actingAs($user)->deleteJson(route('blocks.destroy', $blockId))->assertOk();
-        $this->assertDatabaseMissing('long_text_attachments', ['log_block_id' => $blockId]);
-    }
-
-    public function test_recording_controls_expose_visible_status_and_supported_browser_formats(): void
-    {
-        Storage::fake('local');
-        $user = User::factory()->create();
-        $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
-
         $this->actingAs($user)->get('/logs/2026-08-15')->assertOk()
-            ->assertSee('data-recording-status', false)
-            ->assertSee('Your browser will ask for microphone or camera permission.');
+            ->assertDontSee('data-composer-media-form', false)
+            ->assertDontSee('data-composer-long-text-form', false)
+            ->assertDontSee('data-recording-status', false)
+            ->assertDontSee('Attach media and text');
 
-        $this->postJson(route('attachments.store', $log), [
-            'file' => UploadedFile::fake()->create('voice-note.ogg', 64, 'audio/ogg'),
-        ])->assertCreated()->assertJsonPath('attachment.type', 'audio');
+        $this->assertFalse(Schema::hasTable('long_text_attachments'));
+        $this->assertFalse(Route::has('attachments.store'));
+        $this->assertFalse(Route::has('attachments.destroy'));
+        $this->assertFalse(Route::has('long-texts.store'));
+        $this->assertFalse(Route::has('openrouter.transcribe'));
+        $this->assertTrue(Route::has('openrouter.images'));
+        $this->assertTrue(Route::has('attachments.show'));
     }
 
     public function test_openrouter_chat_reply_and_cost_are_added_to_the_day(): void
@@ -829,9 +760,6 @@ class CaptainsLogTest extends TestCase
         $user = User::factory()->create();
         $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
         $log->blocks()->create(['type' => 'text', 'content' => 'Editable bridge note', 'position' => 1, 'occurred_at' => '2026-08-15 09:35:00']);
-        $mediaBlock = $log->blocks()->create(['type' => 'media', 'position' => 2, 'occurred_at' => '2026-08-15 10:00:00']);
-        Attachment::create(['user_id' => $user->id, 'daily_log_id' => $log->id, 'log_block_id' => $mediaBlock->id, 'type' => 'audio', 'disk' => 'local', 'path' => 'test.webm', 'original_name' => 'test.webm', 'mime_type' => 'audio/webm', 'size' => 1]);
-
         $this->actingAs($user)->get(route('logs.show', '2026-08-15'))->assertOk()
             ->assertSee('data-timeline-edit', false)
             ->assertSee('data-timeline-time="09:35"', false)
@@ -839,8 +767,6 @@ class CaptainsLogTest extends TestCase
             ->assertSee('data-edit-updated=', false)
             ->assertSee('data-hide-url=', false)
             ->assertSee('data-delete-url=', false)
-            ->assertSee('data-has-media="false"', false)
-            ->assertSee('data-has-media="true"', false)
             ->assertSee('data-composer-entry-actions', false)
             ->assertSee('data-composer-updated', false)
             ->assertDontSee('Recorded 09:35')
@@ -849,8 +775,8 @@ class CaptainsLogTest extends TestCase
             ->assertSee('data-composer-note-form', false)
             ->assertSee('data-autosave-status', false)
             ->assertSee('data-composer-cancel', false)
-            ->assertSee('data-composer-media-panel', false)
-            ->assertSee('data-composer-media-form', false)
+            ->assertDontSee('data-composer-media-panel', false)
+            ->assertDontSee('data-composer-media-form', false)
             ->assertSee('data-day-view-fragment', false)
             ->assertSee('data-busy-label="Waiting for response"', false)
             ->assertSee('data-busy-label="Generating image"', false)

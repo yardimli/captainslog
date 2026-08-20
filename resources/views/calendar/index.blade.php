@@ -19,7 +19,7 @@
                 <a href="{{ route('logs.show', $day->toDateString()) }}" class="group min-h-32 rounded-2xl border p-3 transition hover:-translate-y-0.5 hover:border-indigo-400 hover:shadow-md {{ $day->isToday() ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/50' : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900' }} {{ $view === 'month' && !$day->isSameMonth($focus) ? 'opacity-50' : '' }}">
                     <div class="calendar-day-heading flex items-center justify-between"><span class="text-xs font-semibold uppercase text-slate-500">{{ $day->format('D') }}</span><span class="grid h-8 w-8 place-items-center rounded-full {{ $day->isToday() ? 'bg-indigo-600 text-white' : '' }}">{{ $day->day }}</span></div>
                     <div class="calendar-day-summary mt-5 space-y-1 text-xs text-slate-500">
-                        @if($item)<p>{{ $item->blocks_count }} log {{ Str::plural('block', $item->blocks_count) }}</p><p>{{ $item->attachments_count }} {{ Str::plural('attachment', $item->attachments_count) }}</p>@else<p class="opacity-0 transition group-hover:opacity-100">Open log →</p>@endif
+                        @if($item)<p>{{ $item->blocks_count }} log {{ Str::plural('entry', $item->blocks_count) }}</p>@else<p class="opacity-0 transition group-hover:opacity-100">Open log →</p>@endif
                     </div>
                 </a>
             @endforeach

@@ -28,7 +28,7 @@ class DayLogController extends Controller
         $this->githubSensor->sync($request->user(), $log, $day);
         $this->browsingRecorder->finalizeStale($request->user());
         $showHidden = $request->boolean('show_hidden');
-        $log->load(['blocks.attachments', 'blocks.longText', 'blocks.taskEvent', 'blocks.browsingActivities']);
+        $log->load(['blocks.attachments', 'blocks.taskEvent', 'blocks.browsingActivities']);
         $tasks = TaskDefinition::where('user_id', $request->user()->id)
             ->where('is_active', true)
             ->orderBy('name')

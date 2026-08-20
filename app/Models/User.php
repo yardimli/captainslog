@@ -62,6 +62,36 @@ class User extends Authenticatable
         return $this->hasMany(DailyLog::class);
     }
 
+    public function notes()
+    {
+        return $this->hasMany(Note::class);
+    }
+
+    public function notebooks()
+    {
+        return $this->hasMany(Notebook::class);
+    }
+
+    public function notebookStacks()
+    {
+        return $this->hasMany(NotebookStack::class);
+    }
+
+    public function noteTags()
+    {
+        return $this->hasMany(NoteTag::class);
+    }
+
+    public function noteTasks()
+    {
+        return $this->hasMany(NoteTask::class);
+    }
+
+    public function noteSettings()
+    {
+        return $this->hasOne(NoteUserSetting::class);
+    }
+
     public function taskDefinitions()
     {
         return $this->hasMany(TaskDefinition::class);

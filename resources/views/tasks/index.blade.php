@@ -58,7 +58,7 @@
                 <button class="btn w-full" data-event-definition-submit>Create event</button>
             </form>
 
-            <div id="event-definition-delete-section" class="mt-7 hidden border-t border-slate-200 pt-5 dark:border-slate-800" data-event-definition-delete-section><form method="POST" action="" data-confirm-event-delete data-event-definition-delete-form>@csrf @method('DELETE')<button class="btn-secondary w-full border-rose-300 text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:hover:bg-rose-950">Delete event</button><p class="mt-2 text-center text-xs text-slate-500">Recorded entries become editable text and keep their media.</p></form></div>
+            <div id="event-definition-delete-section" class="mt-7 hidden border-t border-slate-200 pt-5 dark:border-slate-800" data-event-definition-delete-section><form method="POST" action="" data-confirm-event-delete data-event-definition-delete-form>@csrf @method('DELETE')<button class="btn-secondary w-full border-rose-300 text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:hover:bg-rose-950">Delete event</button><p class="mt-2 text-center text-xs text-slate-500">Recorded entries become editable text.</p></form></div>
         </aside>
     </div>
 @endsection

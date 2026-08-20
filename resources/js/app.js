@@ -1,5 +1,7 @@
 import './bootstrap';
 
+if (document.querySelector('[data-note-rich-editor]')) import('./notes');
+
 const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
 const cloneTemplate = id => document.getElementById(id)?.content.firstElementChild.cloneNode(true);
 const setButtonBusy = (button, busy) => {
@@ -267,13 +269,6 @@ function initTimePicker(root) {
 }
 
 document.querySelectorAll('[data-time-picker]').forEach(initTimePicker);
-
-function initComposerMediaPanel(panel) {
-    const update = () => { const label = panel.querySelector('[data-media-disclosure-label]'); if (label) label.textContent = panel.open ? 'Hide' : 'Show'; };
-    panel.addEventListener('toggle', update); update();
-}
-
-document.querySelectorAll('[data-composer-media-panel]').forEach(initComposerMediaPanel);
 
 function setEmojiPickerValue(picker, value, dispatch = false) {
     if (!picker) return;
@@ -546,7 +541,7 @@ function scheduleEventAutosave(form, delay = 650) {
     }, delay));
 }
 
-function configureComposer({time, mode = 'create', kind = 'block', action = '', content = '', emoji = '📝', updated = '', hideUrl = '', deleteUrl = '', isHidden = false, hasMedia = false, media = [], location = null, blockId = ''} = {}) {
+function configureComposer({time, mode = 'create', kind = 'block', action = '', content = '', emoji = '📝', updated = '', hideUrl = '', deleteUrl = '', isHidden = false, location = null} = {}) {
     const root = document.querySelector('[data-overlay="composer"]');
     const timeInput = root?.querySelector('[data-composer-time]');
     const form = root?.querySelector('[data-composer-note-form]');
@@ -596,25 +591,6 @@ function configureComposer({time, mode = 'create', kind = 'block', action = '', 
     entryActions?.classList.toggle('hidden', !showActions); entryActions?.classList.toggle('grid', showActions);
     if (visibility) { visibility.classList.toggle('hidden', !showVisibility); visibility.textContent = isHidden ? 'Restore' : 'Hide'; visibility.dataset.plannerVisibility = hideUrl; visibility.dataset.method = 'PATCH'; visibility.dataset.payload = JSON.stringify({hidden:!isHidden}); }
     if (deleteButton) { deleteButton.classList.toggle('hidden', !showDelete); deleteButton.dataset.delete = deleteUrl; }
-    const mediaPanel = root.querySelector('[data-composer-media-panel]');
-    if (mediaPanel) mediaPanel.open = mode === 'edit' && hasMedia;
-    const existingMedia = root.querySelector('[data-composer-existing-media]');
-    if (existingMedia) {
-        const previews = media.map(item => {
-            const preview = cloneTemplate('composer-image-preview-template');
-            const image = preview?.querySelector('[data-composer-image-preview]');
-            if (image) image.src = item.url;
-            return preview;
-        }).filter(Boolean);
-        existingMedia.replaceChildren(...previews);
-        existingMedia.classList.toggle('hidden', previews.length === 0);
-        existingMedia.classList.toggle('grid', previews.length > 0);
-    }
-    root.querySelectorAll('[data-composer-block-field]').forEach(field => { field.value = mode === 'edit' ? blockId : ''; });
-    const longTextContent = root.querySelector('[data-long-text-content]');
-    if (longTextContent) longTextContent.value = '';
-    const longTextFormat = root.querySelector('[data-composer-long-text-form] [name="format"]');
-    if (longTextFormat) longTextFormat.value = 'text';
     syncComposerTime();
     form.dataset.originalContent = textarea.value;
     form.dataset.originalTime = timeInput.value;
@@ -747,7 +723,6 @@ document.addEventListener('submit', async e => {
     e.preventDefault(); const button = form.querySelector('[type=submit]'); setButtonBusy(button, true);
     try {
         const composer = form.closest('[data-overlay="composer"]');
-        if (composer && form.matches('[data-composer-media-form], [data-composer-long-text-form]') && !await saveComposerDraft(composer, {close:false, refresh:false})) return;
         const body = await ajax(form.action, {method: form.method || 'POST', body: new FormData(form)});
         toast(body.message || 'Saved.');
         if (await refreshDayView()) {
@@ -883,7 +858,7 @@ document.addEventListener('click', async e => {
         if (timelineItem.matches('[data-timeline-github]')) openGithubDetails(timelineItem);
         else if (timelineItem.matches('[data-timeline-browsing]')) openBrowsingDetails(timelineItem);
         else if (timelineItem.matches('[data-timeline-google-calendar]')) openGoogleCalendarDetails(timelineItem);
-        else if (timelineItem.matches('[data-timeline-edit]')) configureComposer({time: timelineItem.dataset.timelineTime, mode:'edit', kind:timelineItem.dataset.editKind, action:timelineItem.dataset.editUrl, content:timelineItem.dataset.editContent, emoji:timelineItem.dataset.editEmoji, updated:timelineItem.dataset.editUpdated, hideUrl:timelineItem.dataset.hideUrl, deleteUrl:timelineItem.dataset.deleteUrl, isHidden:timelineItem.dataset.isHidden === 'true', hasMedia:timelineItem.dataset.hasMedia === 'true', media:JSON.parse(timelineItem.dataset.editMedia || '[]'), location:JSON.parse(timelineItem.dataset.editLocation || 'null'), blockId:timelineItem.dataset.blockId});
+        else if (timelineItem.matches('[data-timeline-edit]')) configureComposer({time: timelineItem.dataset.timelineTime, mode:'edit', kind:timelineItem.dataset.editKind, action:timelineItem.dataset.editUrl, content:timelineItem.dataset.editContent, emoji:timelineItem.dataset.editEmoji, updated:timelineItem.dataset.editUpdated, hideUrl:timelineItem.dataset.hideUrl, deleteUrl:timelineItem.dataset.deleteUrl, isHidden:timelineItem.dataset.isHidden === 'true', location:JSON.parse(timelineItem.dataset.editLocation || 'null')});
         else if (timelineItem.matches('[data-time-gap]')) configureComposer({time:timelineItem.dataset.from});
         else configureComposer({time:timelineItem.dataset.timelineTime || timelineItem.dataset.currentTime});
     }
@@ -936,8 +911,8 @@ document.addEventListener('click', async e => {
                 } catch (_) { toast('The event was logged, but its location could not be saved.', true); }
             }
             await refreshDayViewOrReload();
-            const addNotes = body.edit_url && await modal({title:'Event tracked', message:'Would you like to attach notes, a photo, or a recording?', confirmText:'Add notes & media', cancelText:'Done'});
-            if (addNotes) configureComposer({time:body.time, mode:'edit', kind:'event', action:body.edit_url, content:'', emoji:body.emoji || '✅', hideUrl:body.hide_url, deleteUrl:body.delete_url, location:savedLocation, blockId:body.block_id});
+            const addNotes = body.edit_url && await modal({title:'Event tracked', message:'Would you like to add a note to this event?', confirmText:'Add note', cancelText:'Done'});
+            if (addNotes) configureComposer({time:body.time, mode:'edit', kind:'event', action:body.edit_url, content:'', emoji:body.emoji || '✅', hideUrl:body.hide_url, deleteUrl:body.delete_url, location:savedLocation});
         }
         catch(error) { toast(error.message,true); } finally { task.disabled = false; }
     }
@@ -1005,10 +980,11 @@ async function loadModels(select) {
         if (!options.length) { const option = cloneTemplate('select-option-template'); option.textContent = 'No compatible models available'; option.value = ''; options.push(option); }
         select.replaceChildren(...options);
         if (choice && [...select.options].some(option => option.value === choice)) select.value = choice;
+        select.dispatchEvent(new CustomEvent('modelsloaded', {bubbles: true}));
     };
     const cached = JSON.parse(localStorage.getItem(key) || '[]'); if (cached.length) render(cached);
     try { const body = await ajax(`${select.dataset.modelsUrl}?images=${modelKind === 'image' ? 1 : 0}`); const models = body.data || []; localStorage.setItem(key, JSON.stringify(models)); render(models); }
-    catch(error) { if (!cached.length) { const option = cloneTemplate('select-option-template'); option.textContent = accountChoice || 'Add an API key in Settings'; option.value = accountChoice; select.replaceChildren(option); } }
+    catch(error) { if (!cached.length) { const option = cloneTemplate('select-option-template'); option.textContent = accountChoice || 'Add an API key in Settings'; option.value = accountChoice; select.replaceChildren(option); select.dispatchEvent(new CustomEvent('modelsloaded', {bubbles: true})); } }
     if (kind !== 'chat-default') select.addEventListener('change', () => localStorage.setItem(choiceKey, select.value));
 }
 document.querySelectorAll('[data-model-select]').forEach(loadModels);
@@ -1018,121 +994,11 @@ if (['chat', 'image'].includes(requestedPanel) && document.querySelector(`[data-
     openOverlay(requestedPanel);
 }
 
-let activeRecording = null;
-
-function recordingMime(type) {
-    const candidates = type === 'video'
-        ? ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4']
-        : ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4'];
-    return candidates.find(mime => MediaRecorder.isTypeSupported?.(mime)) || '';
-}
-
-function extensionFor(mime, type) {
-    if (mime.includes('mp4')) return type === 'audio' ? 'm4a' : 'mp4';
-    if (mime.includes('ogg')) return 'ogg';
-    return 'webm';
-}
-
-function recordingUi(button) {
-    const panel = button.closest('[data-recorder-panel]') || button.parentElement;
-    return {
-        panel,
-        status: panel?.querySelector('[data-recording-status]'),
-        message: panel?.querySelector('[data-recording-message]'),
-        time: panel?.querySelector('[data-recording-time]'),
-        dot: panel?.querySelector('[data-recording-dot]'),
-        preview: panel?.querySelector('[data-recording-preview]'),
-        buttons: [...(panel?.querySelectorAll('[data-record]') || [])],
-    };
-}
-
-function setRecordingStatus(ui, message, state = 'working') {
-    if (!ui.status) return;
-    ui.status.classList.remove('hidden', 'border-rose-300', 'bg-rose-50', 'text-rose-800', 'border-emerald-300', 'bg-emerald-50', 'text-emerald-800', 'dark:bg-rose-950', 'dark:text-rose-200', 'dark:border-rose-800', 'dark:bg-emerald-950', 'dark:text-emerald-200', 'dark:border-emerald-800');
-    if (state === 'error') ui.status.classList.add('border-rose-300', 'bg-rose-50', 'text-rose-800', 'dark:border-rose-800', 'dark:bg-rose-950', 'dark:text-rose-200');
-    if (state === 'success') ui.status.classList.add('border-emerald-300', 'bg-emerald-50', 'text-emerald-800', 'dark:border-emerald-800', 'dark:bg-emerald-950', 'dark:text-emerald-200');
-    ui.message.textContent = message;
-    ui.dot?.classList.toggle('animate-pulse', state === 'recording');
-    ui.dot?.classList.toggle('bg-rose-500', state === 'recording' || state === 'error');
-    ui.dot?.classList.toggle('bg-emerald-500', state === 'success');
-}
-
-function recordingError(error, type) {
-    if (!window.isSecureContext) return 'Recording requires HTTPS or a localhost address.';
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') return `This browser cannot record ${type}. Use the upload button instead.`;
-    if (error?.name === 'NotAllowedError' || error?.name === 'SecurityError') return `${type === 'video' ? 'Camera and microphone' : 'Microphone'} permission was denied. Allow it in this site's browser settings, then try again.`;
-    if (error?.name === 'NotFoundError') return `No ${type === 'video' ? 'camera or microphone' : 'microphone'} was found.`;
-    if (error?.name === 'NotReadableError') return `The ${type === 'video' ? 'camera or microphone is' : 'microphone is'} busy in another application.`;
-    return `Could not start ${type} recording. Use the upload button or check browser permissions.`;
-}
-
-async function uploadRecording(session) {
-    const {button, chunks, mime, stream, timer, ui, type} = session;
-    clearInterval(timer);
-    stream.getTracks().forEach(track => track.stop());
-    if (ui.preview) { ui.preview.pause(); ui.preview.srcObject = null; ui.preview.classList.add('hidden'); }
-    setRecordingStatus(ui, 'Preparing recording for upload…');
-    try {
-        const blob = new Blob(chunks, {type: mime || (type === 'video' ? 'video/webm' : 'audio/webm')});
-        if (!blob.size) throw new Error('The recording was empty.');
-        const input = document.querySelector(button.dataset.target), form = input?.closest('form');
-        if (!form) throw new Error('The upload form is unavailable.');
-        const composer = form.closest('[data-overlay="composer"]');
-        if (composer && !await saveComposerDraft(composer, {close:false, refresh:false})) throw new Error('Save the entry before uploading this recording.');
-        const file = new File([blob], `${type}-${new Date().toISOString().replace(/[:.]/g, '-')}.${extensionFor(blob.type, type)}`, {type: blob.type});
-        const formData = new FormData(form); formData.set('file', file);
-        setRecordingStatus(ui, `Uploading ${type}…`);
-        const body = await ajax(form.action, {method:'POST', body:formData});
-        setRecordingStatus(ui, `${type[0].toUpperCase() + type.slice(1)} uploaded.`, 'success');
-        toast(body.message || `${type} attached.`);
-        if (body.reload) setTimeout(async () => { await refreshDayViewOrReload(); closeOverlay(form.closest('[data-overlay]')); }, 350);
-    } catch (error) {
-        setRecordingStatus(ui, error.message || `Could not upload ${type}.`, 'error'); toast(error.message, true);
-    } finally {
-        button.textContent = button.dataset.idleLabel; button.disabled = false;
-        ui.buttons.forEach(item => item.disabled = false); activeRecording = null;
-    }
-}
-
-async function handleRecordingButton(button) {
-    const type = button.dataset.record, ui = recordingUi(button);
-    if (activeRecording?.button === button && activeRecording.recorder.state === 'recording') {
-        button.disabled = true; button.textContent = 'Stopping…'; setRecordingStatus(ui, 'Stopping and preparing upload…'); activeRecording.recorder.stop(); return;
-    }
-    if (activeRecording) { setRecordingStatus(ui, 'Finish the current recording first.', 'error'); return; }
-    button.dataset.idleLabel ||= button.textContent;
-    try {
-        if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') throw new DOMException('Media capture unsupported', 'NotSupportedError');
-        ui.buttons.forEach(item => item.disabled = true); button.textContent = 'Requesting permission…';
-        setRecordingStatus(ui, `Requesting ${type === 'video' ? 'camera and microphone' : 'microphone'} permission…`);
-        const stream = await navigator.mediaDevices.getUserMedia(type === 'video' ? {audio:true, video:{facingMode:'user'}} : {audio:true});
-        const mime = recordingMime(type), recorder = new MediaRecorder(stream, mime ? {mimeType:mime} : undefined), chunks = [];
-        const started = Date.now();
-        const session = {button, chunks, mime: recorder.mimeType || mime, recorder, stream, timer:null, type, ui}; activeRecording = session;
-        recorder.ondataavailable = event => { if (event.data?.size) chunks.push(event.data); };
-        recorder.onerror = event => { setRecordingStatus(ui, event.error?.message || 'Recording failed.', 'error'); };
-        recorder.onstop = () => uploadRecording(session);
-        if (type === 'video' && ui.preview) { ui.preview.srcObject = stream; ui.preview.classList.remove('hidden'); await ui.preview.play().catch(() => {}); }
-        recorder.start(1000); button.textContent = 'Stop & upload'; ui.buttons.forEach(item => item.disabled = item !== button); button.disabled = false;
-        setRecordingStatus(ui, `${type[0].toUpperCase() + type.slice(1)} recording in progress`, 'recording');
-        session.timer = setInterval(() => { const seconds = Math.floor((Date.now() - started) / 1000); if (ui.time) ui.time.textContent = `${String(Math.floor(seconds / 60)).padStart(2,'0')}:${String(seconds % 60).padStart(2,'0')}`; }, 250);
-    } catch (error) {
-        const message = recordingError(error, type); button.textContent = button.dataset.idleLabel; ui.buttons.forEach(item => item.disabled = false); setRecordingStatus(ui, message, 'error'); toast(message, true); activeRecording = null;
-    }
-}
-
-function initRecordingButton(button) {
-    button.addEventListener('click', () => handleRecordingButton(button));
-}
-
-document.querySelectorAll('[data-record]').forEach(initRecordingButton);
 
 function initializeRefreshedMain(root) {
     root.querySelectorAll('[data-time-picker]').forEach(initTimePicker);
-    root.querySelectorAll('[data-composer-media-panel]').forEach(initComposerMediaPanel);
     root.querySelectorAll('[data-emoji-picker]').forEach(initEmojiPicker);
     root.querySelectorAll('[data-model-select]').forEach(loadModels);
-    root.querySelectorAll('[data-record]').forEach(initRecordingButton);
     initComposerTimeInput(root);
     scheduleStickyVisibilityRefresh(root);
 }

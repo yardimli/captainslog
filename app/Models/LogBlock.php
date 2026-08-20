@@ -12,8 +12,6 @@ class LogBlock extends Model
     public const DEFAULT_EMOJIS = [
         'event' => '✅',
         'text' => '📝',
-        'media' => '📎',
-        'long_text' => '📄',
         'generated_image' => '🎨',
         'chat_user' => '💬',
         'chat_assistant' => '🤖',
@@ -54,11 +52,6 @@ class LogBlock extends Model
         return $this->hasOne(TaskEvent::class);
     }
 
-    public function longText(): HasOne
-    {
-        return $this->hasOne(LongTextAttachment::class);
-    }
-
     public function browsingActivities(): HasMany
     {
         return $this->hasMany(BrowsingActivity::class);
@@ -72,5 +65,10 @@ class LogBlock extends Model
     public function googleCalendarEvent(): HasOne
     {
         return $this->hasOne(GoogleCalendarEvent::class);
+    }
+
+    public function noteLinks(): HasMany
+    {
+        return $this->hasMany(NoteLogLink::class);
     }
 }

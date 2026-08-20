@@ -15,7 +15,7 @@
   <img alt="MariaDB" src="https://img.shields.io/badge/MariaDB-ready-003545?logo=mariadb&logoColor=white">
 </p>
 
-Captain's Log combines a calendar, block-based daily journal, private media library, repeatable event tracking, and OpenRouter tools in a responsive Laravel application. Every calendar and log URL is refreshable, while AJAX updates keep everyday interactions quick.
+Captain's Log combines a calendar, block-based daily journal, standalone Notes library, repeatable event tracking, and OpenRouter tools in a responsive Laravel application. Every calendar, log, and note URL is refreshable, while everyday interactions stay quick.
 
 ![Captain's Log landing page and guest simulation](https://raw.githubusercontent.com/yardimli/captainslog/main/docs/images/landing-demo.png)
 
@@ -49,35 +49,31 @@ Captain's Log combines a calendar, block-based daily journal, private media libr
 - Access non-sticky events from an easy-to-reach dropdown.
 - Clicking an event commits its timestamp immediately and increases its daily counter.
 - Sticky buttons occupy their scheduled position in a 24-hour timeline, while completed events are placed at their actual click time.
-- Optionally add notes, photos, uploaded audio, or newly recorded audio after an event is tracked.
+- Optionally add text notes after an event is tracked.
 - Events remain recorded even if the optional notes screen is abandoned.
 - Add required dropdown values to an event, such as a stress level from 1 to 5 or the pet receiving medication.
 
-### Images, audio, and video
+### Notes
 
-- Upload image, audio, and video files to a daily log.
-- Take photos and capture audio or video using browser media APIs where supported.
-- Preview recording state and supported browser formats before uploading.
-- Track every file through a dedicated attachment ledger associated with its owner, day, and log block.
-- Store uploaded and generated media on Laravel's private local disk.
-- Serve attachments only through authenticated, ownership-checked routes; no public storage symlink is required.
-
-> Recording requires browser permission and a secure context. `localhost` and `127.0.0.1` are accepted secure development contexts by modern browsers.
+- Open a dedicated Notes workspace from the primary navigation.
+- Create, edit, version, and soft-delete private notes in a default notebook.
+- Browse recent notes in a responsive navigation/list/editor layout.
+- Store safe plain text, searchable text, and excerpts while the rich editor is developed.
+- Keep Notes separate from tasks, reminders, and calendars; Notes can link back to an exact log date and time.
+- Use an extensible schema for notebooks, stacks, tags, backlinks, attachments, searches, spaces, sharing, and preferences.
 
 ### OpenRouter integration
 
 Each user supplies their own OpenRouter API key from **Settings**. The key is encrypted in the database, is never returned to client-side JavaScript, and is used only by the Laravel backend.
 
 - Chat with an OpenRouter model and append both sides of the conversation to the selected daily log.
-- Include uploaded images in multimodal chat requests.
 - Generate images and attach the results to the current day.
-- Transcribe uploaded or recorded audio into a daily-log text block.
 - Fetch available chat and image-generation models.
 - Remember fetched model catalogs and each user's selected chat and image models in local storage.
 - Record each API operation, model, status, request ID, token usage, reported cost, duration, and error details.
 - Review all OpenRouter API calls, token counts, costs, and linked log days on the dedicated API usage page.
 
-The integration follows OpenRouter's APIs for [chat completions](https://openrouter.ai/docs/api/api-reference/chat/create-a-chat-completion), [image generation](https://openrouter.ai/docs/api/api-reference/images/generate-an-image), [image models](https://openrouter.ai/docs/api/api-reference/images/list-image-generation-models), [speech-to-text](https://openrouter.ai/docs/api/api-reference/stt/create-transcription), and the [model catalog](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties).
+The integration follows OpenRouter's APIs for [chat completions](https://openrouter.ai/docs/api/api-reference/chat/create-a-chat-completion), [image generation](https://openrouter.ai/docs/api/api-reference/images/generate-an-image), [image models](https://openrouter.ai/docs/api/api-reference/images/list-image-generation-models), and the [model catalog](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties).
 
 ### Automatic sensors
 
@@ -117,7 +113,7 @@ The landing page runs the real journal code without requiring registration.
 | Views | Blade templates and semantic HTML |
 | Frontend | Tailwind CSS, vanilla JavaScript, Fetch/AJAX |
 | Database | MariaDB/MySQL migrations and Eloquent ORM |
-| Media | `MediaRecorder`, `getUserMedia`, private Laravel storage |
+| Generated images | Private Laravel storage with ownership-checked delivery |
 | AI | OpenRouter chat, image generation, model discovery, and speech-to-text APIs |
 | Build | Vite and npm |
 | Tests | PHPUnit with Laravel feature tests |
@@ -220,7 +216,7 @@ npm run build
 php artisan view:cache
 ```
 
-The feature suite covers authentication, refreshable and user-owned logs, block CRUD authorization, immediate event tracking, custom event colors, private media persistence, recording controls, isolated guest workspaces, and OpenRouter response and cost logging.
+The feature suite covers authentication, refreshable and user-owned logs, block CRUD authorization, immediate event tracking, custom event colors, generated-image persistence, the initial Notes workspace, isolated guest workspaces, and OpenRouter response and cost logging.
 
 ## Project assets
 

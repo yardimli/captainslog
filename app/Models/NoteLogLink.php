@@ -5,13 +5,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class LongTextAttachment extends Model
+class NoteLogLink extends Model
 {
-    protected $fillable = ['user_id', 'daily_log_id', 'log_block_id', 'format', 'content'];
+    protected $fillable = ['note_id', 'daily_log_id', 'log_block_id', 'occurred_at', 'label'];
 
-    public function user(): BelongsTo
+    protected $casts = ['occurred_at' => 'datetime'];
+
+    public function note(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Note::class);
     }
 
     public function dailyLog(): BelongsTo

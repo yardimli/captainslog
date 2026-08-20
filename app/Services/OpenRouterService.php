@@ -32,6 +32,17 @@ class OpenRouterService
         );
     }
 
+    public function complete(User $user, string $model, array $messages, array $options = [], string $operation = 'completion'): array
+    {
+        return $this->request($user, $operation, null, null, $model,
+            fn ($http) => $http->timeout(120)->post(self::BASE_URL.'/chat/completions', array_merge([
+                'model' => $model,
+                'messages' => $messages,
+                'max_completion_tokens' => 2000,
+            ], $options))
+        );
+    }
+
     public function image(User $user, DailyLog $log, LogBlock $block, string $model, string $prompt): array
     {
         return $this->request($user, 'image', $log, $block, $model,
