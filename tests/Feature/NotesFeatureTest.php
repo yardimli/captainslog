@@ -16,7 +16,7 @@ class NotesFeatureTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_notes_workspace_creates_a_default_notebook_and_is_linked_from_navigation(): void
+    public function test_notes_workspace_creates_a_default_notebook_and_links_to_todays_log_from_navigation(): void
     {
         $user = User::factory()->create();
 
@@ -24,7 +24,9 @@ class NotesFeatureTest extends TestCase
             ->assertSee('id="notes-workspace"', false)
             ->assertSee('New note')
             ->assertDontSee('id="notes-page-heading"', false)
-            ->assertSee('aria-label="Open notes"', false);
+            ->assertSee('aria-label="Open today\'s log"', false)
+            ->assertSee('href="'.route('logs.show', today()->toDateString()).'"', false)
+            ->assertDontSee('aria-label="Open notes"', false);
 
         $this->assertDatabaseHas('notebooks', ['user_id' => $user->id, 'name' => 'Notes', 'is_default' => true]);
         $this->assertDatabaseHas('note_user_settings', ['user_id' => $user->id]);

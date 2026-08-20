@@ -45,9 +45,15 @@
             </div>
         @endif
 
-        <a class="nav-link ml-auto grid h-9 w-9 place-items-center p-0 {{ request()->routeIs('notes.*') ? 'nav-active' : '' }}" href="{{ route('notes.index') }}" aria-label="Open notes" title="Notes">
-            <svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4M9 11h6M9 15h6"/></svg>
-        </a>
+        @if(request()->routeIs('notes.*'))
+            <a class="nav-link ml-auto grid h-9 w-9 place-items-center p-0" href="{{ route('logs.show', today()->toDateString()) }}" aria-label="Open today's log" title="Today's log">
+                <svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/><path d="M8 7h8M8 11h6"/></svg>
+            </a>
+        @else
+            <a class="nav-link ml-auto grid h-9 w-9 place-items-center p-0" href="{{ route('notes.index') }}" aria-label="Open notes" title="Notes">
+                <svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4M9 11h6M9 15h6"/></svg>
+            </a>
+        @endif
         @include('partials.theme-selector')
         <form method="POST" action="{{ route('logout') }}">@csrf<button class="nav-link p-2" aria-label="Sign out" title="Sign out"><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg></button></form>
         <button type="button" class="nav-link p-2" data-mobile-nav-toggle aria-expanded="false" aria-controls="account-navigation" aria-label="Open navigation" title="Menu"><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
