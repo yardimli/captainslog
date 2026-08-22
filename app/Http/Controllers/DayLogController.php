@@ -16,6 +16,7 @@ class DayLogController extends Controller
 
     public function show(Request $request, string $date)
     {
+        $startedAt = hrtime(true);
         $day = Carbon::parse($date)->startOfDay();
         $log = DailyLog::where('user_id', $request->user()->id)->whereDate('log_date', $day)->first();
         if (! $log) {
@@ -137,6 +138,7 @@ class DayLogController extends Controller
 
         $mainFragment = $request->header('X-Day-View') === 'main';
 
-        return view('logs.show', compact('day', 'log', 'tasks', 'counts', 'slotCounts', 'timeline', 'showHidden', 'mainFragment', 'nextStickyVisibility'));
+        return response()->view('logs.show', compact('day', 'log', 'tasks', 'counts', 'slotCounts', 'timeline', 'showHidden', 'mainFragment', 'nextStickyVisibility'))
+            ->header('Server-Timing', sprintf('day-view;dur=%.1f', (hrtime(true) - $startedAt) / 1_000_000));
     }
 }

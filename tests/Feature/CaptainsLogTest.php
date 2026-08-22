@@ -809,6 +809,7 @@ class CaptainsLogTest extends TestCase
             ->assertSee('data-button-spinner', false);
 
         $this->withHeader('X-Day-View', 'main')->get(route('logs.show', '2026-08-15'))->assertOk()
+            ->assertHeader('Server-Timing')
             ->assertSee('<main id="page-content">', false)
             ->assertDontSee('<html', false)
             ->assertDontSee('primary-navigation-content', false);

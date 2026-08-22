@@ -36,4 +36,8 @@ return [
         'client_secret' => env('GOOGLE_CALENDAR_CLIENT_SECRET'),
     ],
 
+    'github' => [
+        'sync_interval_seconds' => (int) env('GITHUB_SYNC_INTERVAL_SECONDS', 300),
+    ],
+
 ];

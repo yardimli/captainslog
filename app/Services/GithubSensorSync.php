@@ -23,6 +23,16 @@ class GithubSensorSync
             return;
         }
 
+        $sensor = Sensor::where('user_id', $user->id)->where('type', Sensor::GITHUB)->where('enabled', true)->first();
+        if (! $sensor || blank($sensor->username)) {
+            return;
+        }
+        if ($day->isToday() && $sensor->last_checked_at?->greaterThan(
+            now()->subSeconds(max(1, (int) config('services.github.sync_interval_seconds', 300)))
+        )) {
+            return;
+        }
+
         $existingSensorBlocks = $this->consolidateExistingBlocks($log);
         if ($day->isToday()) {
             $existingSensorBlocks
@@ -31,10 +41,6 @@ class GithubSensorSync
             $existingSensorBlocks = $existingSensorBlocks
                 ->reject(fn (LogBlock $block) => data_get($block->metadata, 'empty') === true)
                 ->values();
-        }
-        $sensor = Sensor::where('user_id', $user->id)->where('type', Sensor::GITHUB)->where('enabled', true)->first();
-        if (! $sensor || blank($sensor->username)) {
-            return;
         }
 
         $completed = $sensor->daySyncs()->whereDate('log_date', $day)->exists();

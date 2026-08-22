@@ -135,6 +135,7 @@ class SensorTest extends TestCase
     {
         Carbon::setTestNow('2026-08-17 14:00:00');
         $user = User::factory()->create();
+        Sensor::create(['user_id' => $user->id, 'type' => Sensor::GITHUB, 'username' => 'octocat', 'token' => 'secret', 'enabled' => true]);
         $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
         foreach ([['legacy-one', '09:10:00'], ['legacy-two', '09:45:00']] as [$sha, $time]) {
             $log->blocks()->forceCreate([
@@ -183,12 +184,14 @@ class SensorTest extends TestCase
 
         $this->actingAs($user)->get('/logs/2026-08-17')->assertOk()->assertDontSee('No Git commits today');
         $this->assertDatabaseMissing('log_blocks', ['type' => 'sensor_github', 'content' => 'No Git commits today']);
+        $this->get('/logs/2026-08-17')->assertOk()->assertDontSee('today-project');
+        Carbon::setTestNow('2026-08-17 14:05:01');
         $secondLoad = $this->get('/logs/2026-08-17')->assertOk();
         $this->assertNull(Sensor::first()->fresh()->last_error, Sensor::first()->fresh()->last_error ?? 'GitHub sync should not fail.');
         $secondLoad->assertSee('today-project')->assertDontSee('No Git commits today');
         $this->get('/logs/2026-08-17')->assertOk()->assertSee('today-project');
 
-        Http::assertSentCount(3);
+        Http::assertSentCount(2);
         $this->assertDatabaseCount('log_blocks', 1);
         $this->assertDatabaseHas('log_blocks', ['type' => 'sensor_github', 'content' => 'today-project']);
         Carbon::setTestNow();

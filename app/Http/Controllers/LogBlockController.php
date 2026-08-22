@@ -47,6 +47,7 @@ class LogBlockController extends Controller
 
     public function destroy(Request $request, LogBlock $block)
     {
+        $startedAt = hrtime(true);
         $this->authorizeBlock($request, $block);
         $block->attachments->each(function ($attachment) {
             Storage::disk($attachment->disk)->delete($attachment->path);
@@ -54,7 +55,8 @@ class LogBlockController extends Controller
         });
         $block->delete();
 
-        return response()->json(['message' => 'Entry deleted.']);
+        return response()->json(['message' => 'Entry deleted.'])
+            ->header('Server-Timing', sprintf('block-delete;dur=%.1f', (hrtime(true) - $startedAt) / 1_000_000));
     }
 
     private function authorizeBlock(Request $request, LogBlock $block): void
