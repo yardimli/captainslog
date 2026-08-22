@@ -65,8 +65,13 @@ class OpenRouterService
 
     private function request(User $user, string $operation, ?DailyLog $log, ?LogBlock $block, ?string $model, callable $callback): array
     {
-        if (! $user->openrouter_api_key) {
-            throw ValidationException::withMessages(['api_key' => 'Add your OpenRouter API key in Settings first.']);
+        $apiKey = $user->openRouterApiKey();
+        if (! $apiKey) {
+            $message = $user->hasInvalidOpenRouterApiKey()
+                ? 'Your saved OpenRouter API key can no longer be decrypted. Replace it in Settings.'
+                : 'Add your OpenRouter API key in Settings first.';
+
+            throw ValidationException::withMessages(['api_key' => $message]);
         }
 
         $started = microtime(true);
@@ -75,7 +80,7 @@ class OpenRouterService
 
         try {
             $response = Http::acceptJson()
-                ->withToken($user->openrouter_api_key)
+                ->withToken($apiKey)
                 ->withHeaders([
                     'HTTP-Referer' => config('app.url'),
                     'X-Title' => config('app.name', "Captain's Log"),

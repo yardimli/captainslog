@@ -20,9 +20,12 @@
             <section class="panel">
                 <h2 class="text-lg font-bold">OpenRouter</h2>
                 <p class="mt-1 text-sm text-slate-500">Your key is encrypted in the database and only used by the server for your requests.</p>
+                @if($apiKeyNeedsReplacement)
+                    <div id="openrouter-api-key-warning" class="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100" role="alert">Your saved API key can no longer be decrypted. This can happen when the application encryption key changes. Enter your OpenRouter API key again to replace it, or remove the saved key.</div>
+                @endif
                 <div id="openrouter-setting-fields" class="mt-5 space-y-4">
                     <div id="api-key-field"><label class="label" for="api-key">API key</label><input id="api-key" type="password" class="input" name="openrouter_api_key" autocomplete="off" placeholder="{{ $hasApiKey ? 'Key saved — enter a new value to replace it' : 'sk-or-v1-…' }}"></div>
-                    @if($hasApiKey)<label class="flex gap-2 text-sm text-rose-600"><input type="checkbox" name="remove_api_key" value="1">Remove the saved API key</label>@endif
+                    @if($hasApiKey || $apiKeyNeedsReplacement)<label class="flex gap-2 text-sm text-rose-600"><input type="checkbox" name="remove_api_key" value="1">Remove the saved API key</label>@endif
                     <div id="default-chat-model-field"><label class="label" for="default-chat-model">Default chat model</label><select id="default-chat-model" class="input" name="default_chat_model" data-model-select="chat-default" data-models-url="{{ route('openrouter.models') }}" data-selected="{{ auth()->user()->default_chat_model }}"><option value="">{{ $hasApiKey ? 'Loading compatible models…' : 'Add an API key to load models' }}</option>@if(auth()->user()->default_chat_model)<option value="{{ auth()->user()->default_chat_model }}" selected>{{ auth()->user()->default_chat_model }}</option>@endif</select><p class="mt-1 text-xs text-slate-500">Only models that support the structured responses used by smart chat are shown.</p></div>
                 </div>
             </section>

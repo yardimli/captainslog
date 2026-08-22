@@ -11,6 +11,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -127,6 +128,30 @@ class CaptainsLogTest extends TestCase
                 route('logs.show', '2026-08-21'),
                 route('logs.show', '2026-08-22'),
             ]);
+    }
+
+    public function test_an_undecryptable_openrouter_key_does_not_break_settings_or_model_requests(): void
+    {
+        $user = User::factory()->create();
+        DB::table('users')->where('id', $user->id)->update(['openrouter_api_key' => 'not-valid-encrypted-data']);
+        $user->refresh();
+
+        $this->actingAs($user)->get(route('settings.edit'))->assertOk()
+            ->assertSee('id="openrouter-api-key-warning"', false)
+            ->assertSee('Enter your OpenRouter API key again');
+
+        $this->getJson(route('openrouter.models', ['images' => 1]))
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.api_key.0', 'Your saved OpenRouter API key can no longer be decrypted. Replace it in Settings.');
+
+        $this->patch(route('settings.update'), [
+            'openrouter_api_key' => 'sk-or-replacement',
+            'time_format' => '24',
+            'week_starts_on' => 1,
+            'default_chat_model' => '',
+        ])->assertRedirect();
+
+        $this->assertSame('sk-or-replacement', $user->refresh()->openRouterApiKey());
     }
 
     public function test_event_time_slots_use_add_remove_visual_controls(): void

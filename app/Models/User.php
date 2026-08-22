@@ -5,6 +5,7 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Carbon\Carbon;
 use DateTimeInterface;
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -115,6 +116,30 @@ class User extends Authenticatable
     public function googleCalendarEvents()
     {
         return $this->hasMany(GoogleCalendarEvent::class);
+    }
+
+    public function openRouterApiKey(): ?string
+    {
+        try {
+            return $this->openrouter_api_key;
+        } catch (DecryptException) {
+            return null;
+        }
+    }
+
+    public function hasInvalidOpenRouterApiKey(): bool
+    {
+        if (! filled($this->getRawOriginal('openrouter_api_key'))) {
+            return false;
+        }
+
+        try {
+            $this->openrouter_api_key;
+
+            return false;
+        } catch (DecryptException) {
+            return true;
+        }
     }
 
     public function formatTime(DateTimeInterface $time): string
