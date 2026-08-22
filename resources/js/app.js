@@ -893,28 +893,48 @@ document.addEventListener('click', async e => {
         let value = null; const options = JSON.parse(task.dataset.options || '[]');
         if (options.length) { value = await modal({title:task.dataset.name, message:'Choose a value before this event is tracked.', options, confirmText:'Track event'}); if (value === null) return; }
         const locationPromise = task.hasAttribute('data-capture-location') ? captureBrowserLocation() : Promise.resolve(null);
+        const relatedButtons = [...document.querySelectorAll('[data-task-event]')].filter(button => button.dataset.taskEvent === task.dataset.taskEvent);
+        const originalCounts = new Map();
+        relatedButtons.forEach(button => {
+            const count = button.querySelector('[data-count]');
+            const buttonSlot = button.dataset.scheduledTime || '';
+            const clickedSlot = task.dataset.scheduledTime || '';
+            if (!count || (buttonSlot && buttonSlot !== clickedSlot)) return;
+            originalCounts.set(count, count.textContent);
+            count.textContent = String((Number.parseInt(count.textContent, 10) || 0) + 1);
+        });
         task.disabled = true;
+        let eventCreated = false;
         try {
             const body = await ajax(task.dataset.taskEvent,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value, scheduled_time:task.dataset.scheduledTime || null})});
-            document.querySelectorAll(`[data-task-event="${task.dataset.taskEvent}"]`).forEach(button => {
+            eventCreated = true;
+            relatedButtons.forEach(button => {
                 const count = button.querySelector('[data-count]');
                 if (!count) return;
                 count.textContent = button.dataset.scheduledTime ? (body.slot_counts?.[button.dataset.scheduledTime] || 0) : body.count;
             });
             toast(body.message);
-            const capturedLocation = await locationPromise;
-            let savedLocation = null;
-            if (capturedLocation && body.location_url) {
-                try {
-                    const locationBody = await ajax(body.location_url, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(capturedLocation)});
-                    savedLocation = locationBody.location;
-                } catch (_) { toast('The event was logged, but its location could not be saved.', true); }
-            }
-            await refreshDayViewOrReload();
+            const eventRefreshPromise = (async () => {
+                const capturedLocation = await locationPromise;
+                let savedLocation = null;
+                if (capturedLocation && body.location_url) {
+                    try {
+                        const locationBody = await ajax(body.location_url, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(capturedLocation)});
+                        savedLocation = locationBody.location;
+                    } catch (_) { toast('The event was logged, but its location could not be saved.', true); }
+                }
+                await refreshDayViewOrReload();
+
+                return savedLocation;
+            })();
             const addNotes = body.edit_url && await modal({title:'Event tracked', message:'Would you like to add a note to this event?', confirmText:'Add note', cancelText:'Done'});
+            const savedLocation = await eventRefreshPromise;
             if (addNotes) configureComposer({time:body.time, mode:'edit', kind:'event', action:body.edit_url, content:'', emoji:body.emoji || '✅', hideUrl:body.hide_url, deleteUrl:body.delete_url, location:savedLocation});
         }
-        catch(error) { toast(error.message,true); } finally { task.disabled = false; }
+        catch(error) {
+            if (!eventCreated) originalCounts.forEach((value, count) => { count.textContent = value; });
+            toast(error.message,true);
+        } finally { task.disabled = false; }
     }
 });
 
@@ -972,7 +992,29 @@ document.querySelectorAll('[data-recurrence-form]').forEach(form => {
     if (select) update();
 });
 
+const modelLoadOutcomes = new Map();
+const modelLoadRequests = new Map();
+
+function requestModelList(url) {
+    if (modelLoadOutcomes.has(url)) return Promise.resolve(modelLoadOutcomes.get(url));
+    if (modelLoadRequests.has(url)) return modelLoadRequests.get(url);
+
+    const request = ajax(url)
+        .then(body => ({models: body.data || [], error: null}))
+        .catch(error => ({models: null, error}))
+        .then(outcome => {
+            modelLoadOutcomes.set(url, outcome);
+            return outcome;
+        })
+        .finally(() => modelLoadRequests.delete(url));
+    modelLoadRequests.set(url, request);
+
+    return request;
+}
+
 async function loadModels(select) {
+    if (select.dataset.modelsInitialized === 'true') return;
+    select.dataset.modelsInitialized = 'true';
     const kind = select.dataset.modelSelect, modelKind = kind === 'chat-default' ? 'chat' : kind, key = `captainslog.models.${modelKind}`, choiceKey = `captainslog.model.${modelKind}`, accountChoice = select.dataset.selected || '';
     const render = models => {
         const choice = kind === 'chat-default' ? accountChoice : (localStorage.getItem(choiceKey) || accountChoice);
@@ -983,8 +1025,14 @@ async function loadModels(select) {
         select.dispatchEvent(new CustomEvent('modelsloaded', {bubbles: true}));
     };
     const cached = JSON.parse(localStorage.getItem(key) || '[]'); if (cached.length) render(cached);
-    try { const body = await ajax(`${select.dataset.modelsUrl}?images=${modelKind === 'image' ? 1 : 0}`); const models = body.data || []; localStorage.setItem(key, JSON.stringify(models)); render(models); }
-    catch(error) { if (!cached.length) { const option = cloneTemplate('select-option-template'); option.textContent = accountChoice || 'Add an API key in Settings'; option.value = accountChoice; select.replaceChildren(option); select.dispatchEvent(new CustomEvent('modelsloaded', {bubbles: true})); } }
+    const url = `${select.dataset.modelsUrl}?images=${modelKind === 'image' ? 1 : 0}`;
+    const outcome = await requestModelList(url);
+    if (outcome.models) {
+        localStorage.setItem(key, JSON.stringify(outcome.models));
+        render(outcome.models);
+    } else if (!cached.length) {
+        const option = cloneTemplate('select-option-template'); option.textContent = accountChoice || 'Add an API key in Settings'; option.value = accountChoice; select.replaceChildren(option); select.dispatchEvent(new CustomEvent('modelsloaded', {bubbles: true}));
+    }
     if (kind !== 'chat-default') select.addEventListener('change', () => localStorage.setItem(choiceKey, select.value));
 }
 document.querySelectorAll('[data-model-select]').forEach(loadModels);

@@ -817,6 +817,12 @@ class CaptainsLogTest extends TestCase
         $this->assertStringContainsString("'X-Day-View': 'main'", $script);
         $this->assertStringContainsString('currentMain.replaceWith(replacement)', $script);
         $this->assertStringContainsString('await refreshDayViewOrReload()', $script);
+        $this->assertStringContainsString('const modelLoadOutcomes = new Map()', $script);
+        $this->assertStringContainsString('if (modelLoadOutcomes.has(url))', $script);
+        $this->assertStringContainsString('if (modelLoadRequests.has(url))', $script);
+        $this->assertStringContainsString('const originalCounts = new Map()', $script);
+        $this->assertStringContainsString('const eventRefreshPromise = (async () =>', $script);
+        $this->assertStringContainsString('const addNotes = body.edit_url && await modal', $script);
         $this->assertStringContainsString('Changes save when you close this panel.', $script);
         $this->assertStringContainsString("root.querySelector('[data-composer-time-now]')?.classList.toggle('hidden', mode !== 'edit')", $script);
         $this->assertStringContainsString('composerTimeInput.dispatchEvent', $script);
