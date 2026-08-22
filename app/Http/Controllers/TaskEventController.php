@@ -13,6 +13,7 @@ class TaskEventController extends Controller
 {
     public function store(Request $request, DailyLog $dailyLog, TaskDefinition $task)
     {
+        $startedAt = hrtime(true);
         abort_unless($dailyLog->user_id === $request->user()->id && $task->user_id === $request->user()->id, 403);
         abort_unless($task->is_active && $task->occursOn($dailyLog->log_date), 422, 'This event is not scheduled for this day.');
         $data = $request->validate([
@@ -26,21 +27,29 @@ class TaskEventController extends Controller
         if ($scheduledTime !== null && ! in_array($scheduledTime, $task->scheduled_times ?? [], true)) {
             abort(422, 'Choose a valid event time slot.');
         }
+
+        $eventCounts = $dailyLog->taskEvents()
+            ->where('task_definition_id', $task->id)
+            ->selectRaw('COUNT(*) as total_count');
         if ($scheduledTime !== null) {
-            $slotCount = $dailyLog->taskEvents()->where('task_definition_id', $task->id)->where('scheduled_time', $scheduledTime)->count();
-            abort_if($slotCount >= $task->daily_default_count, 422, 'This event time slot has reached its daily count.');
+            $eventCounts->selectRaw('SUM(CASE WHEN scheduled_time = ? THEN 1 ELSE 0 END) as selected_slot_count', [$scheduledTime]);
         }
-        $event = DB::transaction(function () use ($dailyLog, $task, $data, $scheduledTime) {
-            $occurredAt = $dailyLog->log_date->copy()->setTime(now()->hour, now()->minute, now()->second);
-            $block = $dailyLog->blocks()->create(['type' => 'event', 'emoji' => $task->emoji, 'position' => ($dailyLog->blocks()->max('position') ?? 0) + 1, 'occurred_at' => $occurredAt]);
+        $eventCounts = $eventCounts->first();
+        $count = (int) $eventCounts->total_count + 1;
+        $slotCount = $scheduledTime === null ? null : (int) $eventCounts->selected_slot_count + 1;
+        abort_if($scheduledTime !== null && $slotCount > $task->daily_default_count, 422, 'This event time slot has reached its daily count.');
+
+        $now = now();
+        $occurredAt = $dailyLog->log_date->copy()->setTime($now->hour, $now->minute, $now->second);
+        $position = ($occurredAt->hour * 3600) + ($occurredAt->minute * 60) + $occurredAt->second;
+        $event = DB::transaction(function () use ($dailyLog, $task, $data, $scheduledTime, $occurredAt, $position) {
+            $block = $dailyLog->blocks()->create(['type' => 'event', 'emoji' => $task->emoji, 'position' => $position, 'occurred_at' => $occurredAt]);
 
             return TaskEvent::create(['daily_log_id' => $dailyLog->id, 'task_definition_id' => $task->id, 'log_block_id' => $block->id, 'task_name' => $task->name, 'selected_value' => $data['value'] ?? null, 'scheduled_time' => $scheduledTime, 'occurred_at' => $occurredAt]);
         });
 
-        $taskEvents = $dailyLog->taskEvents()->where('task_definition_id', $task->id);
-        $slotCounts = (clone $taskEvents)->whereNotNull('scheduled_time')->selectRaw('scheduled_time, count(*) as total')->groupBy('scheduled_time')->pluck('total', 'scheduled_time');
-
-        return response()->json(['message' => "$task->name logged.", 'event' => $event, 'count' => $taskEvents->count(), 'slot_count' => $scheduledTime ? (int) ($slotCounts[$scheduledTime] ?? 0) : null, 'slot_counts' => $slotCounts, 'edit_url' => route('events.update', $event), 'location_url' => route('events.location', $event), 'hide_url' => route('blocks.visibility', $event->log_block_id), 'delete_url' => route('blocks.destroy', $event->log_block_id), 'block_id' => $event->log_block_id, 'emoji' => $task->emoji, 'time' => $event->occurred_at->format('H:i')], 201);
+        return response()->json(['message' => "$task->name logged.", 'event' => $event, 'count' => $count, 'slot_count' => $slotCount, 'edit_url' => route('events.update', $event), 'location_url' => route('events.location', $event), 'hide_url' => route('blocks.visibility', $event->log_block_id), 'delete_url' => route('blocks.destroy', $event->log_block_id), 'block_id' => $event->log_block_id, 'emoji' => $task->emoji, 'time' => $event->occurred_at->format('H:i')], 201)
+            ->header('Server-Timing', sprintf('event-store;dur=%.1f', (hrtime(true) - $startedAt) / 1_000_000));
     }
 
     public function edit(Request $request, TaskEvent $event)

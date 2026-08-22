@@ -615,8 +615,9 @@ class CaptainsLogTest extends TestCase
         $task = TaskDefinition::create(['user_id' => $user->id, 'name' => 'Stress level', 'options' => ['1', '2', '3', '4', '5'], 'is_sticky' => true]);
         $this->actingAs($user)->postJson(route('events.store', [$log, $task]), [])->assertUnprocessable();
         Carbon::setTestNow('2026-08-15 15:45:00');
-        $response = $this->postJson(route('events.store', [$log, $task]), ['value' => '4'])->assertCreated()->assertJsonPath('count', 1);
+        $response = $this->postJson(route('events.store', [$log, $task]), ['value' => '4'])->assertCreated()->assertJsonPath('count', 1)->assertHeader('Server-Timing');
         $response->assertJsonStructure(['hide_url', 'delete_url', 'location_url']);
+        $response->assertJsonMissingPath('slot_counts');
         $eventId = $response->json('event.id');
         $this->assertDatabaseHas('task_events', ['id' => $eventId, 'selected_value' => '4', 'occurred_at' => '2026-08-15 15:45:00']);
         $this->patchJson(route('events.location', $eventId), ['latitude' => 25.033, 'longitude' => 121.5654, 'accuracy' => 15.5])

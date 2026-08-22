@@ -911,7 +911,8 @@ document.addEventListener('click', async e => {
             relatedButtons.forEach(button => {
                 const count = button.querySelector('[data-count]');
                 if (!count) return;
-                count.textContent = button.dataset.scheduledTime ? (body.slot_counts?.[button.dataset.scheduledTime] || 0) : body.count;
+                if (!button.dataset.scheduledTime) count.textContent = body.count;
+                else if (button.dataset.scheduledTime === (task.dataset.scheduledTime || '')) count.textContent = body.slot_count;
             });
             toast(body.message);
             const eventRefreshPromise = (async () => {
