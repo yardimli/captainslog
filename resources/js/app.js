@@ -854,7 +854,7 @@ function scheduleEventAutosave(form, delay = 650) {
     }, delay));
 }
 
-function configureComposer({time, mode = 'create', kind = 'block', action = '', content = '', emoji = '📝', updated = '', hideUrl = '', deleteUrl = '', isHidden = false, location = null, pendingEventId = ''} = {}) {
+function configureComposer({time, mode = 'create', kind = 'block', action = '', content = '', emoji = '📝', updated = '', hideUrl = '', deleteUrl = '', isHidden = false, location = null, pendingEventId = '', isNew = false} = {}) {
     const root = document.querySelector('[data-overlay="composer"]');
     const timeInput = root?.querySelector('[data-composer-time]');
     const form = root?.querySelector('[data-composer-note-form]');
@@ -865,6 +865,7 @@ function configureComposer({time, mode = 'create', kind = 'block', action = '', 
     form.dataset.eventAutosave = 'false';
     form.dataset.composerMode = mode;
     if (pendingEventId) form.dataset.pendingEventId = pendingEventId; else delete form.dataset.pendingEventId;
+    form.dataset.newEntry = isNew ? 'true' : 'false';
     timeInput.value = time || new Date().toTimeString().slice(0, 5);
     timeInput.dispatchEvent(new Event('change', {bubbles:true}));
     form.action = mode === 'edit' ? action : form.dataset.createAction;
@@ -899,7 +900,7 @@ function configureComposer({time, mode = 'create', kind = 'block', action = '', 
     const entryActions = root.querySelector('[data-composer-entry-actions]');
     const visibility = root.querySelector('[data-composer-visibility]');
     const deleteButton = root.querySelector('[data-composer-delete]');
-    const showVisibility = mode === 'edit' && Boolean(hideUrl);
+    const showVisibility = mode === 'edit' && !isNew && Boolean(hideUrl);
     const showDelete = mode === 'edit' && Boolean(deleteUrl);
     const showActions = showVisibility || showDelete;
     entryActions?.classList.toggle('hidden', !showActions); entryActions?.classList.toggle('grid', showActions);
@@ -1258,24 +1259,19 @@ document.addEventListener('click', async e => {
     const visibility = e.target.closest('[data-planner-visibility]');
     if (visibility) {
         visibility.disabled = true;
-        const previousState = snapshotDayState();
-        try {
-            const overlay = visibility.closest('[data-overlay]');
-            if (overlay && !saveComposerDraft(overlay, {close:false})) return;
-            const payload = JSON.parse(visibility.dataset.payload || '{}');
-            const visibilityUrl = visibility.dataset.plannerVisibility;
-            mutateDayState(state => {
-                const item = findBlockItem(state, visibilityUrl, 'hide_url');
-                if (!item) return;
-                if (!state.show_hidden && payload.hidden) state.timeline = state.timeline.filter(candidate => candidate !== item);
-                else item.block.is_hidden = Boolean(payload.hidden);
-            });
-            const body = await ajax(visibility.dataset.plannerVisibility, {method:visibility.dataset.method || 'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
-            toast(body.message);
-        } catch (error) {
-            restoreDayState(previousState);
-            toast(error.message, true);
-        }
+        const overlay = visibility.closest('[data-overlay]');
+        if (overlay && !saveComposerDraft(overlay, {close:false})) return;
+        const payload = JSON.parse(visibility.dataset.payload || '{}');
+        const visibilityUrl = visibility.dataset.plannerVisibility;
+        const method = visibility.dataset.method || 'PATCH';
+        mutateDayState(state => {
+            const item = findBlockItem(state, visibilityUrl, 'hide_url');
+            if (!item) return;
+            if (!state.show_hidden && payload.hidden) state.timeline = state.timeline.filter(candidate => candidate !== item);
+            else item.block.is_hidden = Boolean(payload.hidden);
+        });
+        if (overlay) closeOverlay(overlay);
+        queueBackgroundSync(`visibility:${visibilityUrl}`, () => ajax(visibilityUrl, {method, keepalive:true, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)}), body => toast(body.message));
     }
     const del = e.target.closest('[data-delete]');
     if (del && await modal({title:'Delete this item?', message:'This cannot be undone.', confirmText:'Delete'})) {
@@ -1358,6 +1354,7 @@ document.addEventListener('click', async e => {
             content:'',
             emoji:taskEmoji,
             pendingEventId:optimisticId,
+            isNew:true,
         });
         let eventCreated = false;
         try {
@@ -1374,7 +1371,7 @@ document.addEventListener('click', async e => {
                 const actions = composerRoot.querySelector('[data-composer-entry-actions]');
                 actions?.classList.remove('hidden'); actions?.classList.add('grid');
                 const visibility = composerRoot.querySelector('[data-composer-visibility]');
-                if (visibility) { visibility.classList.remove('hidden'); visibility.textContent = 'Hide'; visibility.dataset.plannerVisibility = body.hide_url; visibility.dataset.method = 'PATCH'; visibility.dataset.payload = JSON.stringify({hidden:true}); }
+                visibility?.classList.add('hidden');
                 const deleteButton = composerRoot.querySelector('[data-composer-delete]');
                 if (deleteButton) { deleteButton.classList.remove('hidden'); deleteButton.dataset.delete = body.delete_url; }
             }

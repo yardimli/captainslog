@@ -828,6 +828,9 @@ class CaptainsLogTest extends TestCase
         $this->assertStringContainsString('const originalCounts = new Map()', $script);
         $this->assertStringContainsString('pendingEventCreates.set(optimisticId, eventCreatePromise)', $script);
         $this->assertStringContainsString('pendingEventId:optimisticId', $script);
+        $this->assertStringContainsString('isNew:true', $script);
+        $this->assertStringContainsString("const showVisibility = mode === 'edit' && !isNew", $script);
+        $this->assertStringContainsString('queueBackgroundSync(`visibility:${visibilityUrl}`', $script);
         $this->assertStringNotContainsString("title:'Event tracked'", $script);
         $this->assertStringContainsString('Changes save when you close this panel.', $script);
         $this->assertStringContainsString("root.querySelector('[data-composer-time-now]')?.classList.toggle('hidden', mode !== 'edit')", $script);
