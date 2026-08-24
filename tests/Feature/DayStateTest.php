@@ -50,6 +50,8 @@ class DayStateTest extends TestCase
         $this->assertStringContainsString("'X-Day-State': 'json'", $script);
         $this->assertStringContainsString('mutateDayState', $script);
         $this->assertStringContainsString('function renderTimelineItem(item)', $script);
+        $this->assertStringContainsString("const supportsDayStateNavigation = () => Boolean(document.querySelector('#daily-log-page-container'))", $script);
+        $this->assertStringContainsString('if (!supportsDayStateNavigation() || url.origin', $script);
         $this->assertStringContainsString('const backgroundSyncQueue = new Map()', $script);
         $this->assertStringContainsString('scheduleSyncRun(key, entry)', $script);
     }

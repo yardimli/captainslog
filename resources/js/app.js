@@ -125,6 +125,7 @@ window.addEventListener('pagehide', () => {
 const dayStateCache = new Map();
 const dayStateRequests = new Map();
 let activeDayState = null;
+const supportsDayStateNavigation = () => Boolean(document.querySelector('#daily-log-page-container'));
 const snapshotDayState = () => activeDayState ? structuredClone(activeDayState) : null;
 const restoreDayState = state => { if (state) renderDayState(state, {scroll:{x:window.scrollX, y:window.scrollY}}); };
 
@@ -407,12 +408,13 @@ document.addEventListener('click', event => {
     const link = event.target.closest('a[href]');
     if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target || link.hasAttribute('download')) return;
     const url = new URL(link.href, window.location.href);
-    if (url.origin !== window.location.origin || !/^\/logs\/\d{4}-\d{2}-\d{2}$/.test(url.pathname)) return;
+    if (!supportsDayStateNavigation() || url.origin !== window.location.origin || !/^\/logs\/\d{4}-\d{2}-\d{2}$/.test(url.pathname)) return;
     event.preventDefault();
     navigateToDay(url.href).catch(error => toast(error.message, true));
 });
 
 document.addEventListener('pointerenter', event => {
+    if (!supportsDayStateNavigation()) return;
     const link = event.target.closest?.('a[href]');
     if (!link) return;
     const url = new URL(link.href, window.location.href);
