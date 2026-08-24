@@ -50,6 +50,78 @@ async function ajax(url, options = {}) {
     return body;
 }
 
+const backgroundSyncQueue = new Map();
+const pendingEventCreates = new Map();
+
+function renderBackgroundSyncStatus() {
+    const label = document.querySelector('[data-sync-status]');
+    if (!label) return;
+    const entries = [...backgroundSyncQueue.values()];
+    label.classList.toggle('hidden', entries.length === 0);
+    if (!entries.length) return;
+    if (entries.some(entry => entry.state === 'failed')) label.textContent = 'Changes not synced — retrying…';
+    else if (entries.some(entry => entry.running)) label.textContent = 'Syncing changes…';
+    else label.textContent = 'Changes waiting to sync…';
+}
+
+function scheduleSyncRun(key, entry, delay = 1000) {
+    clearTimeout(entry.timer);
+    entry.timer = window.setTimeout(() => runBackgroundSync(key, entry), delay);
+    renderBackgroundSyncStatus();
+}
+
+async function runBackgroundSync(key, entry) {
+    if (entry.running) { scheduleSyncRun(key, entry, 250); return; }
+    const version = entry.version;
+    const request = entry.request;
+    const onSuccess = entry.onSuccess;
+    entry.running = true;
+    entry.state = 'syncing';
+    entry.timer = null;
+    renderBackgroundSyncStatus();
+    try {
+        const body = await request();
+        if (entry.cancelled) return;
+        onSuccess?.(body);
+        entry.running = false;
+        if (entry.version === version) backgroundSyncQueue.delete(key);
+        else scheduleSyncRun(key, entry);
+    } catch (error) {
+        if (entry.cancelled) return;
+        entry.running = false;
+        entry.state = 'failed';
+        entry.error = error;
+        scheduleSyncRun(key, entry, 5000);
+    }
+    renderBackgroundSyncStatus();
+}
+
+function queueBackgroundSync(key, request, onSuccess = null) {
+    const entry = backgroundSyncQueue.get(key) || {version:0, running:false, timer:null, state:'pending'};
+    entry.version += 1;
+    entry.request = request;
+    entry.onSuccess = onSuccess;
+    entry.state = 'pending';
+    backgroundSyncQueue.set(key, entry);
+    scheduleSyncRun(key, entry);
+}
+
+function cancelBackgroundSync(key) {
+    const entry = backgroundSyncQueue.get(key);
+    if (!entry) return;
+    entry.cancelled = true;
+    clearTimeout(entry.timer);
+    backgroundSyncQueue.delete(key);
+    renderBackgroundSyncStatus();
+}
+
+window.addEventListener('pagehide', () => {
+    backgroundSyncQueue.forEach((entry, key) => {
+        clearTimeout(entry.timer);
+        runBackgroundSync(key, entry);
+    });
+});
+
 const dayStateCache = new Map();
 const dayStateRequests = new Map();
 let activeDayState = null;
@@ -164,8 +236,13 @@ function updateDayNavigation(state) {
     }
     const menu = document.querySelector('#more-events-menu');
     if (menu) {
-        menu.replaceChildren(...state.tasks.map(task => renderTaskButton(task)));
-        menu.closest('[data-events-menu]')?.classList.toggle('hidden', state.tasks.length === 0);
+        const eventsMenu = menu.closest('[data-events-menu]');
+        const nextMenu = menu.cloneNode(false);
+        const menuContent = document.createDocumentFragment();
+        state.tasks.forEach(task => menuContent.append(renderTaskButton(task)));
+        nextMenu.append(menuContent);
+        menu.replaceWith(nextMenu);
+        eventsMenu?.classList.toggle('hidden', state.tasks.length === 0);
     }
 }
 
@@ -173,8 +250,15 @@ function updateDayControls(state) {
     const container = document.querySelector('#daily-log-page-container');
     if (state.next_sticky_visibility) container.dataset.nextStickyVisibility = state.next_sticky_visibility; else delete container.dataset.nextStickyVisibility;
     const timeline = document.querySelector('#timeline');
-    timeline.dataset.logDate = state.date;
-    timeline.replaceChildren(...state.timeline.map(renderTimelineItem).filter(Boolean));
+    const nextTimeline = timeline.cloneNode(false);
+    const timelineContent = document.createDocumentFragment();
+    state.timeline.forEach(item => {
+        const rendered = renderTimelineItem(item);
+        if (rendered) timelineContent.append(rendered);
+    });
+    nextTimeline.dataset.logDate = state.date;
+    nextTimeline.append(timelineContent);
+    timeline.replaceWith(nextTimeline);
     const composer = document.querySelector('[data-composer-note-form]');
     if (composer) { composer.action = state.log.create_block_url; composer.dataset.createAction = state.log.create_block_url; }
     const headingDate = document.querySelector('#log-composer-heading-copy > p'); if (headingDate) headingDate.textContent = state.title;
@@ -439,12 +523,24 @@ function openTimePicker(root) {
         const values = buttons.map(button => numeric ? Number(button.dataset.value) : button.dataset.value);
         buttons.forEach((button, index) => button.addEventListener('click', () => {
             choose(values[index]);
-            list.scrollTo({top:index * 48, behavior:'smooth'});
+            list.scrollTop = index * 48;
             render(true);
             if (kind === 'minute') dismiss();
         }));
         let scrollTimer;
-        list.addEventListener('scroll', () => { clearTimeout(scrollTimer); scrollTimer = setTimeout(() => { if (dismissed) return; const index = Math.max(0, Math.min(values.length - 1, Math.round(list.scrollTop / 48))); choose(values[index]); list.scrollTo({top:index * 48, behavior:'smooth'}); render(!initializing); }, 80); });
+        let lastWheelAt = 0;
+        list.addEventListener('wheel', event => {
+            event.preventDefault();
+            const now = performance.now();
+            if (now - lastWheelAt < 40 || !event.deltaY) return;
+            lastWheelAt = now;
+            const current = Math.round(list.scrollTop / 48);
+            const index = Math.max(0, Math.min(values.length - 1, current + Math.sign(event.deltaY)));
+            choose(values[index]);
+            list.scrollTop = index * 48;
+            render(true);
+        }, {passive:false});
+        list.addEventListener('scroll', () => { clearTimeout(scrollTimer); scrollTimer = setTimeout(() => { if (dismissed) return; const index = Math.max(0, Math.min(values.length - 1, Math.round(list.scrollTop / 48))); choose(values[index]); list.scrollTop = index * 48; render(!initializing); }, 40); });
         const control = {list, values, buttons, selected, update() { const current = selected(); buttons.forEach(button => { const active = String(button.dataset.value) === String(current); button.classList.toggle('text-white', active); button.classList.toggle('text-slate-800', !active); button.classList.toggle('dark:text-slate-200', !active); button.setAttribute('aria-selected', active ? 'true' : 'false'); }); }, center() { list.scrollTop = values.indexOf(selected()) * 48; }};
         wheelControls.push(control); return control;
     };
@@ -727,7 +823,6 @@ function syncComposerTime() {
 }
 
 const eventAutosaveTimers = new WeakMap();
-const eventAutosaveRevisions = new WeakMap();
 
 function isEventAutosaveForm(form) {
     return form?.matches('[data-event-autosave-form]');
@@ -736,31 +831,23 @@ function isEventAutosaveForm(form) {
 function scheduleEventAutosave(form, delay = 650) {
     if (!isEventAutosaveForm(form)) return;
     clearTimeout(eventAutosaveTimers.get(form));
-    eventAutosaveTimers.set(form, setTimeout(async () => {
+    eventAutosaveTimers.set(form, setTimeout(() => {
         const status = form.querySelector('[data-autosave-status]');
         const notes = form.querySelector('textarea[name="notes"]')?.value ?? '';
         const occurredAt = form.querySelector('[name="occurred_at"]')?.value;
         const emoji = form.querySelector('[name="emoji"]')?.value;
-        const revision = (eventAutosaveRevisions.get(form) || 0) + 1;
-        eventAutosaveRevisions.set(form, revision);
-        if (status) { status.classList.remove('hidden', 'text-emerald-600', 'dark:text-emerald-400', 'text-rose-600', 'dark:text-rose-400'); status.classList.add('text-indigo-600', 'dark:text-indigo-400'); status.textContent = 'Saving…'; }
-        const previousState = snapshotDayState();
+        if (status) { status.classList.remove('hidden', 'text-emerald-600', 'dark:text-emerald-400', 'text-rose-600', 'dark:text-rose-400'); status.classList.add('text-indigo-600', 'dark:text-indigo-400'); status.textContent = 'Queued for sync.'; }
         updateLocalTimelineBlock(form.action, {content:notes, emoji, time:occurredAt});
-        try {
-            const body = await ajax(form.action, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({notes, emoji, occurred_at:occurredAt})});
-            if (eventAutosaveRevisions.get(form) !== revision) return;
+        const action = form.action;
+        queueBackgroundSync(`event-edit:${action}`, () => ajax(action, {method:'PATCH', keepalive:true, headers:{'Content-Type':'application/json'}, body:JSON.stringify({notes, emoji, occurred_at:occurredAt})}), body => {
             if (status) { status.classList.remove('text-indigo-600', 'dark:text-indigo-400'); status.classList.add('text-emerald-600', 'dark:text-emerald-400'); status.textContent = 'Saved automatically.'; }
             const updatedLabel = form.closest('[data-overlay="composer"]')?.querySelector('[data-composer-updated]');
             if (updatedLabel && body.updated_time) { updatedLabel.textContent = `Updated ${body.updated_time}`; updatedLabel.classList.remove('hidden'); }
-        } catch (error) {
-            restoreDayState(previousState);
-            if (status) { status.classList.remove('text-indigo-600', 'dark:text-indigo-400', 'text-emerald-600', 'dark:text-emerald-400'); status.classList.add('text-rose-600', 'dark:text-rose-400'); status.textContent = 'Could not save. Keep this editor open and try again.'; }
-            toast(error.message, true);
-        }
+        });
     }, delay));
 }
 
-function configureComposer({time, mode = 'create', kind = 'block', action = '', content = '', emoji = '📝', updated = '', hideUrl = '', deleteUrl = '', isHidden = false, location = null} = {}) {
+function configureComposer({time, mode = 'create', kind = 'block', action = '', content = '', emoji = '📝', updated = '', hideUrl = '', deleteUrl = '', isHidden = false, location = null, pendingEventId = ''} = {}) {
     const root = document.querySelector('[data-overlay="composer"]');
     const timeInput = root?.querySelector('[data-composer-time]');
     const form = root?.querySelector('[data-composer-note-form]');
@@ -770,6 +857,7 @@ function configureComposer({time, mode = 'create', kind = 'block', action = '', 
     clearTimeout(eventAutosaveTimers.get(form));
     form.dataset.eventAutosave = 'false';
     form.dataset.composerMode = mode;
+    if (pendingEventId) form.dataset.pendingEventId = pendingEventId; else delete form.dataset.pendingEventId;
     timeInput.value = time || new Date().toTimeString().slice(0, 5);
     timeInput.dispatchEvent(new Event('change', {bubbles:true}));
     form.action = mode === 'edit' ? action : form.dataset.createAction;
@@ -902,11 +990,15 @@ function findBlockItem(state, url, field = 'edit_url') {
     return state.timeline.find(item => item.kind === 'block' && item.block?.[field] === url);
 }
 
+function findPendingBlockItem(state, pendingEventId) {
+    return state.timeline.find(item => item.kind === 'block' && item.block?.client_id === pendingEventId);
+}
+
 function addOptimisticTimelineBlock(state, {id, time, emoji, content, kind = 'text', editUrl = '', hideUrl = '', deleteUrl = '', eventName = '', selectedValue = ''}) {
     const item = {
         kind:'block', time,
         block:{
-            id, type:kind === 'event' ? 'event' : 'text', emoji, content, is_hidden:false, updated:'syncing', optimistic:true,
+            id, client_id:id, type:kind === 'event' ? 'event' : 'text', emoji, content, is_hidden:false, updated:'syncing', optimistic:true,
             edit_kind:kind === 'event' ? 'event' : 'block', edit_url:editUrl, hide_url:hideUrl, delete_url:deleteUrl,
             event:kind === 'event' ? {name:eventName, value:selectedValue || null, location:null} : null,
             attachments:[], browsing_domains:[], github_events:[], calendar_event:null,
@@ -916,9 +1008,9 @@ function addOptimisticTimelineBlock(state, {id, time, emoji, content, kind = 'te
     state.timeline.splice(followingIndex < 0 ? state.timeline.length : followingIndex, 0, item);
 }
 
-function updateLocalTimelineBlock(url, {content, emoji, time}) {
+function updateLocalTimelineBlock(url, {content, emoji, time}, pendingEventId = '') {
     return mutateDayState(state => {
-        const item = findBlockItem(state, url);
+        const item = pendingEventId ? findPendingBlockItem(state, pendingEventId) : findBlockItem(state, url);
         if (!item) return;
         if (content !== undefined) item.block.content = content;
         if (emoji) item.block.emoji = emoji;
@@ -943,13 +1035,12 @@ function reconcileOptimisticBlock(id, body) {
     }
 }
 
-async function saveComposerDraft(root, {close = true, refresh = true} = {}) {
+function saveComposerDraft(root, {close = true} = {}) {
     const form = root?.querySelector('[data-composer-note-form]');
     if (!form || form.dataset.composerMode !== 'edit') {
         if (close) closeOverlay(root);
         return true;
     }
-    if (form.dataset.saving === 'true') return false;
     const status = form.querySelector('[data-autosave-status]');
     const textarea = form.querySelector('[data-composer-content]');
     const occurredAt = form.querySelector('[name="occurred_at"]')?.value;
@@ -959,19 +1050,32 @@ async function saveComposerDraft(root, {close = true, refresh = true} = {}) {
         return true;
     }
     const payload = {[textarea.name]: textarea.value, emoji, occurred_at: occurredAt};
-    form.dataset.saving = 'true';
-    const previousState = snapshotDayState();
-    updateLocalTimelineBlock(form.action, {content:textarea.value, emoji, time:occurredAt});
-    if (close) closeOverlay(document.querySelector('[data-overlay="composer"]'));
-    try {
-        const body = await ajax(form.action, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
-        toast(body.message || 'Saved.');
-        return true;
-    } catch (error) {
-        restoreDayState(previousState);
-        toast(error.message, true);
-        return false;
-    }
+    const action = form.action;
+    const pendingEventId = form.dataset.pendingEventId || '';
+    const state = activeDayState;
+    if (close) closeOverlay(root);
+    updateLocalTimelineBlock(action, {content:textarea.value, emoji, time:occurredAt}, pendingEventId);
+    form.dataset.originalContent = textarea.value;
+    form.dataset.originalTime = occurredAt;
+    form.dataset.originalEmoji = emoji;
+    if (status) { status.classList.remove('hidden', 'text-emerald-600', 'dark:text-emerald-400'); status.classList.add('text-indigo-600', 'dark:text-indigo-400'); status.textContent = 'Queued for sync.'; }
+    const syncKey = pendingEventId ? `pending-event-edit:${pendingEventId}` : `log-edit:${action}`;
+    const request = pendingEventId
+        ? async () => {
+            const created = await pendingEventCreates.get(pendingEventId);
+            return ajax(created.edit_url, {method:'PATCH', keepalive:true, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+        }
+        : () => ajax(action, {method:'PATCH', keepalive:true, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    queueBackgroundSync(syncKey, request, body => {
+        const item = state ? (pendingEventId ? findPendingBlockItem(state, pendingEventId) : findBlockItem(state, action)) : null;
+        if (item && body.updated_time) item.block.updated = body.updated_time;
+        if (activeDayState === state) {
+            const row = [...document.querySelectorAll('[data-edit-url]')].find(candidate => candidate.dataset.editUrl === action);
+            if (row && body.updated_time) row.dataset.editUpdated = body.updated_time;
+        }
+        if (pendingEventId) pendingEventCreates.delete(pendingEventId);
+    });
+    return true;
 }
 
 document.addEventListener('submit', async e => {
@@ -1126,7 +1230,7 @@ document.addEventListener('click', async e => {
     if (composerCancel) closeOverlay(composerCancel.closest('[data-overlay="composer"]'));
     if (overlayClose) {
         const overlay = overlayClose.closest('[data-overlay]');
-        if (overlay?.dataset.overlay === 'composer') await saveComposerDraft(overlay);
+        if (overlay?.dataset.overlay === 'composer') saveComposerDraft(overlay);
         else closeOverlay(overlay);
     }
     const themeOption = e.target.closest('[data-theme-option]');
@@ -1150,7 +1254,7 @@ document.addEventListener('click', async e => {
         const previousState = snapshotDayState();
         try {
             const overlay = visibility.closest('[data-overlay]');
-            if (overlay && !await saveComposerDraft(overlay, {close:false, refresh:false})) return;
+            if (overlay && !saveComposerDraft(overlay, {close:false})) return;
             const payload = JSON.parse(visibility.dataset.payload || '{}');
             const visibilityUrl = visibility.dataset.plannerVisibility;
             mutateDayState(state => {
@@ -1170,7 +1274,12 @@ document.addEventListener('click', async e => {
     if (del && await modal({title:'Delete this item?', message:'This cannot be undone.', confirmText:'Delete'})) {
         const previousState = snapshotDayState();
         const deleteUrl = del.dataset.delete;
-        mutateDayState(state => { state.timeline = state.timeline.filter(item => item.kind !== 'block' || item.block.delete_url !== deleteUrl); });
+        let editUrl = null;
+        mutateDayState(state => {
+            editUrl = findBlockItem(state, deleteUrl, 'delete_url')?.block.edit_url || null;
+            state.timeline = state.timeline.filter(item => item.kind !== 'block' || item.block.delete_url !== deleteUrl);
+        });
+        if (editUrl) { cancelBackgroundSync(`log-edit:${editUrl}`); cancelBackgroundSync(`event-edit:${editUrl}`); }
         closeOverlay(document.querySelector('[data-overlay="composer"]'));
         try {
             const body = await ajax(deleteUrl, {method:'DELETE'});
@@ -1232,30 +1341,54 @@ document.addEventListener('click', async e => {
             });
         });
         task.disabled = true;
+        const eventCreatePromise = ajax(eventUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value, scheduled_time:scheduledTime})});
+        pendingEventCreates.set(optimisticId, eventCreatePromise);
+        configureComposer({
+            time:optimisticTime,
+            mode:'edit',
+            kind:'event',
+            action:eventUrl,
+            content:'',
+            emoji:taskEmoji,
+            pendingEventId:optimisticId,
+        });
         let eventCreated = false;
         try {
-            const body = await ajax(eventUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value, scheduled_time:scheduledTime})});
+            const body = await eventCreatePromise;
             eventCreated = true;
             reconcileOptimisticBlock(optimisticId, {...body, block:{id:body.block_id}});
             activeDayState.tasks.filter(item => item.event_url === eventUrl).forEach(item => { item.count = body.count; });
             toast(body.message);
-            const eventRefreshPromise = (async () => {
-                const capturedLocation = await locationPromise;
-                let savedLocation = null;
-                if (capturedLocation && body.location_url) {
-                    try {
-                        const locationBody = await ajax(body.location_url, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(capturedLocation)});
-                        savedLocation = locationBody.location;
-                    } catch (_) { toast('The event was logged, but its location could not be saved.', true); }
-                }
-                return savedLocation;
-            })();
-            const addNotes = body.edit_url && await modal({title:'Event tracked', message:'Would you like to add a note to this event?', confirmText:'Add note', cancelText:'Done'});
-            const savedLocation = await eventRefreshPromise;
-            if (addNotes) configureComposer({time:body.time, mode:'edit', kind:'event', action:body.edit_url, content:'', emoji:body.emoji || '✅', hideUrl:body.hide_url, deleteUrl:body.delete_url, location:savedLocation});
+            const composerRoot = document.querySelector('[data-overlay="composer"]');
+            const composerForm = composerRoot?.querySelector('[data-composer-note-form]');
+            if (composerForm?.dataset.pendingEventId === optimisticId) {
+                composerForm.action = body.edit_url;
+                delete composerForm.dataset.pendingEventId;
+                const actions = composerRoot.querySelector('[data-composer-entry-actions]');
+                actions?.classList.remove('hidden'); actions?.classList.add('grid');
+                const visibility = composerRoot.querySelector('[data-composer-visibility]');
+                if (visibility) { visibility.classList.remove('hidden'); visibility.textContent = 'Hide'; visibility.dataset.plannerVisibility = body.hide_url; visibility.dataset.method = 'PATCH'; visibility.dataset.payload = JSON.stringify({hidden:true}); }
+                const deleteButton = composerRoot.querySelector('[data-composer-delete]');
+                if (deleteButton) { deleteButton.classList.remove('hidden'); deleteButton.dataset.delete = body.delete_url; }
+            }
+            if (!backgroundSyncQueue.has(`pending-event-edit:${optimisticId}`)) pendingEventCreates.delete(optimisticId);
+            const capturedLocation = await locationPromise;
+            if (capturedLocation && body.location_url) {
+                try {
+                    const locationBody = await ajax(body.location_url, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(capturedLocation)});
+                    const item = activeDayState ? findPendingBlockItem(activeDayState, optimisticId) : null;
+                    if (item?.block.event) item.block.event.location = locationBody.location;
+                } catch (_) { toast('The event was logged, but its location could not be saved.', true); }
+            }
         }
         catch(error) {
-            if (!eventCreated) restoreDayState(previousState);
+            if (!eventCreated) {
+                cancelBackgroundSync(`pending-event-edit:${optimisticId}`);
+                pendingEventCreates.delete(optimisticId);
+                restoreDayState(previousState);
+                const composer = document.querySelector('[data-overlay="composer"]');
+                if (composer?.querySelector('[data-composer-note-form]')?.dataset.pendingEventId === optimisticId) closeOverlay(composer);
+            }
             toast(error.message,true);
         } finally { task.disabled = false; }
     }
@@ -1280,7 +1413,7 @@ document.addEventListener('keydown', async event => {
     if (event.key === 'Escape') {
         document.querySelectorAll('[data-events-menu][open]').forEach(menu => menu.removeAttribute('open'));
         for (const root of document.querySelectorAll('[data-overlay][data-open="true"]')) {
-            if (root.dataset.overlay === 'composer') await saveComposerDraft(root);
+            if (root.dataset.overlay === 'composer') saveComposerDraft(root);
             else closeOverlay(root);
         }
         setMobileNavigation(false);

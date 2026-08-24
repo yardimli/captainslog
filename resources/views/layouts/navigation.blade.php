@@ -32,7 +32,7 @@
                 </a>
                     <details class="relative z-50 {{ $tasks->isEmpty() ? 'hidden' : '' }}" data-events-menu>
                         <summary class="nav-link grid h-9 w-9 cursor-pointer list-none place-items-center p-0 [&::-webkit-details-marker]:hidden" aria-label="Events" title="Events">
-                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 2v3M16 2v3M3 9h18"/><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 13h3v3H8zM15 13h1"/></svg>
+                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 6 2 2 3-3M11 7h9M4 12l2 2 3-3M11 13h9M4 18l2 2 3-3M11 19h9"/></svg>
                         </summary>
                         <div id="more-events-menu" class="absolute right-0 mt-2 grid w-72 gap-1 rounded-xl border bg-white p-2 shadow-2xl dark:border-slate-700 dark:bg-slate-900" style="z-index:70">
                             @foreach($tasks as $task)

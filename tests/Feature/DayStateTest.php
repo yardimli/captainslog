@@ -41,6 +41,7 @@ class DayStateTest extends TestCase
             ->get(route('calendar'))
             ->assertOk()
             ->assertSee('data-session-expired-overlay', false)
+            ->assertSee('data-sync-status', false)
             ->assertSee('data-session-keepalive-url', false)
             ->assertSee('data-login-url', false);
 
@@ -49,5 +50,7 @@ class DayStateTest extends TestCase
         $this->assertStringContainsString("'X-Day-State': 'json'", $script);
         $this->assertStringContainsString('mutateDayState', $script);
         $this->assertStringContainsString('function renderTimelineItem(item)', $script);
+        $this->assertStringContainsString('const backgroundSyncQueue = new Map()', $script);
+        $this->assertStringContainsString('scheduleSyncRun(key, entry)', $script);
     }
 }

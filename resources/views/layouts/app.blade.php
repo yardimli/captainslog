@@ -43,6 +43,7 @@
                 <a class="btn mt-6 w-full justify-center" href="{{ route('login') }}" data-session-login>Sign in again</a>
             </section>
         </div>
+        <div id="background-sync-status" class="fixed bottom-4 left-4 z-50 hidden rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-xl dark:bg-white dark:text-slate-900" data-sync-status role="status" aria-live="polite"></div>
         @include('partials.javascript-templates')
     </body>
 </html>

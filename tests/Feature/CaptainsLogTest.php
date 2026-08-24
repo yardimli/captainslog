@@ -819,18 +819,22 @@ class CaptainsLogTest extends TestCase
         $this->assertStringContainsString("'X-Day-State': 'json'", $script);
         $this->assertStringContainsString('const dayStateCache = new Map()', $script);
         $this->assertStringContainsString('function mutateDayState(mutator)', $script);
-        $this->assertStringContainsString('timeline.replaceChildren', $script);
+        $this->assertStringContainsString('const timelineContent = document.createDocumentFragment()', $script);
+        $this->assertStringContainsString('timeline.replaceWith(nextTimeline)', $script);
         $this->assertStringContainsString('await refreshDayViewOrReload()', $script);
         $this->assertStringContainsString('const modelLoadOutcomes = new Map()', $script);
         $this->assertStringContainsString('if (modelLoadOutcomes.has(url))', $script);
         $this->assertStringContainsString('if (modelLoadRequests.has(url))', $script);
         $this->assertStringContainsString('const originalCounts = new Map()', $script);
-        $this->assertStringContainsString('const eventRefreshPromise = (async () =>', $script);
-        $this->assertStringContainsString('const addNotes = body.edit_url && await modal', $script);
+        $this->assertStringContainsString('pendingEventCreates.set(optimisticId, eventCreatePromise)', $script);
+        $this->assertStringContainsString('pendingEventId:optimisticId', $script);
+        $this->assertStringNotContainsString("title:'Event tracked'", $script);
         $this->assertStringContainsString('Changes save when you close this panel.', $script);
         $this->assertStringContainsString("root.querySelector('[data-composer-time-now]')?.classList.toggle('hidden', mode !== 'edit')", $script);
         $this->assertStringContainsString('composerTimeInput.dispatchEvent', $script);
         $this->assertStringContainsString('textarea.value === form.dataset.originalContent', $script);
+        $this->assertStringContainsString("list.scrollTop = index * 48", $script);
+        $this->assertStringNotContainsString("behavior:'smooth'", $script);
         $this->assertStringNotContainsString("submit.textContent = mode === 'edit' ? 'Save changes'", $script);
         $this->assertStringContainsString('style="z-index:120"', $templates);
     }
