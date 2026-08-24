@@ -136,9 +136,130 @@ class DayLogController extends Controller
             $cursor = $position;
         }
 
+        $dayState = $this->dayState($request, $day, $log, $tasks, $counts, $slotCounts, $timeline, $showHidden, $nextStickyVisibility);
         $mainFragment = $request->header('X-Day-View') === 'main';
+        $viewData = compact('day', 'log', 'tasks', 'counts', 'slotCounts', 'timeline', 'showHidden', 'mainFragment', 'nextStickyVisibility', 'dayState');
+        $timing = sprintf('day-view;dur=%.1f', (hrtime(true) - $startedAt) / 1_000_000);
 
-        return response()->view('logs.show', compact('day', 'log', 'tasks', 'counts', 'slotCounts', 'timeline', 'showHidden', 'mainFragment', 'nextStickyVisibility'))
-            ->header('Server-Timing', sprintf('day-view;dur=%.1f', (hrtime(true) - $startedAt) / 1_000_000));
+        if ($request->header('X-Day-State') === 'json') {
+            return response()->json($dayState)->header('Server-Timing', $timing);
+        }
+
+        return response()->view('logs.show', $viewData)->header('Server-Timing', $timing);
+    }
+
+    private function dayState(Request $request, Carbon $day, DailyLog $log, $tasks, $counts, $slotCounts, $timeline, bool $showHidden, ?string $nextStickyVisibility): array
+    {
+        $taskData = $tasks->map(fn (TaskDefinition $task) => $this->taskState($log, $task, $counts, $slotCounts))->values();
+
+        return [
+            'date' => $day->toDateString(),
+            'url' => route('logs.show', $day->toDateString()).($showHidden ? '?show_hidden=1' : ''),
+            'title' => $day->format('l, F j, Y'),
+            'is_today' => $day->isToday(),
+            'show_hidden' => $showHidden,
+            'next_sticky_visibility' => $nextStickyVisibility,
+            'fetched_at' => now()->toIso8601String(),
+            'navigation' => [
+                'previous_url' => route('logs.show', $day->copy()->subDay()->toDateString()),
+                'today_url' => route('logs.show', today()->toDateString()),
+                'next_url' => route('logs.show', $day->copy()->addDay()->toDateString()),
+                'calendar_url' => route('calendar'),
+            ],
+            'log' => [
+                'id' => $log->id,
+                'create_block_url' => route('blocks.store', $log),
+                'chat_url' => route('openrouter.chat', $log),
+                'image_url' => route('openrouter.images', $log),
+            ],
+            'tasks' => $taskData->all(),
+            'timeline' => $timeline->map(function (array $item) use ($request, $log, $counts, $slotCounts) {
+                if ($item['kind'] === 'block') {
+                    return ['kind' => 'block', 'time' => $item['time'], 'block' => $this->blockState($request, $item['block'])];
+                }
+                if ($item['kind'] === 'schedule') {
+                    return [
+                        'kind' => 'schedule',
+                        'time' => $item['time'],
+                        'is_unscheduled' => $item['is_unscheduled'],
+                        'task' => $this->taskState($log, $item['task'], $counts, $slotCounts, $item['time']),
+                    ];
+                }
+
+                return $item;
+            })->values()->all(),
+        ];
+    }
+
+    private function taskState(DailyLog $log, TaskDefinition $task, $counts, $slotCounts, ?string $slot = null): array
+    {
+        return [
+            'id' => $task->id,
+            'name' => $task->name,
+            'emoji' => $task->emoji,
+            'color' => $task->color_hex,
+            'text_color' => $task->button_text_color,
+            'options' => $task->options ?? [],
+            'scheduled_times' => $task->scheduled_times ?? [],
+            'event_url' => route('events.store', [$log, $task]),
+            'count' => (int) ($counts[$task->id] ?? 0),
+            'slot_count' => $slot === null ? null : (int) data_get($slotCounts, $task->id.'.'.$slot, 0),
+        ];
+    }
+
+    private function blockState(Request $request, $block): array
+    {
+        $isBrowsing = $block->type === 'sensor_browser';
+        $isGithub = $block->type === 'sensor_github' && data_get($block->metadata, 'empty') !== true && filled(data_get($block->metadata, 'commits'));
+        $isGoogleCalendar = $block->type === 'sensor_google_calendar';
+        $browsingDomains = $isBrowsing
+            ? $block->browsingActivities->groupBy('domain')->map(fn ($activities, $domain) => ['domain' => $domain, 'seconds' => (int) $activities->sum('duration_seconds')])->sortByDesc('seconds')->values()->all()
+            : [];
+        $githubEvents = $isGithub
+            ? collect(data_get($block->metadata, 'commits', []))->map(fn ($commit) => [
+                'time' => $request->user()->formatTime(Carbon::parse($commit['occurred_at'])),
+                'sha' => $commit['sha'] ?? '',
+                'message' => $commit['message'] ?? null,
+                'url' => $commit['url'] ?? null,
+            ])->values()->all()
+            : [];
+        $calendarEvent = $isGoogleCalendar ? [
+            'title' => $block->content,
+            'start' => data_get($block->metadata, 'is_all_day') ? 'All day' : $request->user()->formatTime($block->occurred_at),
+            'end' => data_get($block->metadata, 'ends_at') ? $request->user()->formatTime(Carbon::parse(data_get($block->metadata, 'ends_at'))) : null,
+            'description' => data_get($block->metadata, 'description'),
+            'location' => data_get($block->metadata, 'location'),
+            'url' => data_get($block->metadata, 'html_link'),
+        ] : null;
+
+        return [
+            'id' => $block->id,
+            'type' => $block->type,
+            'emoji' => $block->emoji,
+            'content' => $block->content,
+            'is_hidden' => (bool) $block->is_hidden,
+            'updated' => $request->user()->formatTime($block->updated_at),
+            'edit_kind' => $block->taskEvent ? 'event' : 'block',
+            'edit_url' => $block->taskEvent ? route('events.update', $block->taskEvent) : route('blocks.update', $block),
+            'hide_url' => route('blocks.visibility', $block),
+            'delete_url' => route('blocks.destroy', $block),
+            'event' => $block->taskEvent ? [
+                'name' => $block->taskEvent->task_name,
+                'value' => $block->taskEvent->selected_value,
+                'location' => $block->taskEvent->latitude !== null ? [
+                    'latitude' => $block->taskEvent->latitude,
+                    'longitude' => $block->taskEvent->longitude,
+                    'accuracy' => $block->taskEvent->location_accuracy,
+                ] : null,
+            ] : null,
+            'attachments' => $block->attachments->map(fn ($attachment) => [
+                'type' => $attachment->type,
+                'url' => $attachment->url,
+                'name' => $attachment->original_name,
+            ])->values()->all(),
+            'browsing_domains' => $browsingDomains,
+            'github_events' => $githubEvents,
+            'calendar_event' => $calendarEvent,
+        ];
     }
 }

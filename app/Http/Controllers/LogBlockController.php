@@ -22,7 +22,14 @@ class LogBlockController extends Controller
         $data['occurred_at'] = $dailyLog->log_date->copy()->setTimeFromTimeString($data['occurred_at'] ?? now()->format('H:i'));
         $block = $dailyLog->blocks()->create($data + ['position' => ($dailyLog->blocks()->max('position') ?? 0) + 1]);
 
-        return response()->json(['message' => 'Entry added.', 'block' => $block, 'reload' => true], 201);
+        return response()->json([
+            'message' => 'Entry added.',
+            'block' => $block,
+            'edit_url' => route('blocks.update', $block),
+            'hide_url' => route('blocks.visibility', $block),
+            'delete_url' => route('blocks.destroy', $block),
+            'updated_time' => $request->user()->formatTime($block->updated_at),
+        ], 201);
     }
 
     public function update(Request $request, LogBlock $block)
@@ -42,7 +49,16 @@ class LogBlockController extends Controller
         }
         $block->update($data);
 
-        return response()->json(['message' => 'Entry updated.', 'block' => $block->fresh()]);
+        $block = $block->fresh();
+
+        return response()->json([
+            'message' => 'Entry updated.',
+            'block' => $block,
+            'edit_url' => route('blocks.update', $block),
+            'hide_url' => route('blocks.visibility', $block),
+            'delete_url' => route('blocks.destroy', $block),
+            'updated_time' => $request->user()->formatTime($block->updated_at),
+        ]);
     }
 
     public function destroy(Request $request, LogBlock $block)

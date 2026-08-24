@@ -17,7 +17,7 @@
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="font-sans antialiased text-slate-900 dark:text-slate-100 {{ request()->routeIs('notes.*') ? 'overflow-hidden' : '' }}" data-time-format="{{ auth()->user()->time_format ?? '24' }}" data-session-keepalive-url="{{ route('session.keep-alive') }}">
+    <body class="font-sans antialiased text-slate-900 dark:text-slate-100 {{ request()->routeIs('notes.*') ? 'overflow-hidden' : '' }}" data-time-format="{{ auth()->user()->time_format ?? '24' }}" data-session-keepalive-url="{{ route('session.keep-alive') }}" data-login-url="{{ route('login') }}">
         <div id="authenticated-app-shell" class="min-h-screen bg-slate-100 dark:bg-slate-950">
             @include('layouts.navigation')
 
@@ -35,6 +35,13 @@
                 @if(session('status'))<div id="application-status-region" class="mx-auto mt-4 max-w-7xl px-4"><div id="application-status-message" class="rounded-xl bg-emerald-100 px-4 py-3 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">{{ session('status') }}</div></div>@endif
                 @yield('content')
             </main>
+        </div>
+        <div id="session-expired-overlay" class="fixed inset-0 hidden place-items-center bg-slate-950/75 p-4" style="z-index:200" data-session-expired-overlay role="alertdialog" aria-modal="true" aria-labelledby="session-expired-title">
+            <section class="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-2xl dark:bg-slate-900">
+                <h2 id="session-expired-title" class="text-2xl font-black">Your session has expired</h2>
+                <p class="mt-3 text-sm text-slate-500">Sign in again before continuing. Unsynced changes remain visible on this page until you leave it.</p>
+                <a class="btn mt-6 w-full justify-center" href="{{ route('login') }}" data-session-login>Sign in again</a>
+            </section>
         </div>
         @include('partials.javascript-templates')
     </body>

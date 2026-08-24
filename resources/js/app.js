@@ -40,28 +40,206 @@ function modal({title, message = '', options = null, initial = null, confirmText
 }
 
 async function ajax(url, options = {}) {
-    const response = await fetch(url, {...options, headers: {'X-CSRF-TOKEN': csrf, Accept: 'application/json', ...(options.headers || {})}});
+    const response = await fetch(url, {credentials: 'same-origin', ...options, headers: {'X-CSRF-TOKEN': csrf, Accept: 'application/json', ...(options.headers || {})}});
+    if (isExpiredSessionResponse(response)) {
+        showSessionExpired();
+        throw new Error('Your session has expired. Sign in again to continue.');
+    }
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(Object.values(body.errors || {}).flat()[0] || body.message || 'Something went wrong.');
     return body;
 }
 
-async function refreshDayView() {
-    const currentMain = document.querySelector('#page-content');
-    if (!currentMain?.querySelector('#daily-log-page-container')) return false;
-    const response = await fetch(window.location.href, {
-        credentials: 'same-origin',
-        headers: {Accept: 'text/html', 'X-Requested-With': 'XMLHttpRequest', 'X-Day-View': 'main'},
+const dayStateCache = new Map();
+const dayStateRequests = new Map();
+let activeDayState = null;
+const snapshotDayState = () => activeDayState ? structuredClone(activeDayState) : null;
+const restoreDayState = state => { if (state) renderDayState(state, {scroll:{x:window.scrollX, y:window.scrollY}}); };
+
+function dayStateKey(url = window.location.href) {
+    const parsed = new URL(url, window.location.href);
+    return `${parsed.pathname}${parsed.search}`;
+}
+
+function captureCurrentDayState() {
+    const source = document.querySelector('#day-log-state');
+    if (!source) return null;
+    const state = JSON.parse(source.textContent);
+    dayStateCache.set(dayStateKey(state.url), state);
+    activeDayState = state;
+    return state;
+}
+
+function element(tag, className = '', text = null) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== null) node.textContent = text;
+    return node;
+}
+
+function renderTaskButton(task, scheduledTime = null) {
+    const button = element('button', 'flex min-w-0 flex-1 items-center rounded-xl px-3 py-2.5 text-left text-sm font-semibold shadow-sm transition hover:brightness-110 disabled:cursor-wait disabled:opacity-50');
+    button.style.backgroundColor = task.color;
+    button.style.color = task.text_color;
+    button.dataset.taskEvent = task.event_url;
+    if (scheduledTime) button.dataset.scheduledTime = scheduledTime;
+    button.dataset.captureLocation = '';
+    button.dataset.name = task.name;
+    button.dataset.options = JSON.stringify(task.options || []);
+    const color = element('span', 'mr-2 h-3 w-3 shrink-0 rounded-sm border border-current opacity-80'); color.style.backgroundColor = task.color;
+    const emoji = element('span', 'mr-2 text-lg', task.emoji); emoji.setAttribute('aria-hidden', 'true');
+    const name = element('span', 'truncate', task.name);
+    const count = element('span', 'ml-2 rounded-full bg-white/20 px-2', String(scheduledTime ? task.slot_count : task.count)); count.dataset.count = '';
+    button.append(color, emoji, name, count);
+    return button;
+}
+
+function renderTimelineItem(item) {
+    if (item.kind === 'gap') {
+        if (item.state === 'past') return null;
+        const row = element('div', 'timeline-item flex cursor-pointer items-center gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-indigo-700 dark:border-indigo-900 dark:bg-indigo-950/20 dark:text-indigo-300');
+        row.dataset.timeGap = ''; row.dataset.state = item.state; row.dataset.from = item.from; row.dataset.to = item.to;
+        row.append(element('span', 'rounded-full bg-indigo-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200', 'Open'), element('span', 'h-px flex-1 bg-current opacity-20'));
+        const time = element('time', 'font-mono text-xs font-bold', `${formatClock(item.from)} – ${formatClock(item.to)}`); row.append(time);
+        return row;
+    }
+    if (item.kind === 'now') {
+        const row = element('button', 'timeline-item flex w-full scroll-mt-24 items-center gap-3 py-1 text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-4 dark:text-indigo-400 dark:focus:ring-offset-slate-950');
+        row.type = 'button'; row.id = 'timeline-now'; row.dataset.currentTime = item.time; row.dataset.composerOpen = ''; row.setAttribute('aria-label', 'Add to the log now');
+        row.append(element('span', 'h-px flex-1 bg-current opacity-40'), element('span', 'rounded-full bg-indigo-600 px-3 py-1 text-xs font-bold text-white', `Now · ${formatClock(item.time)}`), element('span', 'h-px flex-1 bg-current opacity-40'));
+        return row;
+    }
+    if (item.kind === 'schedule') {
+        const row = element('div', 'timeline-item flex min-w-0 cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white p-3 pl-0 shadow-sm dark:border-slate-700 dark:bg-slate-900');
+        row.dataset.scheduledEvent = ''; row.dataset.timelineTime = item.time;
+        row.append(element('time', 'w-20 shrink-0 text-center font-mono text-xs font-bold text-slate-500', item.is_unscheduled ? 'Any' : formatClock(item.time)), renderTaskButton(item.task, item.is_unscheduled ? null : item.time));
+        return row;
+    }
+
+    const block = item.block;
+    const row = element('div', `timeline-item flex min-w-0 cursor-pointer items-start gap-3 ${block.is_hidden ? 'opacity-60' : ''}`);
+    row.dataset.recordedTime = item.time; row.dataset.timelineTime = item.time;
+    if (block.type === 'sensor_browser') {
+        row.dataset.timelineBrowsing = ''; row.dataset.browsingStart = formatClock(item.time); row.dataset.browsingDomains = JSON.stringify(block.browsing_domains || []); row.dataset.browsingTotal = String((block.browsing_domains || []).reduce((total, domain) => total + Number(domain.seconds || 0), 0));
+    } else if (block.type === 'sensor_github' && (block.github_events || []).length) {
+        row.dataset.timelineGithub = ''; row.dataset.githubProject = block.content || ''; row.dataset.githubStart = formatClock(item.time); row.dataset.githubEvents = JSON.stringify(block.github_events);
+    } else if (block.type === 'sensor_google_calendar') {
+        row.dataset.timelineGoogleCalendar = ''; row.dataset.googleCalendarEvent = JSON.stringify(block.calendar_event || {});
+    } else {
+        row.dataset.timelineEdit = ''; row.dataset.editKind = block.edit_kind; row.dataset.editUrl = block.edit_url; row.dataset.editContent = block.content || ''; row.dataset.editEmoji = block.emoji || ''; row.dataset.editUpdated = block.updated || ''; row.dataset.editLocation = JSON.stringify(block.event?.location || null); row.dataset.hideUrl = block.hide_url; row.dataset.deleteUrl = block.delete_url; row.dataset.isHidden = block.is_hidden ? 'true' : 'false';
+    }
+    if (block.is_hidden) row.dataset.hiddenPlannerItem = '';
+    row.append(element('time', 'w-20 shrink-0 pt-4 text-center font-mono text-xs font-bold text-slate-500', formatClock(item.time)));
+    const wrapper = element('div', 'timeline-entry-card min-w-0 flex-1');
+    const article = element('article', `panel group ${block.is_hidden ? 'ring-2 ring-amber-400' : ''} ${block.optimistic ? 'ring-2 ring-indigo-300' : ''}`); article.id = `block-${block.id}`;
+    const description = element('div', block.event ? 'block-event-description flex flex-wrap items-center gap-2 leading-relaxed' : 'block-text-description whitespace-pre-wrap leading-relaxed'); description.dataset.blockDescription = '';
+    const emoji = element('span', block.event ? 'text-xl' : 'mr-2 inline-block align-middle text-xl', block.emoji || '📝'); emoji.dataset.blockEmoji = ''; emoji.setAttribute('aria-hidden', 'true');
+    const label = element('span', `mr-2 inline-flex align-middle rounded-lg px-2 py-1 text-xs font-bold uppercase ${block.event ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`, block.type.replaceAll('_', ' ')); label.dataset.blockTypeLabel = '';
+    description.append(emoji, label);
+    if (block.is_hidden) description.append(element('span', 'mr-2 inline-flex align-middle rounded-lg bg-amber-100 px-2 py-1 text-xs font-bold uppercase text-amber-800', 'Hidden'));
+    if (block.event) description.append(element('span', 'text-lg font-bold', `${block.event.name}${block.event.value ? ` · ${block.event.value}` : ''}`));
+    else description.append(document.createTextNode(block.content || ''));
+    article.append(description);
+    if (block.event && block.content) article.append(element('div', 'block-event-notes mt-2 whitespace-pre-wrap leading-relaxed', block.content));
+    if (block.type === 'generated_image') (block.attachments || []).forEach(attachment => {
+        const frame = element('div', 'block-attachment mt-3 overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-950');
+        const image = element('img', 'h-[512px] max-h-[512px] w-full object-contain'); image.src = attachment.url; image.alt = 'AI-generated image'; image.loading = 'lazy';
+        frame.append(image); article.append(frame);
     });
-    if (!response.ok) throw new Error('The entry was saved, but the day view could not be refreshed.');
-    const nextDocument = new DOMParser().parseFromString(await response.text(), 'text/html');
-    const replacement = nextDocument.querySelector('#page-content');
-    if (!replacement) throw new Error('The entry was saved, but the day view could not be refreshed.');
-    const scrollPosition = {x: window.scrollX, y: window.scrollY};
-    currentMain.replaceWith(replacement);
-    initializeRefreshedMain(replacement);
-    window.requestAnimationFrame(() => window.scrollTo(scrollPosition.x, scrollPosition.y));
+    wrapper.append(article); row.append(wrapper);
+    return row;
+}
+
+function updateDayNavigation(state) {
+    const date = document.querySelector('[data-navigation-date]');
+    if (date) { date.textContent = state.title; date.setAttribute('datetime', state.date); }
+    const links = document.querySelectorAll('[data-day-navigation] > a');
+    if (links[0]) links[0].href = state.navigation.previous_url;
+    if (links[1]) links[1].href = state.navigation.today_url;
+    if (links[2]) links[2].href = state.navigation.next_url;
+    const hiddenToggle = document.querySelector('[data-hidden-entries-toggle]');
+    if (hiddenToggle) {
+        hiddenToggle.href = state.show_hidden ? state.url.replace(/\?show_hidden=1$/, '') : `${state.url.split('?')[0]}?show_hidden=1`;
+        hiddenToggle.textContent = state.show_hidden ? 'Hide hidden entries' : 'Show hidden entries';
+    }
+    const menu = document.querySelector('#more-events-menu');
+    if (menu) {
+        menu.replaceChildren(...state.tasks.map(task => renderTaskButton(task)));
+        menu.closest('[data-events-menu]')?.classList.toggle('hidden', state.tasks.length === 0);
+    }
+}
+
+function updateDayControls(state) {
+    const container = document.querySelector('#daily-log-page-container');
+    if (state.next_sticky_visibility) container.dataset.nextStickyVisibility = state.next_sticky_visibility; else delete container.dataset.nextStickyVisibility;
+    const timeline = document.querySelector('#timeline');
+    timeline.dataset.logDate = state.date;
+    timeline.replaceChildren(...state.timeline.map(renderTimelineItem).filter(Boolean));
+    const composer = document.querySelector('[data-composer-note-form]');
+    if (composer) { composer.action = state.log.create_block_url; composer.dataset.createAction = state.log.create_block_url; }
+    const headingDate = document.querySelector('#log-composer-heading-copy > p'); if (headingDate) headingDate.textContent = state.title;
+    const chat = document.querySelector('[data-smart-chat-form]'); if (chat) chat.action = state.log.chat_url;
+    const image = document.querySelector('[data-overlay="image"] form'); if (image) image.action = state.log.image_url;
+    updateDayNavigation(state);
+}
+
+function renderDayState(state, {scroll = null} = {}) {
+    if (!document.querySelector('#daily-log-page-container')) return false;
+    activeDayState = state;
+    dayStateCache.set(dayStateKey(state.url), state);
+    updateDayControls(state);
+    scheduleStickyVisibilityRefresh();
+    if (scroll) window.requestAnimationFrame(() => window.scrollTo(scroll.x, scroll.y));
     return true;
+}
+
+function mutateDayState(mutator) {
+    const state = activeDayState || captureCurrentDayState();
+    if (!state) return false;
+    mutator(state);
+    return renderDayState(state, {scroll:{x:window.scrollX, y:window.scrollY}});
+}
+
+async function fetchDayState(url, {fresh = false} = {}) {
+    const key = dayStateKey(url);
+    if (!fresh && dayStateCache.has(key)) return dayStateCache.get(key);
+    if (dayStateRequests.has(key)) return dayStateRequests.get(key);
+    const request = fetch(url, {
+            credentials: 'same-origin',
+            headers: {Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-Day-State': 'json'},
+        })
+        .then(async response => {
+            if (isExpiredSessionResponse(response)) { showSessionExpired(); throw new Error('Your session has expired.'); }
+            if (!response.ok) throw new Error('The day could not be loaded.');
+            const state = await response.json();
+            dayStateCache.set(key, state);
+            return state;
+        })
+        .finally(() => dayStateRequests.delete(key));
+    dayStateRequests.set(key, request);
+    return request;
+}
+
+async function navigateToDay(url, {history = true, fresh = false} = {}) {
+    const key = dayStateKey(url);
+    const cached = !fresh ? dayStateCache.get(key) : null;
+    if (cached) {
+        if (history) window.history.pushState({dayState:true}, '', cached.url || url);
+        renderDayState(cached);
+        window.scrollTo(0, 0);
+        return true;
+    }
+    const state = await fetchDayState(url, {fresh:true});
+    if (history) window.history.pushState({dayState:true}, '', state.url || url);
+    renderDayState(state);
+    window.scrollTo(0, 0);
+    return true;
+}
+
+async function refreshDayView() {
+    if (!document.querySelector('#daily-log-page-container')) return false;
+    const state = await fetchDayState(window.location.href, {fresh:true});
+    return renderDayState(state, {scroll:{x:window.scrollX, y:window.scrollY}});
 }
 
 const reloadScrollKey = `captainslog.reload-scroll:${window.location.pathname}${window.location.search}`;
@@ -86,6 +264,21 @@ async function refreshDayViewOrReload() {
     if (!await refreshDayView()) reloadAtCurrentScroll();
 }
 
+function isExpiredSessionResponse(response) {
+    const redirectedToLogin = response.redirected && new URL(response.url, window.location.href).pathname.includes('/login');
+    return response.status === 401 || response.status === 419 || redirectedToLogin;
+}
+
+function showSessionExpired() {
+    const overlay = document.querySelector('[data-session-expired-overlay]');
+    if (!overlay || overlay.dataset.open === 'true') return;
+    overlay.dataset.open = 'true';
+    overlay.classList.remove('hidden');
+    overlay.classList.add('grid');
+    document.body.classList.add('overflow-hidden');
+    overlay.querySelector('[data-session-login]')?.focus();
+}
+
 function startSessionKeepAlive() {
     const url = document.body.dataset.sessionKeepaliveUrl;
     if (!url) return;
@@ -108,7 +301,10 @@ function startSessionKeepAlive() {
                 },
             });
 
-            if (response.status === 401 || response.status === 419) clearInterval(timer);
+            if (isExpiredSessionResponse(response)) {
+                clearInterval(timer);
+                showSessionExpired();
+            }
         } catch {
             // A temporary network failure should not interrupt the page.
         }
@@ -121,6 +317,27 @@ function startSessionKeepAlive() {
 }
 
 startSessionKeepAlive();
+captureCurrentDayState();
+
+document.addEventListener('click', event => {
+    const link = event.target.closest('a[href]');
+    if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || link.target || link.hasAttribute('download')) return;
+    const url = new URL(link.href, window.location.href);
+    if (url.origin !== window.location.origin || !/^\/logs\/\d{4}-\d{2}-\d{2}$/.test(url.pathname)) return;
+    event.preventDefault();
+    navigateToDay(url.href).catch(error => toast(error.message, true));
+});
+
+document.addEventListener('pointerenter', event => {
+    const link = event.target.closest?.('a[href]');
+    if (!link) return;
+    const url = new URL(link.href, window.location.href);
+    if (url.origin === window.location.origin && /^\/logs\/\d{4}-\d{2}-\d{2}$/.test(url.pathname)) fetchDayState(url.href).catch(() => {});
+}, true);
+
+window.addEventListener('popstate', () => {
+    if (/^\/logs\/\d{4}-\d{2}-\d{2}$/.test(window.location.pathname)) navigateToDay(window.location.href, {history:false}).catch(() => window.location.reload());
+});
 
 document.querySelectorAll('[data-auto-dismiss]').forEach(element => window.setTimeout(() => element.remove(), 2000));
 
@@ -527,14 +744,16 @@ function scheduleEventAutosave(form, delay = 650) {
         const revision = (eventAutosaveRevisions.get(form) || 0) + 1;
         eventAutosaveRevisions.set(form, revision);
         if (status) { status.classList.remove('hidden', 'text-emerald-600', 'dark:text-emerald-400', 'text-rose-600', 'dark:text-rose-400'); status.classList.add('text-indigo-600', 'dark:text-indigo-400'); status.textContent = 'Saving…'; }
+        const previousState = snapshotDayState();
+        updateLocalTimelineBlock(form.action, {content:notes, emoji, time:occurredAt});
         try {
             const body = await ajax(form.action, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({notes, emoji, occurred_at:occurredAt})});
             if (eventAutosaveRevisions.get(form) !== revision) return;
             if (status) { status.classList.remove('text-indigo-600', 'dark:text-indigo-400'); status.classList.add('text-emerald-600', 'dark:text-emerald-400'); status.textContent = 'Saved automatically.'; }
             const updatedLabel = form.closest('[data-overlay="composer"]')?.querySelector('[data-composer-updated]');
             if (updatedLabel && body.updated_time) { updatedLabel.textContent = `Updated ${body.updated_time}`; updatedLabel.classList.remove('hidden'); }
-            await refreshDayView();
         } catch (error) {
+            restoreDayState(previousState);
             if (status) { status.classList.remove('text-indigo-600', 'dark:text-indigo-400', 'text-emerald-600', 'dark:text-emerald-400'); status.classList.add('text-rose-600', 'dark:text-rose-400'); status.textContent = 'Could not save. Keep this editor open and try again.'; }
             toast(error.message, true);
         }
@@ -679,6 +898,51 @@ function openImagePreview(trigger) {
     openOverlay('image-preview');
 }
 
+function findBlockItem(state, url, field = 'edit_url') {
+    return state.timeline.find(item => item.kind === 'block' && item.block?.[field] === url);
+}
+
+function addOptimisticTimelineBlock(state, {id, time, emoji, content, kind = 'text', editUrl = '', hideUrl = '', deleteUrl = '', eventName = '', selectedValue = ''}) {
+    const item = {
+        kind:'block', time,
+        block:{
+            id, type:kind === 'event' ? 'event' : 'text', emoji, content, is_hidden:false, updated:'syncing', optimistic:true,
+            edit_kind:kind === 'event' ? 'event' : 'block', edit_url:editUrl, hide_url:hideUrl, delete_url:deleteUrl,
+            event:kind === 'event' ? {name:eventName, value:selectedValue || null, location:null} : null,
+            attachments:[], browsing_domains:[], github_events:[], calendar_event:null,
+        },
+    };
+    const followingIndex = state.timeline.findIndex(candidate => ['block', 'schedule', 'now'].includes(candidate.kind) && (candidate.time || '24:00') > time);
+    state.timeline.splice(followingIndex < 0 ? state.timeline.length : followingIndex, 0, item);
+}
+
+function updateLocalTimelineBlock(url, {content, emoji, time}) {
+    return mutateDayState(state => {
+        const item = findBlockItem(state, url);
+        if (!item) return;
+        if (content !== undefined) item.block.content = content;
+        if (emoji) item.block.emoji = emoji;
+        if (time) item.time = time;
+    });
+}
+
+function reconcileOptimisticBlock(id, body) {
+    const item = activeDayState?.timeline.find(candidate => candidate.kind === 'block' && candidate.block?.id === id);
+    if (!item) return;
+    item.block.id = body.block?.id || body.block_id || item.block.id;
+    item.block.edit_url = body.edit_url || item.block.edit_url;
+    item.block.hide_url = body.hide_url || item.block.hide_url;
+    item.block.delete_url = body.delete_url || item.block.delete_url;
+    item.block.updated = body.updated_time || '';
+    item.block.optimistic = false;
+    const row = document.querySelector(`#block-${CSS.escape(String(id))}`)?.closest('.timeline-item');
+    if (row) {
+        row.querySelector('article').id = `block-${item.block.id}`;
+        row.querySelector('article').classList.remove('ring-2', 'ring-indigo-300');
+        row.dataset.editUrl = item.block.edit_url; row.dataset.hideUrl = item.block.hide_url; row.dataset.deleteUrl = item.block.delete_url; row.dataset.editUpdated = item.block.updated;
+    }
+}
+
 async function saveComposerDraft(root, {close = true, refresh = true} = {}) {
     const form = root?.querySelector('[data-composer-note-form]');
     if (!form || form.dataset.composerMode !== 'edit') {
@@ -696,31 +960,49 @@ async function saveComposerDraft(root, {close = true, refresh = true} = {}) {
     }
     const payload = {[textarea.name]: textarea.value, emoji, occurred_at: occurredAt};
     form.dataset.saving = 'true';
-    if (status) { status.classList.remove('hidden', 'text-emerald-600', 'dark:text-emerald-400', 'text-rose-600', 'dark:text-rose-400'); status.classList.add('text-indigo-600', 'dark:text-indigo-400'); status.textContent = 'Saving…'; }
+    const previousState = snapshotDayState();
+    updateLocalTimelineBlock(form.action, {content:textarea.value, emoji, time:occurredAt});
+    if (close) closeOverlay(document.querySelector('[data-overlay="composer"]'));
     try {
         const body = await ajax(form.action, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
-        if (status) { status.classList.remove('text-indigo-600', 'dark:text-indigo-400'); status.classList.add('text-emerald-600', 'dark:text-emerald-400'); status.textContent = 'Saved.'; }
-        const updatedLabel = root.querySelector('[data-composer-updated]');
-        if (updatedLabel && body.updated_time) { updatedLabel.textContent = `Updated ${body.updated_time}`; updatedLabel.classList.remove('hidden'); }
-        form.dataset.originalContent = textarea.value;
-        form.dataset.originalTime = occurredAt;
-        form.dataset.originalEmoji = emoji;
-        if (close) closeOverlay(root);
-        if (refresh) await refreshDayViewOrReload();
+        toast(body.message || 'Saved.');
         return true;
     } catch (error) {
-        if (status) { status.classList.remove('text-indigo-600', 'dark:text-indigo-400', 'text-emerald-600', 'dark:text-emerald-400'); status.classList.add('text-rose-600', 'dark:text-rose-400'); status.textContent = 'Could not save. Try closing again.'; }
+        restoreDayState(previousState);
         toast(error.message, true);
         return false;
-    } finally {
-        form.dataset.saving = 'false';
     }
 }
 
 document.addEventListener('submit', async e => {
     const form = e.target.closest('form[data-ajax]'); if (!form) return;
     if (isEventAutosaveForm(form)) { e.preventDefault(); scheduleEventAutosave(form, 0); return; }
-    e.preventDefault(); const button = form.querySelector('[type=submit]'); setButtonBusy(button, true);
+    e.preventDefault();
+    if (form.matches('[data-composer-note-form]') && form.dataset.composerMode !== 'edit') {
+        const requestBody = new FormData(form);
+        const action = form.action;
+        const previousState = snapshotDayState();
+        const optimisticId = `local-${crypto.randomUUID?.() || Date.now()}`;
+        const draft = {
+            id:optimisticId,
+            time:String(requestBody.get('occurred_at') || '12:00'),
+            emoji:String(requestBody.get('emoji') || '📝'),
+            content:String(requestBody.get('content') || ''),
+            editUrl:action,
+        };
+        mutateDayState(state => addOptimisticTimelineBlock(state, draft));
+        closeOverlay(document.querySelector('[data-overlay="composer"]'));
+        try {
+            const body = await ajax(action, {method:'POST', body:requestBody});
+            reconcileOptimisticBlock(optimisticId, body);
+            toast(body.message || 'Saved.');
+        } catch (error) {
+            restoreDayState(previousState);
+            toast(error.message, true);
+        }
+        return;
+    }
+    const button = form.querySelector('[type=submit]'); setButtonBusy(button, true);
     try {
         const composer = form.closest('[data-overlay="composer"]');
         const body = await ajax(form.action, {method: form.method || 'POST', body: new FormData(form)});
@@ -865,28 +1147,49 @@ document.addEventListener('click', async e => {
     const visibility = e.target.closest('[data-planner-visibility]');
     if (visibility) {
         visibility.disabled = true;
+        const previousState = snapshotDayState();
         try {
             const overlay = visibility.closest('[data-overlay]');
             if (overlay && !await saveComposerDraft(overlay, {close:false, refresh:false})) return;
             const payload = JSON.parse(visibility.dataset.payload || '{}');
+            const visibilityUrl = visibility.dataset.plannerVisibility;
+            mutateDayState(state => {
+                const item = findBlockItem(state, visibilityUrl, 'hide_url');
+                if (!item) return;
+                if (!state.show_hidden && payload.hidden) state.timeline = state.timeline.filter(candidate => candidate !== item);
+                else item.block.is_hidden = Boolean(payload.hidden);
+            });
             const body = await ajax(visibility.dataset.plannerVisibility, {method:visibility.dataset.method || 'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
             toast(body.message);
-            if (overlay) closeOverlay(overlay);
-            await refreshDayViewOrReload();
-        } catch (error) { toast(error.message, true); visibility.disabled = false; }
+        } catch (error) {
+            restoreDayState(previousState);
+            toast(error.message, true);
+        }
     }
     const del = e.target.closest('[data-delete]');
     if (del && await modal({title:'Delete this item?', message:'This cannot be undone.', confirmText:'Delete'})) {
+        const previousState = snapshotDayState();
+        const deleteUrl = del.dataset.delete;
+        mutateDayState(state => { state.timeline = state.timeline.filter(item => item.kind !== 'block' || item.block.delete_url !== deleteUrl); });
+        closeOverlay(document.querySelector('[data-overlay="composer"]'));
         try {
-            const overlay = del.closest('[data-overlay]');
-            const body = await ajax(del.dataset.delete, {method:'DELETE'});
+            const body = await ajax(deleteUrl, {method:'DELETE'});
             toast(body.message);
-            if (overlay) closeOverlay(overlay);
-            await refreshDayViewOrReload();
-        } catch(error) { toast(error.message, true); }
+        } catch(error) {
+            restoreDayState(previousState);
+            toast(error.message, true);
+        }
     }
     const edit = e.target.closest('[data-edit-block]');
-    if (edit) { const content = await modal({title:'Edit log entry', message:edit.dataset.updated ? `Updated ${edit.dataset.updated}` : '', initial:edit.dataset.content || '', confirmText:'Save'}); if (content !== null) try { await ajax(edit.dataset.editBlock,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({content})}); await refreshDayViewOrReload(); } catch(error) { toast(error.message,true); } }
+    if (edit) {
+        const content = await modal({title:'Edit log entry', message:edit.dataset.updated ? `Updated ${edit.dataset.updated}` : '', initial:edit.dataset.content || '', confirmText:'Save'});
+        if (content !== null) {
+            const previousState = snapshotDayState();
+            updateLocalTimelineBlock(edit.dataset.editBlock, {content});
+            try { const body = await ajax(edit.dataset.editBlock,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({content})}); toast(body.message || 'Saved.'); }
+            catch(error) { restoreDayState(previousState); toast(error.message,true); }
+        }
+    }
     const task = e.target.closest('[data-task-event]');
     if (task) {
         task.closest('[data-events-menu]')?.removeAttribute('open');
@@ -903,17 +1206,38 @@ document.addEventListener('click', async e => {
             originalCounts.set(count, count.textContent);
             count.textContent = String((Number.parseInt(count.textContent, 10) || 0) + 1);
         });
+        const previousState = snapshotDayState();
+        const eventUrl = task.dataset.taskEvent;
+        const scheduledTime = task.dataset.scheduledTime || null;
+        const taskName = task.dataset.name;
+        const taskEmoji = task.querySelector('[aria-hidden="true"]')?.textContent?.trim() || '✅';
+        const optimisticId = `local-event-${crypto.randomUUID?.() || Date.now()}`;
+        const now = new Date();
+        const optimisticTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        mutateDayState(state => {
+            state.tasks.filter(item => item.event_url === eventUrl).forEach(item => { item.count += 1; });
+            state.timeline.filter(item => item.kind === 'schedule' && item.task.event_url === eventUrl).forEach(item => {
+                item.task.count += 1;
+                if (!scheduledTime || item.time === scheduledTime) item.task.slot_count = Number(item.task.slot_count || 0) + 1;
+            });
+            addOptimisticTimelineBlock(state, {
+            id:optimisticId,
+            time:optimisticTime,
+            emoji:taskEmoji,
+            content:'',
+            kind:'event',
+            editUrl:eventUrl,
+            eventName:taskName,
+            selectedValue:value || '',
+            });
+        });
         task.disabled = true;
         let eventCreated = false;
         try {
-            const body = await ajax(task.dataset.taskEvent,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value, scheduled_time:task.dataset.scheduledTime || null})});
+            const body = await ajax(eventUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value, scheduled_time:scheduledTime})});
             eventCreated = true;
-            relatedButtons.forEach(button => {
-                const count = button.querySelector('[data-count]');
-                if (!count) return;
-                if (!button.dataset.scheduledTime) count.textContent = body.count;
-                else if (button.dataset.scheduledTime === (task.dataset.scheduledTime || '')) count.textContent = body.slot_count;
-            });
+            reconcileOptimisticBlock(optimisticId, {...body, block:{id:body.block_id}});
+            activeDayState.tasks.filter(item => item.event_url === eventUrl).forEach(item => { item.count = body.count; });
             toast(body.message);
             const eventRefreshPromise = (async () => {
                 const capturedLocation = await locationPromise;
@@ -924,8 +1248,6 @@ document.addEventListener('click', async e => {
                         savedLocation = locationBody.location;
                     } catch (_) { toast('The event was logged, but its location could not be saved.', true); }
                 }
-                await refreshDayViewOrReload();
-
                 return savedLocation;
             })();
             const addNotes = body.edit_url && await modal({title:'Event tracked', message:'Would you like to add a note to this event?', confirmText:'Add note', cancelText:'Done'});
@@ -933,7 +1255,7 @@ document.addEventListener('click', async e => {
             if (addNotes) configureComposer({time:body.time, mode:'edit', kind:'event', action:body.edit_url, content:'', emoji:body.emoji || '✅', hideUrl:body.hide_url, deleteUrl:body.delete_url, location:savedLocation});
         }
         catch(error) {
-            if (!eventCreated) originalCounts.forEach((value, count) => { count.textContent = value; });
+            if (!eventCreated) restoreDayState(previousState);
             toast(error.message,true);
         } finally { task.disabled = false; }
     }

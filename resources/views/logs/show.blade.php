@@ -2,6 +2,7 @@
 
 @section('content')
     <div id="daily-log-page-container" class="mx-auto max-w-5xl space-y-5 p-4 sm:p-6 lg:p-8" data-day-view-fragment @if($nextStickyVisibility) data-next-sticky-visibility="{{ $nextStickyVisibility }}" @endif>
+        <script id="day-log-state" type="application/json">@json($dayState)</script>
         <section id="timeline" class="space-y-2" data-log-date="{{ $day->toDateString() }}">
             @foreach($timeline as $item)
                 @if($item['kind'] === 'gap')

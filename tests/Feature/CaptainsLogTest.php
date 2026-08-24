@@ -816,8 +816,10 @@ class CaptainsLogTest extends TestCase
 
         $script = file_get_contents(resource_path('js/app.js'));
         $templates = file_get_contents(resource_path('views/partials/javascript-templates.blade.php'));
-        $this->assertStringContainsString("'X-Day-View': 'main'", $script);
-        $this->assertStringContainsString('currentMain.replaceWith(replacement)', $script);
+        $this->assertStringContainsString("'X-Day-State': 'json'", $script);
+        $this->assertStringContainsString('const dayStateCache = new Map()', $script);
+        $this->assertStringContainsString('function mutateDayState(mutator)', $script);
+        $this->assertStringContainsString('timeline.replaceChildren', $script);
         $this->assertStringContainsString('await refreshDayViewOrReload()', $script);
         $this->assertStringContainsString('const modelLoadOutcomes = new Map()', $script);
         $this->assertStringContainsString('if (modelLoadOutcomes.has(url))', $script);

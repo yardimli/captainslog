@@ -30,8 +30,7 @@
                 <a class="nav-link grid h-9 w-9 place-items-center p-0" href="{{ route('calendar') }}" aria-label="Open calendar" title="Calendar">
                     <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M8 14h2M12 14h2M16 14h2M8 18h2M12 18h2"/></svg>
                 </a>
-                @if($tasks->isNotEmpty())
-                    <details class="relative z-50" data-events-menu>
+                    <details class="relative z-50 {{ $tasks->isEmpty() ? 'hidden' : '' }}" data-events-menu>
                         <summary class="nav-link grid h-9 w-9 cursor-pointer list-none place-items-center p-0 [&::-webkit-details-marker]:hidden" aria-label="Events" title="Events">
                             <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 2v3M16 2v3M3 9h18"/><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 13h3v3H8zM15 13h1"/></svg>
                         </summary>
@@ -41,7 +40,6 @@
                             @endforeach
                         </div>
                     </details>
-                @endif
             </div>
         @endif
 
@@ -68,9 +66,9 @@
             <a class="nav-link {{ request()->routeIs('api-usage.*') ? 'nav-active' : '' }}" href="{{ route('api-usage.index') }}">API usage</a>
             <a class="nav-link {{ request()->routeIs('profile.*') ? 'nav-active' : '' }}" href="{{ route('profile.edit') }}">Account settings</a>
             @if(request()->routeIs('logs.show') && request()->boolean('show_hidden'))
-                <a class="nav-link font-semibold text-amber-700 dark:text-amber-300" href="{{ route('logs.show', $activeLogDate) }}">Hide hidden entries</a>
+                <a class="nav-link font-semibold text-amber-700 dark:text-amber-300" href="{{ route('logs.show', $activeLogDate) }}" data-hidden-entries-toggle>Hide hidden entries</a>
             @else
-                <a class="nav-link font-semibold text-amber-700 dark:text-amber-300" href="{{ route('logs.show', $activeLogDate) }}?show_hidden=1">Show hidden entries</a>
+                <a class="nav-link font-semibold text-amber-700 dark:text-amber-300" href="{{ route('logs.show', $activeLogDate) }}?show_hidden=1" data-hidden-entries-toggle>Show hidden entries</a>
             @endif
             <div class="navigation-divider my-1 border-t border-slate-200 dark:border-slate-800"></div>
             @if(request()->routeIs('logs.show'))
