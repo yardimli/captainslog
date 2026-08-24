@@ -837,5 +837,8 @@ class CaptainsLogTest extends TestCase
         $this->assertStringNotContainsString("behavior:'smooth'", $script);
         $this->assertStringNotContainsString("submit.textContent = mode === 'edit' ? 'Save changes'", $script);
         $this->assertStringContainsString('style="z-index:120"', $templates);
+        $this->assertStringContainsString('data-time-wheel-step="-1"', $templates);
+        $this->assertStringContainsString('data-time-wheel-step="1"', $templates);
+        $this->assertStringContainsString('selectIndex(values.indexOf(selected())', $script);
     }
 }

@@ -504,10 +504,11 @@ function openTimePicker(root) {
     const hour24 = backdrop.querySelector('[data-time-wheel-hour-24]');
     const hour12 = backdrop.querySelector('[data-time-wheel-hour-12]');
     const periodWheel = backdrop.querySelector('[data-time-wheel-period]');
+    const periodColumn = backdrop.querySelector('[data-time-wheel-period-column]');
     const usesTwelveHours = accountTimeFormat === '12';
     labels.classList.toggle('grid-cols-2', !usesTwelveHours); labels.classList.toggle('grid-cols-3', usesTwelveHours);
     wheels.classList.toggle('grid-cols-2', !usesTwelveHours); wheels.classList.toggle('grid-cols-3', usesTwelveHours);
-    periodLabel.classList.toggle('hidden', !usesTwelveHours); periodWheel.classList.toggle('hidden', !usesTwelveHours);
+    periodLabel.classList.toggle('hidden', !usesTwelveHours); periodColumn.classList.toggle('hidden', !usesTwelveHours);
     hour24.classList.toggle('hidden', usesTwelveHours); hour12.classList.toggle('hidden', !usesTwelveHours);
     const wheelControls = [];
     let dismissed = false, initializing = true;
@@ -521,12 +522,18 @@ function openTimePicker(root) {
     const makeWheel = (list, numeric, selected, choose, kind) => {
         const buttons = Array.from(list.querySelectorAll('[data-value]'));
         const values = buttons.map(button => numeric ? Number(button.dataset.value) : button.dataset.value);
-        buttons.forEach((button, index) => button.addEventListener('click', () => {
-            choose(values[index]);
-            list.scrollTop = index * 48;
+        const stepButtons = Array.from(list.closest('[data-time-wheel-column]').querySelectorAll('[data-time-wheel-step]'));
+        const selectIndex = index => {
+            const next = Math.max(0, Math.min(values.length - 1, index));
+            choose(values[next]);
+            list.scrollTop = next * 48;
             render(true);
+        };
+        buttons.forEach((button, index) => button.addEventListener('click', () => {
+            selectIndex(index);
             if (kind === 'minute') dismiss();
         }));
+        stepButtons.forEach(button => button.addEventListener('click', () => selectIndex(values.indexOf(selected()) + Number(button.dataset.timeWheelStep))));
         let scrollTimer;
         let lastWheelAt = 0;
         list.addEventListener('wheel', event => {
@@ -541,7 +548,7 @@ function openTimePicker(root) {
             render(true);
         }, {passive:false});
         list.addEventListener('scroll', () => { clearTimeout(scrollTimer); scrollTimer = setTimeout(() => { if (dismissed) return; const index = Math.max(0, Math.min(values.length - 1, Math.round(list.scrollTop / 48))); choose(values[index]); list.scrollTop = index * 48; render(!initializing); }, 40); });
-        const control = {list, values, buttons, selected, update() { const current = selected(); buttons.forEach(button => { const active = String(button.dataset.value) === String(current); button.classList.toggle('text-white', active); button.classList.toggle('text-slate-800', !active); button.classList.toggle('dark:text-slate-200', !active); button.setAttribute('aria-selected', active ? 'true' : 'false'); }); }, center() { list.scrollTop = values.indexOf(selected()) * 48; }};
+        const control = {list, values, buttons, selected, update() { const current = selected(), index = values.indexOf(current); buttons.forEach(button => { const active = String(button.dataset.value) === String(current); button.classList.toggle('text-white', active); button.classList.toggle('text-slate-800', !active); button.classList.toggle('dark:text-slate-200', !active); button.setAttribute('aria-selected', active ? 'true' : 'false'); }); stepButtons.forEach(button => { const disabled = Number(button.dataset.timeWheelStep) < 0 ? index <= 0 : index >= values.length - 1; button.disabled = disabled; button.classList.toggle('opacity-30', disabled); }); }, center() { list.scrollTop = values.indexOf(selected()) * 48; }};
         wheelControls.push(control); return control;
     };
     makeWheel(usesTwelveHours ? hour12 : hour24, true, () => usesTwelveHours ? displayHour : hour, value => { if (usesTwelveHours) { displayHour = value; hour = (value % 12) + (period === 'PM' ? 12 : 0); } else hour = value; }, 'hour');
