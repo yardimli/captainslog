@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Models\DailyLog;
+use App\Models\TaskDefinition;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -16,6 +17,7 @@ class DayStateTest extends TestCase
         $user = User::factory()->create();
         $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-24']);
         $log->blocks()->create(['type' => 'text', 'emoji' => '🧭', 'content' => 'Structured payload', 'occurred_at' => '2026-08-24 09:15:00']);
+        TaskDefinition::create(['user_id' => $user->id, 'name' => 'Hydration', 'daily_default_count' => 2]);
 
         $response = $this->actingAs($user)
             ->withHeader('X-Day-State', 'json')
@@ -33,6 +35,7 @@ class DayStateTest extends TestCase
 
         $response->assertJsonMissingPath('main_html')->assertJsonMissingPath('navigation_html');
         $response->assertJsonFragment(['type' => 'text', 'content' => 'Structured payload', 'emoji' => '🧭']);
+        $response->assertJsonFragment(['name' => 'Hydration', 'daily_default_count' => 2]);
     }
 
     public function test_authenticated_shell_contains_the_expired_session_login_overlay(): void

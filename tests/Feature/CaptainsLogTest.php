@@ -860,6 +860,8 @@ class CaptainsLogTest extends TestCase
         $this->assertStringContainsString("behavior:smooth ? 'smooth' : 'auto'", $script);
         $this->assertStringContainsString('const adaptedDelta = notchedGesture', $script);
         $this->assertStringContainsString('requestAnimationFrame(frameTime =>', $script);
+        $this->assertStringContainsString('Number(item.task.daily_default_count || 1)', $script);
+        $this->assertStringContainsString("item.kind !== 'schedule' || item.task.event_url !== eventUrl", $script);
         $this->assertStringNotContainsString("submit.textContent = mode === 'edit' ? 'Save changes'", $script);
         $this->assertStringContainsString('style="z-index:120"', $templates);
         $this->assertStringContainsString('data-time-wheel-step="-1"', $templates);

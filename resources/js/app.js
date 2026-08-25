@@ -1415,15 +1415,22 @@ document.addEventListener('click', async e => {
                 if (!scheduledTime || item.time === scheduledTime) item.task.slot_count = Number(item.task.slot_count || 0) + 1;
             });
             addOptimisticTimelineBlock(state, {
-            id:optimisticId,
-            time:optimisticTime,
-            emoji:taskEmoji,
-            content:'',
-            kind:'event',
-            editUrl:eventUrl,
-            eventName:taskName,
-            selectedValue:value || '',
+                id:optimisticId,
+                time:optimisticTime,
+                emoji:taskEmoji,
+                content:'',
+                kind:'event',
+                editUrl:eventUrl,
+                eventName:taskName,
+                selectedValue:value || '',
             });
+            state.timeline = state.timeline.filter(item => {
+                if (item.kind !== 'schedule' || item.task.event_url !== eventUrl) return true;
+                const limit = Number(item.task.daily_default_count || 1);
+                if (scheduledTime) return item.time !== scheduledTime || Number(item.task.slot_count || 0) < limit;
+                return !item.is_unscheduled || Number(item.task.count || 0) < limit;
+            });
+            reorderTimeline(state);
         });
         task.disabled = true;
         const eventCreatePromise = ajax(eventUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value, scheduled_time:scheduledTime})});

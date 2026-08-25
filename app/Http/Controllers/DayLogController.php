@@ -201,6 +201,7 @@ class DayLogController extends Controller
             'text_color' => $task->button_text_color,
             'options' => $task->options ?? [],
             'scheduled_times' => $task->scheduled_times ?? [],
+            'daily_default_count' => $task->daily_default_count,
             'event_url' => route('events.store', [$log, $task]),
             'count' => (int) ($counts[$task->id] ?? 0),
             'slot_count' => $slot === null ? null : (int) data_get($slotCounts, $task->id.'.'.$slot, 0),
