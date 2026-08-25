@@ -639,6 +639,8 @@ class CaptainsLogTest extends TestCase
             ->assertDontSee('Save notes &amp; time', false);
         $this->get(route('logs.show', '2026-08-15'))->assertOk()
             ->assertSee('data-capture-location', false)
+            ->assertSee('data-edit-event-name="Stress level"', false)
+            ->assertSee('data-composer-event-source', false)
             ->assertSee('data-edit-location=', false)
             ->assertSee('"latitude":25.033', false)
             ->assertSee('data-composer-location', false);
@@ -828,6 +830,10 @@ class CaptainsLogTest extends TestCase
         $this->assertStringContainsString('const originalCounts = new Map()', $script);
         $this->assertStringContainsString('pendingEventCreates.set(optimisticId, eventCreatePromise)', $script);
         $this->assertStringContainsString('pendingEventId:optimisticId', $script);
+        $this->assertStringContainsString('eventName:taskName', $script);
+        $this->assertStringContainsString("eventSource.querySelector('[data-composer-event-name]').textContent = eventName", $script);
+        $this->assertStringContainsString('function reorderTimeline(state)', $script);
+        $this->assertStringContainsString('reorderTimeline(state)', $script);
         $this->assertStringContainsString('isNew:true', $script);
         $this->assertStringContainsString("const showVisibility = mode === 'edit' && !isNew", $script);
         $this->assertStringContainsString('queueBackgroundSync(`visibility:${visibilityUrl}`', $script);
@@ -837,7 +843,9 @@ class CaptainsLogTest extends TestCase
         $this->assertStringContainsString('composerTimeInput.dispatchEvent', $script);
         $this->assertStringContainsString('textarea.value === form.dataset.originalContent', $script);
         $this->assertStringContainsString("list.scrollTop = index * 48", $script);
-        $this->assertStringNotContainsString("behavior:'smooth'", $script);
+        $this->assertStringContainsString("behavior:smooth ? 'smooth' : 'auto'", $script);
+        $this->assertStringContainsString('const adaptedDelta = notchedGesture', $script);
+        $this->assertStringContainsString('requestAnimationFrame(frameTime =>', $script);
         $this->assertStringNotContainsString("submit.textContent = mode === 'edit' ? 'Save changes'", $script);
         $this->assertStringContainsString('style="z-index:120"', $templates);
         $this->assertStringContainsString('data-time-wheel-step="-1"', $templates);

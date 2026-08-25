@@ -199,7 +199,7 @@ function renderTimelineItem(item) {
     } else if (block.type === 'sensor_google_calendar') {
         row.dataset.timelineGoogleCalendar = ''; row.dataset.googleCalendarEvent = JSON.stringify(block.calendar_event || {});
     } else {
-        row.dataset.timelineEdit = ''; row.dataset.editKind = block.edit_kind; row.dataset.editUrl = block.edit_url; row.dataset.editContent = block.content || ''; row.dataset.editEmoji = block.emoji || ''; row.dataset.editUpdated = block.updated || ''; row.dataset.editLocation = JSON.stringify(block.event?.location || null); row.dataset.hideUrl = block.hide_url; row.dataset.deleteUrl = block.delete_url; row.dataset.isHidden = block.is_hidden ? 'true' : 'false';
+        row.dataset.timelineEdit = ''; row.dataset.editKind = block.edit_kind; row.dataset.editEventName = block.event?.name || ''; row.dataset.editUrl = block.edit_url; row.dataset.editContent = block.content || ''; row.dataset.editEmoji = block.emoji || ''; row.dataset.editUpdated = block.updated || ''; row.dataset.editLocation = JSON.stringify(block.event?.location || null); row.dataset.hideUrl = block.hide_url; row.dataset.deleteUrl = block.delete_url; row.dataset.isHidden = block.is_hidden ? 'true' : 'false';
     }
     if (block.is_hidden) row.dataset.hiddenPlannerItem = '';
     row.append(element('time', 'w-20 shrink-0 pt-4 text-center font-mono text-xs font-bold text-slate-500', formatClock(item.time)));
@@ -525,10 +525,22 @@ function openTimePicker(root) {
         const buttons = Array.from(list.querySelectorAll('[data-value]'));
         const values = buttons.map(button => numeric ? Number(button.dataset.value) : button.dataset.value);
         const stepButtons = Array.from(list.closest('[data-time-wheel-column]').querySelectorAll('[data-time-wheel-step]'));
-        const selectIndex = index => {
+        let scrollTarget = null;
+        let programmedScrollTimer;
+        const scrollToIndex = (index, smooth = true) => {
+            scrollTarget = index;
+            list.scrollTo({top:index * 48, behavior:smooth ? 'smooth' : 'auto'});
+            clearTimeout(programmedScrollTimer);
+            programmedScrollTimer = setTimeout(() => {
+                if (scrollTarget !== index) return;
+                scrollTarget = null;
+                list.scrollTop = index * 48;
+            }, smooth ? 400 : 0);
+        };
+        const selectIndex = (index, smooth = true) => {
             const next = Math.max(0, Math.min(values.length - 1, index));
             choose(values[next]);
-            list.scrollTop = next * 48;
+            scrollToIndex(next, smooth);
             render(true);
         };
         buttons.forEach((button, index) => button.addEventListener('click', () => {
@@ -537,19 +549,53 @@ function openTimePicker(root) {
         }));
         stepButtons.forEach(button => button.addEventListener('click', () => selectIndex(values.indexOf(selected()) + Number(button.dataset.timeWheelStep))));
         let scrollTimer;
-        let lastWheelAt = 0;
+        let accumulatedWheel = 0;
+        let wheelFrame = null;
+        let lastWheelEventAt = 0;
+        let lastWheelStepAt = 0;
+        let notchedGesture = false;
         list.addEventListener('wheel', event => {
             event.preventDefault();
             const now = performance.now();
-            if (now - lastWheelAt < 40 || !event.deltaY) return;
-            lastWheelAt = now;
-            const current = Math.round(list.scrollTop / 48);
-            const index = Math.max(0, Math.min(values.length - 1, current + Math.sign(event.deltaY)));
-            choose(values[index]);
-            list.scrollTop = index * 48;
-            render(true);
+            if (!event.deltaY) return;
+            if (now - lastWheelEventAt > 180) {
+                accumulatedWheel = 0;
+                notchedGesture = event.deltaMode === WheelEvent.DOM_DELTA_LINE || Math.abs(event.deltaY) >= 100;
+            }
+            lastWheelEventAt = now;
+            const modeScale = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : (event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? list.clientHeight : 1);
+            const adaptedDelta = notchedGesture ? Math.sign(event.deltaY) * 48 : event.deltaY * modeScale * 0.35;
+            accumulatedWheel += adaptedDelta;
+            if (wheelFrame !== null) return;
+            wheelFrame = requestAnimationFrame(frameTime => {
+                wheelFrame = null;
+                const threshold = notchedGesture ? 1 : 48;
+                const cooldown = notchedGesture ? 40 : 140;
+                if (Math.abs(accumulatedWheel) < threshold) return;
+                if (frameTime - lastWheelStepAt < cooldown) { accumulatedWheel = 0; return; }
+                const direction = Math.sign(accumulatedWheel);
+                accumulatedWheel = 0;
+                lastWheelStepAt = frameTime;
+                selectIndex(values.indexOf(selected()) + direction);
+            });
         }, {passive:false});
-        list.addEventListener('scroll', () => { clearTimeout(scrollTimer); scrollTimer = setTimeout(() => { if (dismissed) return; const index = Math.max(0, Math.min(values.length - 1, Math.round(list.scrollTop / 48))); choose(values[index]); list.scrollTop = index * 48; render(!initializing); }, 40); });
+        list.addEventListener('scroll', () => {
+            if (scrollTarget !== null) {
+                clearTimeout(programmedScrollTimer);
+                programmedScrollTimer = setTimeout(() => {
+                    const target = scrollTarget;
+                    scrollTarget = null;
+                    list.scrollTop = target * 48;
+                }, 100);
+                return;
+            }
+            clearTimeout(scrollTimer);
+            scrollTimer = setTimeout(() => {
+                if (dismissed) return;
+                const index = Math.max(0, Math.min(values.length - 1, Math.round(list.scrollTop / 48)));
+                selectIndex(index);
+            }, 80);
+        });
         const control = {list, values, buttons, selected, update() { const current = selected(), index = values.indexOf(current); buttons.forEach(button => { const active = String(button.dataset.value) === String(current); button.classList.toggle('text-white', active); button.classList.toggle('text-slate-800', !active); button.classList.toggle('dark:text-slate-200', !active); button.setAttribute('aria-selected', active ? 'true' : 'false'); }); stepButtons.forEach(button => { const disabled = Number(button.dataset.timeWheelStep) < 0 ? index <= 0 : index >= values.length - 1; button.disabled = disabled; button.classList.toggle('opacity-30', disabled); }); }, center() { list.scrollTop = values.indexOf(selected()) * 48; }};
         wheelControls.push(control); return control;
     };
@@ -856,7 +902,7 @@ function scheduleEventAutosave(form, delay = 650) {
     }, delay));
 }
 
-function configureComposer({time, mode = 'create', kind = 'block', action = '', content = '', emoji = '📝', updated = '', hideUrl = '', deleteUrl = '', isHidden = false, location = null, pendingEventId = '', isNew = false} = {}) {
+function configureComposer({time, mode = 'create', kind = 'block', eventName = '', action = '', content = '', emoji = '📝', updated = '', hideUrl = '', deleteUrl = '', isHidden = false, location = null, pendingEventId = '', isNew = false} = {}) {
     const root = document.querySelector('[data-overlay="composer"]');
     const timeInput = root?.querySelector('[data-composer-time]');
     const form = root?.querySelector('[data-composer-note-form]');
@@ -882,6 +928,10 @@ function configureComposer({time, mode = 'create', kind = 'block', action = '', 
     setEmojiPickerValue(form.querySelector('[data-emoji-picker]'), emoji || (kind === 'event' ? '✅' : '📝'));
     root.querySelector('[data-composer-title]').textContent = mode === 'edit' ? 'Edit log entry' : 'Add to this log';
     if (updatedLabel) { updatedLabel.textContent = updated ? `Updated ${updated}` : ''; updatedLabel.classList.toggle('hidden', mode !== 'edit' || !updated); }
+    const eventSource = root.querySelector('[data-composer-event-source]');
+    const showEventSource = kind === 'event' && Boolean(eventName);
+    eventSource?.classList.toggle('hidden', !showEventSource);
+    if (showEventSource) eventSource.querySelector('[data-composer-event-name]').textContent = eventName;
     const locationPanel = root.querySelector('[data-composer-location]');
     const hasLocation = kind === 'event' && location?.latitude != null && location?.longitude != null;
     locationPanel?.classList.toggle('hidden', !hasLocation);
@@ -1018,13 +1068,38 @@ function addOptimisticTimelineBlock(state, {id, time, emoji, content, kind = 'te
     state.timeline.splice(followingIndex < 0 ? state.timeline.length : followingIndex, 0, item);
 }
 
+function reorderTimeline(state) {
+    const previousGaps = state.timeline.filter(item => item.kind === 'gap');
+    const timedItems = state.timeline
+        .map((item, index) => ({item, index}))
+        .filter(({item}) => item.kind !== 'gap')
+        .sort((left, right) => (left.item.time || '24:00').localeCompare(right.item.time || '24:00') || left.index - right.index)
+        .map(({item}) => item);
+    const currentTime = timedItems.find(item => item.kind === 'now')?.time;
+    const fallbackGapState = previousGaps[0]?.state || 'future';
+    const gapState = end => state.is_today && currentTime ? (end <= currentTime ? 'past' : 'future') : fallbackGapState;
+    const timeline = [];
+    let cursor = '00:00';
+    timedItems.forEach(item => {
+        const time = item.time || cursor;
+        if (time > cursor) timeline.push({kind:'gap', from:cursor, to:time, state:gapState(time)});
+        timeline.push(item);
+        if (time > cursor) cursor = time;
+    });
+    if (cursor < '24:00') timeline.push({kind:'gap', from:cursor, to:'24:00', state:gapState('24:00')});
+    state.timeline = timeline;
+}
+
 function updateLocalTimelineBlock(url, {content, emoji, time}, pendingEventId = '') {
     return mutateDayState(state => {
         const item = pendingEventId ? findPendingBlockItem(state, pendingEventId) : findBlockItem(state, url);
         if (!item) return;
         if (content !== undefined) item.block.content = content;
         if (emoji) item.block.emoji = emoji;
-        if (time) item.time = time;
+        if (time && time !== item.time) {
+            item.time = time;
+            reorderTimeline(state);
+        }
     });
 }
 
@@ -1254,7 +1329,7 @@ document.addEventListener('click', async e => {
         if (timelineItem.matches('[data-timeline-github]')) openGithubDetails(timelineItem);
         else if (timelineItem.matches('[data-timeline-browsing]')) openBrowsingDetails(timelineItem);
         else if (timelineItem.matches('[data-timeline-google-calendar]')) openGoogleCalendarDetails(timelineItem);
-        else if (timelineItem.matches('[data-timeline-edit]')) configureComposer({time: timelineItem.dataset.timelineTime, mode:'edit', kind:timelineItem.dataset.editKind, action:timelineItem.dataset.editUrl, content:timelineItem.dataset.editContent, emoji:timelineItem.dataset.editEmoji, updated:timelineItem.dataset.editUpdated, hideUrl:timelineItem.dataset.hideUrl, deleteUrl:timelineItem.dataset.deleteUrl, isHidden:timelineItem.dataset.isHidden === 'true', location:JSON.parse(timelineItem.dataset.editLocation || 'null')});
+        else if (timelineItem.matches('[data-timeline-edit]')) configureComposer({time: timelineItem.dataset.timelineTime, mode:'edit', kind:timelineItem.dataset.editKind, eventName:timelineItem.dataset.editEventName, action:timelineItem.dataset.editUrl, content:timelineItem.dataset.editContent, emoji:timelineItem.dataset.editEmoji, updated:timelineItem.dataset.editUpdated, hideUrl:timelineItem.dataset.hideUrl, deleteUrl:timelineItem.dataset.deleteUrl, isHidden:timelineItem.dataset.isHidden === 'true', location:JSON.parse(timelineItem.dataset.editLocation || 'null')});
         else if (timelineItem.matches('[data-time-gap]')) configureComposer({time:timelineItem.dataset.from});
         else configureComposer({time:timelineItem.dataset.timelineTime || timelineItem.dataset.currentTime});
     }
@@ -1352,6 +1427,7 @@ document.addEventListener('click', async e => {
             time:optimisticTime,
             mode:'edit',
             kind:'event',
+            eventName:taskName,
             action:eventUrl,
             content:'',
             emoji:taskEmoji,
