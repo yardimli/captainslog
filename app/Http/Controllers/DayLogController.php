@@ -249,7 +249,8 @@ class DayLogController extends Controller
                 'location' => $block->taskEvent->latitude !== null ? [
                     'latitude' => $block->taskEvent->latitude,
                     'longitude' => $block->taskEvent->longitude,
-                    'accuracy' => $block->taskEvent->location_accuracy,
+                    'city' => $block->taskEvent->city,
+                    'suburb' => $block->taskEvent->suburb,
                 ] : null,
             ] : null,
             'attachments' => $block->attachments->map(fn ($attachment) => [

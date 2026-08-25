@@ -10,8 +10,8 @@ use App\Models\TaskEvent;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -610,6 +610,11 @@ class CaptainsLogTest extends TestCase
 
     public function test_task_event_is_committed_before_optional_notes_and_requires_configured_value(): void
     {
+        Http::fake([
+            'nominatim.openstreetmap.org/reverse*' => Http::response([
+                'address' => ['suburb' => 'Xindian District', 'city' => 'New Taipei'],
+            ]),
+        ]);
         $user = User::factory()->create();
         $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
         $task = TaskDefinition::create(['user_id' => $user->id, 'name' => 'Stress level', 'options' => ['1', '2', '3', '4', '5'], 'is_sticky' => true]);
@@ -623,18 +628,26 @@ class CaptainsLogTest extends TestCase
         $this->patchJson(route('events.location', $eventId), ['latitude' => 25.033, 'longitude' => 121.5654, 'accuracy' => 15.5])
             ->assertOk()
             ->assertJsonPath('location.latitude', 25.033)
-            ->assertJsonPath('location.longitude', 121.5654);
+            ->assertJsonPath('location.longitude', 121.5654)
+            ->assertJsonPath('location.city', 'New Taipei')
+            ->assertJsonPath('location.suburb', 'Xindian District');
         $locatedEvent = TaskEvent::findOrFail($eventId);
         $this->assertSame(25.033, $locatedEvent->latitude);
         $this->assertSame(121.5654, $locatedEvent->longitude);
         $this->assertSame(15.5, $locatedEvent->location_accuracy);
+        $this->assertSame('New Taipei', $locatedEvent->city);
+        $this->assertSame('Xindian District', $locatedEvent->suburb);
+        Http::assertSent(fn ($request) => str_starts_with($request->url(), 'https://nominatim.openstreetmap.org/reverse?')
+            && $request['format'] === 'jsonv2'
+            && $request->hasHeader('User-Agent'));
         $this->actingAs(User::factory()->create())->patchJson(route('events.location', $eventId), ['latitude' => 1, 'longitude' => 1])->assertForbidden();
         $this->actingAs($user)->patchJson(route('events.location', $eventId), ['latitude' => 91, 'longitude' => 1])->assertUnprocessable();
         Carbon::setTestNow();
         $this->get(route('events.edit', $eventId))->assertOk()
             ->assertSee('data-event-autosave-form', false)
-            ->assertSee('Recorded location')
-            ->assertSee('25.03300, 121.56540')
+            ->assertSee('Xindian District, New Taipei')
+            ->assertDontSee('Recorded location')
+            ->assertDontSee('Accuracy approximately')
             ->assertSee('Changes save automatically.')
             ->assertDontSee('Save notes &amp; time', false);
         $this->get(route('logs.show', '2026-08-15'))->assertOk()
@@ -643,6 +656,7 @@ class CaptainsLogTest extends TestCase
             ->assertSee('data-composer-event-source', false)
             ->assertSee('data-edit-location=', false)
             ->assertSee('"latitude":25.033', false)
+            ->assertSee('"city":"New Taipei"', false)
             ->assertSee('data-composer-location', false);
         $this->patchJson(route('events.update', $eventId), ['notes' => 'Recovered after a walk.', 'occurred_at' => '16:10'])
             ->assertOk()

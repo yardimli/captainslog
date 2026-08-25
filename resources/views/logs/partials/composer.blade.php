@@ -1,7 +1,6 @@
 <div id="log-composer-content" class="space-y-4">
     <section class="panel">
         <h2 class="mb-1 text-lg font-bold" data-note-heading>Write a note</h2>
-        <p class="mb-3 text-sm text-slate-500">Choose the exact time above; the timeline will place it chronologically.</p>
         <form data-ajax data-composer-note-form method="POST" action="{{ route('blocks.store', $log) }}" data-create-action="{{ route('blocks.store', $log) }}" class="space-y-3">
             @csrf
             <input type="hidden" name="type" value="text">

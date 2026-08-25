@@ -902,6 +902,19 @@ function scheduleEventAutosave(form, delay = 650) {
     }, delay));
 }
 
+function renderComposerLocation(root, kind, location) {
+    const panel = root?.querySelector('[data-composer-location]');
+    const hasLocation = kind === 'event' && location?.latitude != null && location?.longitude != null;
+    panel?.classList.toggle('hidden', !hasLocation);
+    if (!hasLocation) return;
+    const place = [...new Set([location.suburb, location.city].filter(Boolean))].join(', ');
+    const display = panel.querySelector('[data-composer-location-display]');
+    display.textContent = place || `${Number(location.latitude).toFixed(5)}, ${Number(location.longitude).toFixed(5)}`;
+    display.classList.toggle('font-mono', !place);
+    display.classList.toggle('text-xs', !place);
+    panel.querySelector('[data-composer-location-attribution]')?.classList.toggle('hidden', !place);
+}
+
 function configureComposer({time, mode = 'create', kind = 'block', eventName = '', action = '', content = '', emoji = '📝', updated = '', hideUrl = '', deleteUrl = '', isHidden = false, location = null, pendingEventId = '', isNew = false} = {}) {
     const root = document.querySelector('[data-overlay="composer"]');
     const timeInput = root?.querySelector('[data-composer-time]');
@@ -932,15 +945,7 @@ function configureComposer({time, mode = 'create', kind = 'block', eventName = '
     const showEventSource = kind === 'event' && Boolean(eventName);
     eventSource?.classList.toggle('hidden', !showEventSource);
     if (showEventSource) eventSource.querySelector('[data-composer-event-name]').textContent = eventName;
-    const locationPanel = root.querySelector('[data-composer-location]');
-    const hasLocation = kind === 'event' && location?.latitude != null && location?.longitude != null;
-    locationPanel?.classList.toggle('hidden', !hasLocation);
-    if (hasLocation) {
-        locationPanel.querySelector('[data-composer-location-coordinates]').textContent = `${Number(location.latitude).toFixed(5)}, ${Number(location.longitude).toFixed(5)}`;
-        const accuracy = locationPanel.querySelector('[data-composer-location-accuracy]');
-        accuracy.textContent = location.accuracy != null ? `Accuracy approximately ${Math.round(Number(location.accuracy))} metres` : '';
-        accuracy.classList.toggle('hidden', location.accuracy == null);
-    }
+    renderComposerLocation(root, kind, location);
     root.querySelector('[data-note-heading]').textContent = kind === 'event' ? 'Event notes' : (mode === 'edit' ? 'Edit note' : 'Write a note');
     const submit = root.querySelector('[data-composer-submit]');
     submit.textContent = 'Add to log';
@@ -1460,6 +1465,7 @@ document.addEventListener('click', async e => {
                     const locationBody = await ajax(body.location_url, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(capturedLocation)});
                     const item = activeDayState ? findPendingBlockItem(activeDayState, optimisticId) : null;
                     if (item?.block.event) item.block.event.location = locationBody.location;
+                    if (composerForm?.action === body.edit_url) renderComposerLocation(composerRoot, 'event', locationBody.location);
                 } catch (_) { toast('The event was logged, but its location could not be saved.', true); }
             }
         }

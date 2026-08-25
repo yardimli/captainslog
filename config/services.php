@@ -40,4 +40,9 @@ return [
         'sync_interval_seconds' => (int) env('GITHUB_SYNC_INTERVAL_SECONDS', 300),
     ],
 
+    'nominatim' => [
+        'url' => env('NOMINATIM_URL', 'https://nominatim.openstreetmap.org/reverse'),
+        'user_agent' => env('NOMINATIM_USER_AGENT', "Captain's Log/1.0 (+".env('APP_URL', 'http://localhost').')'),
+    ],
+
 ];

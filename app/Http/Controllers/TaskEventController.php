@@ -6,11 +6,14 @@ use App\Models\DailyLog;
 use App\Models\LogBlock;
 use App\Models\TaskDefinition;
 use App\Models\TaskEvent;
+use App\Services\NominatimReverseGeocoder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class TaskEventController extends Controller
 {
+    public function __construct(private NominatimReverseGeocoder $geocoder) {}
+
     public function store(Request $request, DailyLog $dailyLog, TaskDefinition $task)
     {
         $startedAt = hrtime(true);
@@ -94,15 +97,18 @@ class TaskEventController extends Controller
             'longitude' => 'required|numeric|between:-180,180',
             'accuracy' => 'nullable|numeric|min:0|max:100000',
         ]);
+        $place = $this->geocoder->reverse((float) $data['latitude'], (float) $data['longitude']);
         $event->update([
             'latitude' => $data['latitude'],
             'longitude' => $data['longitude'],
             'location_accuracy' => $data['accuracy'] ?? null,
+            'city' => $place['city'] ?? null,
+            'suburb' => $place['suburb'] ?? null,
         ]);
 
         return response()->json([
             'message' => 'Event location saved.',
-            'location' => ['latitude' => $event->latitude, 'longitude' => $event->longitude, 'accuracy' => $event->location_accuracy],
+            'location' => ['latitude' => $event->latitude, 'longitude' => $event->longitude, 'city' => $event->city, 'suburb' => $event->suburb],
         ]);
     }
 
