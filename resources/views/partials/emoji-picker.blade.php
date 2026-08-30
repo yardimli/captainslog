@@ -11,7 +11,7 @@
         <span class="min-w-0 flex-1 text-sm font-semibold">Choose emoji</span>
         <span class="text-xs text-slate-400" aria-hidden="true">▼</span>
     </button>
-    <div id="{{ $pickerId }}-menu" class="block-emoji-picker-menu absolute inset-x-0 top-full z-[100] mt-2 hidden max-h-[300px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900" data-emoji-menu>
+    <div id="{{ $pickerId }}-menu" class="block-emoji-picker-menu absolute inset-x-0 top-full z-[100] mt-2 hidden h-[300px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900" data-emoji-menu>
         <div id="{{ $pickerId }}-search-control" class="shrink-0 border-b border-slate-200 p-2 dark:border-slate-700">
             <label class="sr-only" for="{{ $pickerId }}-search">Search emojis</label>
             <input id="{{ $pickerId }}-search" type="search" class="input text-sm" placeholder="Search all emojis…" autocomplete="off" data-emoji-search>

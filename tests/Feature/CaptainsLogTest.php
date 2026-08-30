@@ -260,7 +260,7 @@ class CaptainsLogTest extends TestCase
             ->assertSee('data-emoji-loading-spinner', false)
             ->assertSee('overflow-x-hidden', false)
             ->assertSee('z-[100]', false)
-            ->assertSee('max-h-[300px]', false)
+            ->assertSee('h-[300px]', false)
             ->assertSee('🧘');
 
         $emojiGroups = json_decode(file_get_contents(public_path('data/data-by-group.json')), true, flags: JSON_THROW_ON_ERROR);
