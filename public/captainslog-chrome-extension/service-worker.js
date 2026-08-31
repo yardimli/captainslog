@@ -1,6 +1,7 @@
 const DEFAULT_APP_URL = 'http://127.0.0.1:8016/';
 const DEFAULT_KINDLE_URL = 'https://read.amazon.com/kindle-library';
 const HEARTBEAT_ALARM = 'captainslog-browsing-heartbeat';
+const MOBILE_HISTORY_ALARM = 'captainslog-mobile-history';
 const KINDLE_CHECK_ALARM = 'captainslog-kindle-session-check';
 const KINDLE_SYNC_TIMEOUT_PREFIX = 'captainslog-kindle-sync-timeout-';
 
@@ -20,7 +21,7 @@ const normalizeKindleUrl = value => {
 };
 
 async function settings() {
-  const keys = ['appUrl', 'pairingKey', 'clientId', 'connectionStatus', 'lastSentAt', 'lastDomain', 'lastError', 'kindleEnabled', 'kindleUrl', 'kindleStatus', 'kindleLastSyncAt', 'kindleLastTitle', 'kindleLastProgress', 'kindleLastError', 'kindleLastFingerprint'];
+  const keys = ['appUrl', 'pairingKey', 'clientId', 'connectionStatus', 'lastSentAt', 'lastDomain', 'lastError', 'lastMobileHistorySyncAt', 'lastMobileHistoryImportCount', 'mobileHistoryLastError', 'kindleEnabled', 'kindleUrl', 'kindleStatus', 'kindleLastSyncAt', 'kindleLastTitle', 'kindleLastProgress', 'kindleLastError', 'kindleLastFingerprint'];
   const saved = await chrome.storage.local.get(keys);
   const updates = {};
   if (!saved.appUrl) updates.appUrl = DEFAULT_APP_URL;
@@ -58,6 +59,88 @@ async function sendActiveBrowsing() {
     await chrome.storage.local.set({connectionStatus: 'connected', lastSentAt: new Date().toISOString(), lastDomain: body.domain || browsingUrl.hostname, lastError: null});
   } catch (error) {
     await chrome.storage.local.set({connectionStatus: 'error', lastError: error.message || String(error)});
+  }
+}
+
+async function sha256(value) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function remoteHistoryVisits(startTime, endTime, appOrigin) {
+  const pageSize = 10000;
+  const seenUrls = new Set();
+  const visits = [];
+  let searchEndTime = endTime;
+  while (searchEndTime >= startTime) {
+    const pages = await chrome.history.search({text: '', startTime, endTime: searchEndTime, maxResults: pageSize});
+    if (!pages.length) break;
+    const unseenPages = pages.filter(page => page.url && !seenUrls.has(page.url));
+    unseenPages.forEach(page => seenUrls.add(page.url));
+    for (let offset = 0; offset < unseenPages.length; offset += 25) {
+      const group = unseenPages.slice(offset, offset + 25);
+      const details = await Promise.all(group.map(async page => {
+        let url;
+        try {
+          url = new URL(page.url);
+        } catch (_error) {
+          return [];
+        }
+        if (!['http:', 'https:'].includes(url.protocol) || url.origin === appOrigin) return [];
+        const pageVisits = await chrome.history.getVisits({url: page.url});
+        return Promise.all(pageVisits
+          .filter(visit => visit.isLocal === false && visit.visitTime >= startTime && visit.visitTime <= endTime)
+          .map(async visit => ({
+            url: `${url.protocol}//${url.hostname}`,
+            visited_at: new Date(visit.visitTime).toISOString(),
+            visit_key: await sha256(`${page.url}\n${visit.visitTime}\n${visit.visitId}`)
+          })));
+      }));
+      visits.push(...details.flat());
+    }
+    if (pages.length < pageSize || !unseenPages.length) break;
+    const oldestVisitTime = Math.min(...pages.map(page => page.lastVisitTime).filter(Number.isFinite));
+    if (!Number.isFinite(oldestVisitTime) || oldestVisitTime >= searchEndTime) break;
+    searchEndTime = oldestVisitTime - 1;
+  }
+  return visits.sort((left, right) => left.visited_at.localeCompare(right.visited_at));
+}
+
+async function syncMobileHistory(fullScan = false) {
+  const running = await chrome.storage.session.get(['mobileHistorySyncRunning']);
+  if (running.mobileHistorySyncRunning) return;
+  await chrome.storage.session.set({mobileHistorySyncRunning: true});
+  try {
+    const config = await settings();
+    if (!config.pairingKey || config.connectionStatus !== 'connected') return;
+    const appUrl = normalizeAppUrl(config.appUrl);
+    const endTime = Date.now();
+    const initialStart = endTime - (90 * 24 * 60 * 60 * 1000);
+    const startTime = !fullScan && config.lastMobileHistorySyncAt
+      ? Math.max(initialStart, Date.parse(config.lastMobileHistorySyncAt) - (24 * 60 * 60 * 1000))
+      : initialStart;
+    const visits = await remoteHistoryVisits(startTime, endTime, new URL(appUrl).origin);
+    let imported = 0;
+    for (let offset = 0; offset < visits.length; offset += 500) {
+      const response = await fetch(new URL('api/sensors/browser/mobile-history', appUrl), {
+        method: 'POST',
+        headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CaptainsLog-Key': config.pairingKey},
+        body: JSON.stringify({visits: visits.slice(offset, offset + 500)})
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.message || `Mobile history import returned ${response.status}.`);
+      imported += Number(body.imported || 0);
+    }
+    await chrome.storage.local.set({
+      lastMobileHistorySyncAt: new Date(endTime).toISOString(),
+      lastMobileHistoryImportCount: imported,
+      mobileHistoryLastError: null
+    });
+  } catch (error) {
+    await chrome.storage.local.set({mobileHistoryLastError: error.message || String(error)});
+  } finally {
+    await chrome.storage.session.remove(['mobileHistorySyncRunning']);
   }
 }
 
@@ -190,13 +273,14 @@ async function sendKindleProgress(progress) {
 async function connectToApp() {
   const config = await settings();
   const pairingKey = randomKey();
-  await chrome.storage.local.set({pairingKey, connectionStatus: 'pairing', lastError: null});
+  await chrome.storage.local.set({pairingKey, connectionStatus: 'pairing', lastError: null, lastMobileHistorySyncAt: null, mobileHistoryLastError: null});
   const pairingUrl = new URL(`sensors/browser/pair/${encodeURIComponent(pairingKey)}`, normalizeAppUrl(config.appUrl));
   await chrome.tabs.create({url: pairingUrl.toString()});
 }
 
 async function installAlarms() {
   await chrome.alarms.create(HEARTBEAT_ALARM, {periodInMinutes: 1});
+  await chrome.alarms.create(MOBILE_HISTORY_ALARM, {periodInMinutes: 5});
   await chrome.alarms.create(KINDLE_CHECK_ALARM, {periodInMinutes: 60});
 }
 
@@ -209,10 +293,12 @@ chrome.runtime.onStartup.addListener(async () => {
   await settings();
   await installAlarms();
   await sendActiveBrowsing();
+  await syncMobileHistory();
   await syncKindleInBackground();
 });
 chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === HEARTBEAT_ALARM) sendActiveBrowsing();
+  if (alarm.name === MOBILE_HISTORY_ALARM) syncMobileHistory();
   if (alarm.name === KINDLE_CHECK_ALARM) syncKindleInBackground();
   if (alarm.name.startsWith(KINDLE_SYNC_TIMEOUT_PREFIX)) {
     const tabId = Number(alarm.name.slice(KINDLE_SYNC_TIMEOUT_PREFIX.length));
@@ -240,6 +326,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   let operation;
   if (message?.type === 'connect') operation = connectToApp();
   else if (message?.type === 'send-now') operation = sendActiveBrowsing();
+  else if (message?.type === 'mobile-history-sync-now') operation = syncMobileHistory();
+  else if (message?.type === 'mobile-history-sync-past') operation = syncMobileHistory(true);
   else if (message?.type === 'kindle-connect') operation = connectKindle();
   else if (message?.type === 'kindle-check') operation = checkKindleSession();
   else if (message?.type === 'kindle-sync-now') operation = syncKindleInBackground();

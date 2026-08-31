@@ -17,6 +17,7 @@ class LogBlock extends Model
         'chat_assistant' => '🤖',
         'sensor_github' => '💻',
         'sensor_browser' => '🌐',
+        'sensor_mobile_browser' => '📱',
         'sensor_kindle' => '📖',
         'sensor_google_calendar' => '📅',
     ];
@@ -55,6 +56,11 @@ class LogBlock extends Model
     public function browsingActivities(): HasMany
     {
         return $this->hasMany(BrowsingActivity::class);
+    }
+
+    public function mobileBrowsingVisits(): HasMany
+    {
+        return $this->hasMany(MobileBrowsingVisit::class);
     }
 
     public function kindleReadingProgress(): HasMany

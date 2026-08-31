@@ -3,6 +3,8 @@ const appUrl = document.getElementById('app-url');
 const statusDot = document.getElementById('status-dot');
 const statusLabel = document.getElementById('status-label');
 const statusDetail = document.getElementById('status-detail');
+const mobileHistoryDot = document.getElementById('mobile-history-dot');
+const mobileHistoryDetail = document.getElementById('mobile-history-detail');
 const kindleEnabled = document.getElementById('kindle-enabled');
 const kindleFields = document.getElementById('kindle-settings-fields');
 const kindleUrl = document.getElementById('kindle-url');
@@ -24,7 +26,7 @@ function formatTime(value) {
 }
 
 async function render() {
-  const data = await chrome.storage.local.get(['appUrl', 'connectionStatus', 'lastSentAt', 'lastDomain', 'lastError', 'kindleEnabled', 'kindleUrl', 'kindleStatus', 'kindleLastSyncAt', 'kindleLastTitle', 'kindleLastProgress', 'kindleLastError']);
+  const data = await chrome.storage.local.get(['appUrl', 'connectionStatus', 'lastSentAt', 'lastDomain', 'lastError', 'lastMobileHistorySyncAt', 'lastMobileHistoryImportCount', 'mobileHistoryLastError', 'kindleEnabled', 'kindleUrl', 'kindleStatus', 'kindleLastSyncAt', 'kindleLastTitle', 'kindleLastProgress', 'kindleLastError']);
   appUrl.value = data.appUrl || DEFAULT_APP_URL;
   const state = data.connectionStatus || 'unpaired';
   statusDot.dataset.state = state;
@@ -40,6 +42,15 @@ async function render() {
   } else {
     statusLabel.textContent = 'Not connected';
     statusDetail.textContent = 'Save the app URL, then connect this extension to your signed-in account.';
+  }
+  mobileHistoryDot.dataset.state = data.mobileHistoryLastError ? 'error' : (data.lastMobileHistorySyncAt ? 'connected' : 'waiting');
+  if (data.mobileHistoryLastError) {
+    mobileHistoryDetail.textContent = data.mobileHistoryLastError;
+  } else if (data.lastMobileHistorySyncAt) {
+    const count = Number(data.lastMobileHistoryImportCount || 0);
+    mobileHistoryDetail.textContent = `Last scan ${formatTime(data.lastMobileHistorySyncAt)} · ${count} new ${count === 1 ? 'visit' : 'visits'}`;
+  } else {
+    mobileHistoryDetail.textContent = 'Waiting for the first synchronized history scan.';
   }
   kindleEnabled.checked = data.kindleEnabled === true;
   kindleFields.hidden = !kindleEnabled.checked;
@@ -95,6 +106,18 @@ document.getElementById('connect').addEventListener('click', async () => {
 document.getElementById('send-now').addEventListener('click', async () => {
   await chrome.runtime.sendMessage({type: 'send-now'});
   window.setTimeout(render, 300);
+});
+
+document.getElementById('mobile-history-sync').addEventListener('click', async () => {
+  mobileHistoryDetail.textContent = 'Scanning recent synchronized Chrome history…';
+  await chrome.runtime.sendMessage({type: 'mobile-history-sync-now'});
+  await render();
+});
+
+document.getElementById('mobile-history-sync-past').addEventListener('click', async () => {
+  mobileHistoryDetail.textContent = 'Scanning all synchronized history Chrome still has…';
+  await chrome.runtime.sendMessage({type: 'mobile-history-sync-past'});
+  await render();
 });
 
 kindleEnabled.addEventListener('change', async () => {

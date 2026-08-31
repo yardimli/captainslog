@@ -4,8 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\BrowsingActivity;
 use App\Models\DailyLog;
-use App\Models\KindleReadingProgress;
 use App\Models\GoogleCalendarEvent;
+use App\Models\KindleReadingProgress;
+use App\Models\MobileBrowsingVisit;
 use App\Models\Sensor;
 use App\Models\User;
 use Carbon\Carbon;
@@ -307,16 +308,68 @@ class SensorTest extends TestCase
         $worker = file_get_contents(public_path('captainslog-chrome-extension/service-worker.js'));
         $this->assertStringContainsString('http://127.0.0.1:8016/', $worker);
         $this->assertStringContainsString('api/sensors/browser/activity', $worker);
+        $this->assertStringContainsString('api/sensors/browser/mobile-history', $worker);
+        $this->assertStringContainsString('visit.isLocal === false', $worker);
+        $this->assertStringContainsString("message?.type === 'mobile-history-sync-past'", $worker);
+        $this->assertStringContainsString('syncMobileHistory(true)', $worker);
         $this->assertStringContainsString('sensors/browser/pair/', $worker);
         $this->assertStringContainsString('browsingUrl.hostname', $worker);
         $this->assertStringContainsString('api/sensors/kindle/progress', $worker);
         $this->assertStringContainsString('/kindle-library/search', $worker);
         $this->assertStringContainsString("credentials: 'include'", $worker);
-        $this->assertStringContainsString("active: false", $worker);
+        $this->assertStringContainsString('active: false', $worker);
         $this->assertContains('cookies', $manifest['optional_permissions']);
+        $this->assertContains('history', $manifest['permissions']);
         $this->assertContains('kindle-tracker.js', $manifest['content_scripts'][0]['js']);
         $this->assertFileExists(public_path('captainslog-chrome-extension/kindle-tracker.js'));
-        $this->assertSame('1.2.1', $manifest['version']);
+        $this->assertSame('1.3.1', $manifest['version']);
+        $this->assertStringContainsString('Sync past data', file_get_contents(public_path('captainslog-chrome-extension/options.html')));
+    }
+
+    public function test_mobile_browser_sensor_groups_synced_visits_by_hour_and_counts_domains(): void
+    {
+        Carbon::setTestNow('2026-09-01 13:00:00');
+        $user = User::factory()->create();
+        $key = str_repeat('m', 64);
+        Sensor::create([
+            'user_id' => $user->id,
+            'type' => Sensor::BROWSER,
+            'username' => 'Chrome extension',
+            'pairing_key_hash' => hash('sha256', $key),
+            'enabled' => true,
+        ]);
+        $visits = [
+            ['url' => 'https://example.com/one?private=yes', 'visited_at' => '2026-09-01T10:05:00+08:00', 'visit_key' => hash('sha256', 'visit-1')],
+            ['url' => 'https://example.com/two', 'visited_at' => '2026-09-01T10:12:00+08:00', 'visit_key' => hash('sha256', 'visit-2')],
+            ['url' => 'https://example.com/three', 'visited_at' => '2026-09-01T10:20:00+08:00', 'visit_key' => hash('sha256', 'visit-3')],
+            ['url' => 'https://example.com/four', 'visited_at' => '2026-09-01T10:30:00+08:00', 'visit_key' => hash('sha256', 'visit-4')],
+            ['url' => 'https://example.com/five', 'visited_at' => '2026-09-01T10:45:00+08:00', 'visit_key' => hash('sha256', 'visit-5')],
+            ['url' => 'https://example.com/later', 'visited_at' => '2026-09-01T11:15:00+08:00', 'visit_key' => hash('sha256', 'visit-6')],
+            ['url' => 'https://news.example.org/story', 'visited_at' => '2026-09-01T10:50:00+08:00', 'visit_key' => hash('sha256', 'visit-7')],
+        ];
+
+        $this->withHeader('X-CaptainsLog-Key', $key)
+            ->postJson(route('api.sensors.browser.mobile-history'), ['visits' => $visits])
+            ->assertCreated()
+            ->assertJson(['imported' => 7, 'duplicates' => 0, 'blocks' => 2]);
+
+        $this->withHeader('X-CaptainsLog-Key', $key)
+            ->postJson(route('api.sensors.browser.mobile-history'), ['visits' => $visits])
+            ->assertCreated()
+            ->assertJson(['imported' => 0, 'duplicates' => 7, 'blocks' => 0]);
+
+        $this->assertDatabaseCount('mobile_browsing_visits', 7);
+        $this->assertDatabaseCount('log_blocks', 2);
+        $this->assertDatabaseHas('log_blocks', ['type' => 'sensor_mobile_browser', 'content' => 'Mobile browsing · 2 domains · 6 visits']);
+        $this->assertDatabaseHas('log_blocks', ['type' => 'sensor_mobile_browser', 'content' => 'Mobile browsing · 1 domain · 1 visit']);
+        $this->assertSame(5, MobileBrowsingVisit::where('domain', 'example.com')->whereBetween('visited_at', ['2026-09-01 10:00:00', '2026-09-01 10:59:59'])->count());
+
+        $this->actingAs($user)->get('/logs/2026-09-01')->assertOk()
+            ->assertSee('Mobile browsing')
+            ->assertSee('data-browsing-mode="visits"', false)
+            ->assertSee('"visits":5', false)
+            ->assertDontSee('/one?private=yes');
+        Carbon::setTestNow();
     }
 
     public function test_kindle_sensor_records_progress_history_in_one_daily_book_entry(): void

@@ -193,7 +193,9 @@ function renderTimelineItem(item) {
     const row = element('div', `timeline-item flex min-w-0 cursor-pointer items-start gap-3 ${block.is_hidden ? 'opacity-60' : ''}`);
     row.dataset.recordedTime = item.time; row.dataset.timelineTime = item.time;
     if (block.type === 'sensor_browser') {
-        row.dataset.timelineBrowsing = ''; row.dataset.browsingStart = formatClock(item.time); row.dataset.browsingDomains = JSON.stringify(block.browsing_domains || []); row.dataset.browsingTotal = String((block.browsing_domains || []).reduce((total, domain) => total + Number(domain.seconds || 0), 0));
+        row.dataset.timelineBrowsing = ''; row.dataset.browsingMode = 'duration'; row.dataset.browsingStart = formatClock(item.time); row.dataset.browsingDomains = JSON.stringify(block.browsing_domains || []); row.dataset.browsingTotal = String((block.browsing_domains || []).reduce((total, domain) => total + Number(domain.seconds || 0), 0));
+    } else if (block.type === 'sensor_mobile_browser') {
+        row.dataset.timelineBrowsing = ''; row.dataset.browsingMode = 'visits'; row.dataset.browsingStart = formatClock(item.time); row.dataset.browsingDomains = JSON.stringify(block.mobile_browsing_domains || []); row.dataset.browsingTotal = String((block.mobile_browsing_domains || []).reduce((total, domain) => total + Number(domain.visits || 0), 0));
     } else if (block.type === 'sensor_github' && (block.github_events || []).length) {
         row.dataset.timelineGithub = ''; row.dataset.githubProject = block.content || ''; row.dataset.githubStart = formatClock(item.time); row.dataset.githubEvents = JSON.stringify(block.github_events);
     } else if (block.type === 'sensor_google_calendar') {
@@ -205,9 +207,12 @@ function renderTimelineItem(item) {
     row.append(element('time', 'w-20 shrink-0 pt-4 text-center font-mono text-xs font-bold text-slate-500', formatClock(item.time)));
     const wrapper = element('div', 'timeline-entry-card min-w-0 flex-1');
     const article = element('article', `panel group ${block.is_hidden ? 'ring-2 ring-amber-400' : ''} ${block.optimistic ? 'ring-2 ring-indigo-300' : ''}`); article.id = `block-${block.id}`;
-    const description = element('div', block.event ? 'block-event-description flex flex-wrap items-center gap-2 leading-relaxed' : 'block-text-description whitespace-pre-wrap leading-relaxed'); description.dataset.blockDescription = '';
-    const emoji = element('span', block.event ? 'text-xl' : 'mr-2 inline-block align-middle text-xl', block.emoji || '📝'); emoji.dataset.blockEmoji = ''; emoji.setAttribute('aria-hidden', 'true');
-    const label = element('span', `mr-2 inline-flex align-middle rounded-lg px-2 py-1 text-xs font-bold uppercase ${block.event ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`, block.type.replaceAll('_', ' ')); label.dataset.blockTypeLabel = '';
+    const sensorBrowsing = ['sensor_browser', 'sensor_mobile_browser'].includes(block.type);
+    const description = element('div', block.event || sensorBrowsing ? 'flex flex-wrap items-center gap-2 leading-relaxed' : 'block-text-description whitespace-pre-wrap leading-relaxed'); description.dataset.blockDescription = '';
+    const emoji = element('span', block.event || sensorBrowsing ? 'text-xl' : 'mr-2 inline-block align-middle text-xl', block.emoji || '📝'); emoji.dataset.blockEmoji = ''; emoji.setAttribute('aria-hidden', 'true');
+    const labelText = block.type === 'sensor_mobile_browser' ? 'Mobile browsing' : (block.type === 'sensor_browser' ? 'Browsing' : block.type.replaceAll('_', ' '));
+    const labelColor = block.type === 'sensor_mobile_browser' ? 'bg-violet-100 text-violet-800' : (block.type === 'sensor_browser' ? 'bg-sky-100 text-sky-800' : (block.event ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'));
+    const label = element('span', `mr-2 inline-flex align-middle rounded-lg px-2 py-1 text-xs font-bold uppercase ${labelColor}`, labelText); label.dataset.blockTypeLabel = '';
     description.append(emoji, label);
     if (block.is_hidden) description.append(element('span', 'mr-2 inline-flex align-middle rounded-lg bg-amber-100 px-2 py-1 text-xs font-bold uppercase text-amber-800', 'Hidden'));
     if (block.event) description.append(element('span', 'text-lg font-bold', `${block.event.name}${block.event.value ? ` · ${block.event.value}` : ''}`));
@@ -981,12 +986,20 @@ function browsingDuration(seconds) {
 function openBrowsingDetails(item) {
     const root = document.querySelector('[data-overlay="browsing"]');
     if (!root) return;
-    root.querySelector('[data-browsing-detail-start]').textContent = `Started ${item.dataset.browsingStart}`;
-    root.querySelector('[data-browsing-detail-total]').textContent = browsingDuration(item.dataset.browsingTotal);
+    const visitsMode = item.dataset.browsingMode === 'visits';
+    const total = Number(item.dataset.browsingTotal || 0);
+    root.querySelector('[data-browsing-detail-source]').textContent = visitsMode ? 'Synced Chrome history' : 'Chrome sensor';
+    root.querySelector('[data-browsing-detail-title]').textContent = visitsMode ? 'Mobile browsing' : 'Browsing';
+    root.querySelector('[data-browsing-detail-start]').textContent = `${visitsMode ? 'First visit' : 'Started'} ${item.dataset.browsingStart}`;
+    root.querySelector('[data-browsing-detail-total]').textContent = visitsMode ? `${total} ${total === 1 ? 'visit' : 'visits'}` : browsingDuration(total);
+    root.querySelector('[data-browsing-detail-privacy]').textContent = visitsMode
+        ? 'Only domains, visit timestamps, and counts are stored. Individual page paths, titles, and query strings are not added to your log.'
+        : 'Only site domains and time totals are stored. Individual page paths, titles, and query strings are not added to your log.';
     const rows = JSON.parse(item.dataset.browsingDomains || '[]').map(domain => {
         const row = cloneTemplate('browsing-domain-row-template');
         row.querySelector('[data-browsing-domain-name]').textContent = domain.domain;
-        row.querySelector('[data-browsing-domain-time]').textContent = browsingDuration(domain.seconds);
+        const count = Number(domain.visits || 0);
+        row.querySelector('[data-browsing-domain-time]').textContent = visitsMode ? `${count} ${count === 1 ? 'visit' : 'visits'}` : browsingDuration(domain.seconds);
         return row;
     });
     root.querySelector('[data-browsing-domain-list]').replaceChildren(...rows);
@@ -1066,7 +1079,7 @@ function addOptimisticTimelineBlock(state, {id, time, emoji, content, kind = 'te
             id, client_id:id, type:kind === 'event' ? 'event' : 'text', emoji, content, is_hidden:false, updated:'syncing', optimistic:true,
             edit_kind:kind === 'event' ? 'event' : 'block', edit_url:editUrl, hide_url:hideUrl, delete_url:deleteUrl,
             event:kind === 'event' ? {name:eventName, value:selectedValue || null, location:null} : null,
-            attachments:[], browsing_domains:[], github_events:[], calendar_event:null,
+            attachments:[], browsing_domains:[], mobile_browsing_domains:[], github_events:[], calendar_event:null,
         },
     };
     const followingIndex = state.timeline.findIndex(candidate => ['block', 'schedule', 'now'].includes(candidate.kind) && (candidate.time || '24:00') > time);

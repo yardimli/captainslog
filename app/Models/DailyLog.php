@@ -42,6 +42,11 @@ class DailyLog extends Model
         return $this->hasMany(BrowsingActivity::class);
     }
 
+    public function mobileBrowsingVisits(): HasMany
+    {
+        return $this->hasMany(MobileBrowsingVisit::class);
+    }
+
     public function kindleReadingProgress(): HasMany
     {
         return $this->hasMany(KindleReadingProgress::class);

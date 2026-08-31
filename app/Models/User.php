@@ -108,6 +108,11 @@ class User extends Authenticatable
         return $this->hasMany(BrowsingActivity::class);
     }
 
+    public function mobileBrowsingVisits()
+    {
+        return $this->hasMany(MobileBrowsingVisit::class);
+    }
+
     public function kindleReadingProgress()
     {
         return $this->hasMany(KindleReadingProgress::class);
