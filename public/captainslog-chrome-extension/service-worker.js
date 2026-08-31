@@ -113,7 +113,7 @@ async function syncMobileHistory(fullScan = false) {
   await chrome.storage.session.set({mobileHistorySyncRunning: true});
   try {
     const config = await settings();
-    if (!config.pairingKey || config.connectionStatus !== 'connected') return;
+    if (!config.pairingKey) throw new Error('Connect the extension to Captain\'s Log before syncing mobile history.');
     const appUrl = normalizeAppUrl(config.appUrl);
     const endTime = Date.now();
     const initialStart = endTime - (90 * 24 * 60 * 60 * 1000);
@@ -122,11 +122,12 @@ async function syncMobileHistory(fullScan = false) {
       : initialStart;
     const visits = await remoteHistoryVisits(startTime, endTime, new URL(appUrl).origin);
     let imported = 0;
-    for (let offset = 0; offset < visits.length; offset += 500) {
+    const batches = visits.length ? Array.from({length: Math.ceil(visits.length / 500)}, (_value, index) => visits.slice(index * 500, (index + 1) * 500)) : [[]];
+    for (const batch of batches) {
       const response = await fetch(new URL('api/sensors/browser/mobile-history', appUrl), {
         method: 'POST',
         headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CaptainsLog-Key': config.pairingKey},
-        body: JSON.stringify({visits: visits.slice(offset, offset + 500)})
+        body: JSON.stringify({visits: batch})
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.message || `Mobile history import returned ${response.status}.`);
@@ -135,7 +136,9 @@ async function syncMobileHistory(fullScan = false) {
     await chrome.storage.local.set({
       lastMobileHistorySyncAt: new Date(endTime).toISOString(),
       lastMobileHistoryImportCount: imported,
-      mobileHistoryLastError: null
+      mobileHistoryLastError: null,
+      connectionStatus: 'connected',
+      lastError: null
     });
   } catch (error) {
     await chrome.storage.local.set({mobileHistoryLastError: error.message || String(error)});

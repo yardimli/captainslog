@@ -322,7 +322,7 @@ class SensorTest extends TestCase
         $this->assertContains('history', $manifest['permissions']);
         $this->assertContains('kindle-tracker.js', $manifest['content_scripts'][0]['js']);
         $this->assertFileExists(public_path('captainslog-chrome-extension/kindle-tracker.js'));
-        $this->assertSame('1.3.1', $manifest['version']);
+        $this->assertSame('1.3.2', $manifest['version']);
         $this->assertStringContainsString('Sync past data', file_get_contents(public_path('captainslog-chrome-extension/options.html')));
     }
 
@@ -370,6 +370,26 @@ class SensorTest extends TestCase
             ->assertSee('"visits":5', false)
             ->assertDontSee('/one?private=yes');
         Carbon::setTestNow();
+    }
+
+    public function test_mobile_browser_sensor_accepts_an_empty_scan_to_verify_pairing(): void
+    {
+        $user = User::factory()->create();
+        $key = str_repeat('v', 64);
+        $sensor = Sensor::create([
+            'user_id' => $user->id,
+            'type' => Sensor::BROWSER,
+            'username' => 'Chrome extension',
+            'pairing_key_hash' => hash('sha256', $key),
+            'enabled' => true,
+        ]);
+
+        $this->withHeader('X-CaptainsLog-Key', $key)
+            ->postJson(route('api.sensors.browser.mobile-history'), ['visits' => []])
+            ->assertCreated()
+            ->assertExactJson(['imported' => 0, 'duplicates' => 0, 'blocks' => 0]);
+
+        $this->assertNotNull($sensor->fresh()->last_checked_at);
     }
 
     public function test_kindle_sensor_records_progress_history_in_one_daily_book_entry(): void

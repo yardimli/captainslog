@@ -11,7 +11,7 @@ class MobileBrowserSensorApiController extends Controller
     public function __invoke(Request $request, MobileBrowsingRecorder $recorder)
     {
         $data = $request->validate([
-            'visits' => ['required', 'array', 'min:1', 'max:500'],
+            'visits' => ['present', 'array', 'max:500'],
             'visits.*.url' => ['required', 'url:http,https', 'max:2048'],
             'visits.*.visited_at' => ['required', 'date'],
             'visits.*.visit_key' => ['required', 'string', 'size:64', 'regex:/^[a-f0-9]{64}$/'],
