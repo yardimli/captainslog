@@ -322,8 +322,12 @@ class SensorTest extends TestCase
         $this->assertContains('history', $manifest['permissions']);
         $this->assertContains('kindle-tracker.js', $manifest['content_scripts'][0]['js']);
         $this->assertFileExists(public_path('captainslog-chrome-extension/kindle-tracker.js'));
-        $this->assertSame('1.3.2', $manifest['version']);
-        $this->assertStringContainsString('Sync past data', file_get_contents(public_path('captainslog-chrome-extension/options.html')));
+        $this->assertSame('1.4.0', $manifest['version']);
+        $options = file_get_contents(public_path('captainslog-chrome-extension/options.html'));
+        $this->assertStringContainsString('Sync past data', $options);
+        $this->assertStringContainsString('Chrome history debug', $options);
+        $this->assertStringContainsString('data-options-tab="debug"', $options);
+        $this->assertStringContainsString('history-scan-complete', $worker);
     }
 
     public function test_mobile_browser_sensor_groups_synced_visits_by_hour_and_counts_domains(): void

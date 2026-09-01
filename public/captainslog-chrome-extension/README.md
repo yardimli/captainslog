@@ -11,3 +11,5 @@ The extension sends only the active HTTP(S) hostname when the active tab changes
 When Chrome **History and tabs** sync is enabled, the extension also scans history synchronized from other devices every five minutes. It sends only the hostname, visit time, and a one-way deduplication hash. Captain's Log groups these visits into separate **Mobile browsing** blocks by hour and counts visits per domain. Chrome identifies them only as non-local visits, so history from multiple remote devices cannot be separated.
 
 Use **Sync past data** in the extension settings to ignore the incremental cursor and rescan the complete history range Chrome still retains. The scan pages through the available history index and the server safely ignores visits it has already imported.
+
+The **Debug** tab contains a paginated raw-history inspector and up to 1,000 extension diagnostic messages. The history view shows each visit's full URL, timestamp, transition, and `isLocal` value locally so sync and classification problems can be diagnosed. **Copy report** copies the current status, history snapshot, and messages as JSON; full URLs in that report should be treated as private.

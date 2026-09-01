@@ -4,6 +4,22 @@ const HEARTBEAT_ALARM = 'captainslog-browsing-heartbeat';
 const MOBILE_HISTORY_ALARM = 'captainslog-mobile-history';
 const KINDLE_CHECK_ALARM = 'captainslog-kindle-session-check';
 const KINDLE_SYNC_TIMEOUT_PREFIX = 'captainslog-kindle-sync-timeout-';
+const DEBUG_MESSAGE_LIMIT = 1000;
+let debugWriteQueue = Promise.resolve();
+
+function debugLog(level, event, details = {}) {
+  const entry = {at: new Date().toISOString(), level, event, details};
+  console[level === 'error' ? 'error' : 'log'](`[Captain's Log] ${event}`, details);
+  debugWriteQueue = debugWriteQueue.then(async () => {
+    const stored = await chrome.storage.local.get(['debugMessages']);
+    const messages = Array.isArray(stored.debugMessages) ? stored.debugMessages : [];
+    messages.push(entry);
+    await chrome.storage.local.set({debugMessages: messages.slice(-DEBUG_MESSAGE_LIMIT)});
+  }).catch(error => {
+    console.error('[Captain\'s Log] Could not store debug message', error);
+  });
+  return debugWriteQueue;
+}
 
 const randomKey = () => `${crypto.randomUUID().replaceAll('-', '')}${crypto.randomUUID().replaceAll('-', '')}`;
 const normalizeAppUrl = value => {
@@ -72,12 +88,15 @@ async function remoteHistoryVisits(startTime, endTime, appOrigin) {
   const pageSize = 10000;
   const seenUrls = new Set();
   const visits = [];
+  const counts = {pages: 0, visits: 0, local: 0, remote: 0, unknown: 0};
   let searchEndTime = endTime;
   while (searchEndTime >= startTime) {
     const pages = await chrome.history.search({text: '', startTime, endTime: searchEndTime, maxResults: pageSize});
+    await debugLog('info', 'history-page-read', {startTime: new Date(startTime).toISOString(), endTime: new Date(searchEndTime).toISOString(), pages: pages.length});
     if (!pages.length) break;
     const unseenPages = pages.filter(page => page.url && !seenUrls.has(page.url));
     unseenPages.forEach(page => seenUrls.add(page.url));
+    counts.pages += unseenPages.length;
     for (let offset = 0; offset < unseenPages.length; offset += 25) {
       const group = unseenPages.slice(offset, offset + 25);
       const details = await Promise.all(group.map(async page => {
@@ -89,6 +108,10 @@ async function remoteHistoryVisits(startTime, endTime, appOrigin) {
         }
         if (!['http:', 'https:'].includes(url.protocol) || url.origin === appOrigin) return [];
         const pageVisits = await chrome.history.getVisits({url: page.url});
+        counts.visits += pageVisits.length;
+        counts.local += pageVisits.filter(visit => visit.isLocal === true).length;
+        counts.remote += pageVisits.filter(visit => visit.isLocal === false).length;
+        counts.unknown += pageVisits.filter(visit => typeof visit.isLocal !== 'boolean').length;
         return Promise.all(pageVisits
           .filter(visit => visit.isLocal === false && visit.visitTime >= startTime && visit.visitTime <= endTime)
           .map(async visit => ({
@@ -104,32 +127,42 @@ async function remoteHistoryVisits(startTime, endTime, appOrigin) {
     if (!Number.isFinite(oldestVisitTime) || oldestVisitTime >= searchEndTime) break;
     searchEndTime = oldestVisitTime - 1;
   }
+  await debugLog('info', 'history-scan-complete', {...counts, remoteVisitsSelected: visits.length});
   return visits.sort((left, right) => left.visited_at.localeCompare(right.visited_at));
 }
 
 async function syncMobileHistory(fullScan = false) {
   const running = await chrome.storage.session.get(['mobileHistorySyncRunning']);
-  if (running.mobileHistorySyncRunning) return;
+  if (running.mobileHistorySyncRunning) {
+    await debugLog('info', 'mobile-sync-skipped', {reason: 'another scan is already running', fullScan});
+    return;
+  }
   await chrome.storage.session.set({mobileHistorySyncRunning: true});
+  await debugLog('info', 'mobile-sync-started', {fullScan});
   try {
     const config = await settings();
     if (!config.pairingKey) throw new Error('Connect the extension to Captain\'s Log before syncing mobile history.');
     const appUrl = normalizeAppUrl(config.appUrl);
     const endTime = Date.now();
     const initialStart = endTime - (90 * 24 * 60 * 60 * 1000);
-    const startTime = !fullScan && config.lastMobileHistorySyncAt
-      ? Math.max(initialStart, Date.parse(config.lastMobileHistorySyncAt) - (24 * 60 * 60 * 1000))
-      : initialStart;
+    const startTime = fullScan
+      ? 0
+      : (config.lastMobileHistorySyncAt
+        ? Math.max(initialStart, Date.parse(config.lastMobileHistorySyncAt) - (24 * 60 * 60 * 1000))
+        : initialStart);
+    await debugLog('info', 'mobile-sync-window', {fullScan, start: new Date(startTime).toISOString(), end: new Date(endTime).toISOString(), appOrigin: new URL(appUrl).origin});
     const visits = await remoteHistoryVisits(startTime, endTime, new URL(appUrl).origin);
     let imported = 0;
     const batches = visits.length ? Array.from({length: Math.ceil(visits.length / 500)}, (_value, index) => visits.slice(index * 500, (index + 1) * 500)) : [[]];
-    for (const batch of batches) {
+    for (const [index, batch] of batches.entries()) {
+      await debugLog('info', 'mobile-api-request', {batch: index + 1, batches: batches.length, visits: batch.length});
       const response = await fetch(new URL('api/sensors/browser/mobile-history', appUrl), {
         method: 'POST',
         headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CaptainsLog-Key': config.pairingKey},
         body: JSON.stringify({visits: batch})
       });
       const body = await response.json().catch(() => ({}));
+      await debugLog(response.ok ? 'info' : 'error', 'mobile-api-response', {batch: index + 1, status: response.status, ok: response.ok, imported: body.imported, duplicates: body.duplicates, message: body.message});
       if (!response.ok) throw new Error(body.message || `Mobile history import returned ${response.status}.`);
       imported += Number(body.imported || 0);
     }
@@ -140,8 +173,10 @@ async function syncMobileHistory(fullScan = false) {
       connectionStatus: 'connected',
       lastError: null
     });
+    await debugLog('info', 'mobile-sync-complete', {fullScan, visitsFound: visits.length, imported});
   } catch (error) {
     await chrome.storage.local.set({mobileHistoryLastError: error.message || String(error)});
+    await debugLog('error', 'mobile-sync-failed', {fullScan, message: error.message || String(error), stack: error.stack || null});
   } finally {
     await chrome.storage.session.remove(['mobileHistorySyncRunning']);
   }
@@ -326,6 +361,7 @@ chrome.cookies?.onChanged.addListener(change => {
 });
 chrome.action.onClicked.addListener(() => chrome.runtime.openOptionsPage());
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  debugLog('info', 'runtime-message', {type: message?.type || null, sender: sender?.url || sender?.id || 'unknown'});
   let operation;
   if (message?.type === 'connect') operation = connectToApp();
   else if (message?.type === 'send-now') operation = sendActiveBrowsing();

@@ -11,10 +11,14 @@ main { width: min(680px, calc(100% - 32px)); margin: 48px auto; }
 section { margin-top: 16px; border: 1px solid #cbd5e1; border-radius: 22px; background: #fff; padding: 22px; box-shadow: 0 14px 36px #0f172a12; }
 label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 800; }
 input { width: 100%; border: 1px solid #94a3b8; border-radius: 13px; background: #fff; color: #0f172a; padding: 12px 14px; font: inherit; }
+select { border: 1px solid #94a3b8; border-radius: 11px; background: #fff; color: #0f172a; padding: 9px 11px; font: inherit; }
 .help, #status-detail, #mobile-history-detail, #kindle-status-detail { color: #64748b; font-size: 13px; line-height: 1.55; }
 #extension-actions, #mobile-history-actions, #kindle-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
 button { border: 0; border-radius: 13px; background: #4f46e5; color: #fff; cursor: pointer; padding: 11px 15px; font: inherit; font-weight: 800; }
 button.secondary { border: 1px solid #cbd5e1; background: #fff; color: #334155; }
+button.danger { color: #be123c; }
+#options-tabs { display: flex; gap: 8px; margin-bottom: 18px; }
+#options-tabs button { min-width: 110px; }
 #connection-status-heading { display: flex; align-items: center; gap: 9px; }
 #status-dot { width: 10px; height: 10px; border-radius: 999px; background: #94a3b8; }
 #status-dot[data-state="connected"] { background: #10b981; box-shadow: 0 0 0 5px #10b98122; }
@@ -26,6 +30,28 @@ button.secondary { border: 1px solid #cbd5e1; background: #fff; color: #334155; 
 #mobile-history-dot { width: 10px; height: 10px; border-radius: 999px; background: #f59e0b; }
 #mobile-history-dot[data-state="connected"] { background: #10b981; box-shadow: 0 0 0 5px #10b98122; }
 #mobile-history-dot[data-state="error"] { background: #ef4444; box-shadow: 0 0 0 5px #ef444422; }
+#debug-heading, #debug-actions, #debug-history-controls, #debug-message-heading { display: flex; align-items: center; gap: 10px; }
+#debug-heading > div { flex: 1; }
+#debug-heading p, #debug-heading h2, #debug-message-heading h3 { margin: 0; }
+#debug-heading h2 { margin-top: 3px; font-size: 20px; }
+#debug-history-state { border-radius: 999px; background: #e2e8f0; padding: 5px 9px; font-size: 11px; font-weight: 800; }
+#debug-actions { flex-wrap: wrap; margin-top: 18px; }
+#debug-history-summary { margin-top: 16px; border-radius: 14px; background: #f8fafc; padding: 12px; color: #475569; font-size: 12px; line-height: 1.5; }
+#debug-history-controls { flex-wrap: wrap; margin-top: 12px; }
+#debug-history-controls label { margin: 0; }
+#debug-history-page { color: #64748b; font-size: 12px; font-weight: 700; }
+#debug-history-list { display: grid; gap: 8px; margin-top: 12px; }
+.debug-history-row { border: 1px solid #e2e8f0; border-radius: 13px; background: #f8fafc; padding: 11px; }
+.debug-history-row-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.debug-history-locality { border-radius: 999px; padding: 3px 7px; font-size: 10px; font-weight: 800; }
+.debug-history-locality[data-locality="remote"] { background: #ede9fe; color: #6d28d9; }
+.debug-history-locality[data-locality="local"] { background: #dbeafe; color: #1d4ed8; }
+.debug-history-locality[data-locality="unknown"] { background: #fef3c7; color: #92400e; }
+.debug-history-url { margin-top: 7px; overflow-wrap: anywhere; font: 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.debug-history-meta { margin-top: 5px; color: #64748b; font-size: 11px; }
+#debug-message-heading { justify-content: space-between; margin-top: 24px; }
+#debug-message-heading span { color: #64748b; font-size: 11px; }
+#debug-message-list { max-height: 460px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 14px; background: #020617; color: #dbeafe; padding: 14px; font: 11px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; }
 #kindle-settings-heading, #kindle-status-heading { display: flex; align-items: center; gap: 10px; }
 #kindle-settings-copy { flex: 1; }
 #kindle-settings-copy p, #kindle-settings-copy h2 { margin: 0; }
@@ -49,9 +75,10 @@ button.secondary { border: 1px solid #cbd5e1; background: #fff; color: #334155; 
 @media (prefers-color-scheme: dark) {
   body { background: #020617; color: #e2e8f0; }
   section { border-color: #334155; background: #0f172a; box-shadow: none; }
-  input { border-color: #475569; background: #020617; color: #e2e8f0; }
+  input, select { border-color: #475569; background: #020617; color: #e2e8f0; }
   button.secondary { border-color: #475569; background: #1e293b; color: #e2e8f0; }
   .help, #status-detail, #mobile-history-detail, #kindle-status-detail { color: #94a3b8; }
   #kindle-settings-fields { border-color: #334155; }
   #kindle-status { background: #020617; }
+  #debug-history-state, #debug-history-summary, .debug-history-row { border-color: #334155; background: #020617; color: #cbd5e1; }
 }

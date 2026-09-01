@@ -12,8 +12,6 @@ use Illuminate\Validation\ValidationException;
 
 class MobileBrowsingRecorder
 {
-    public const HISTORY_DAYS = 90;
-
     public function recordBatch(Sensor $sensor, array $visits): array
     {
         $imported = 0;
@@ -29,8 +27,8 @@ class MobileBrowsingRecorder
                 }
 
                 $visitedAt = Carbon::parse($visit['visited_at'])->setTimezone(config('app.timezone'));
-                if ($visitedAt->lt(now()->subDays(self::HISTORY_DAYS)->startOfDay()) || $visitedAt->gt(now()->addMinutes(5))) {
-                    throw ValidationException::withMessages(['visits' => 'Mobile history visits must be from the last 90 days and cannot be in the future.']);
+                if ($visitedAt->gt(now()->addMinutes(5))) {
+                    throw ValidationException::withMessages(['visits' => 'Mobile history visits cannot be in the future.']);
                 }
 
                 $domain = $this->fullHostname($visit['url']);

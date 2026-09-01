@@ -13,6 +13,11 @@
       <div id="extension-logo"><img src="favicon.svg" alt="Captain's Log"></div>
       <div id="extension-title-copy"><p>Captain's Log</p><h1>Browsing sensor</h1></div>
     </header>
+    <nav id="options-tabs" aria-label="Extension sections">
+      <button type="button" data-options-tab="settings" aria-selected="true">Settings</button>
+      <button type="button" class="secondary" data-options-tab="debug" aria-selected="false">Debug</button>
+    </nav>
+    <div id="settings-tab-panel" data-options-tab-panel="settings">
     <section id="connection-settings-card">
       <label for="app-url">Captain's Log URL</label>
       <input id="app-url" type="url" value="http://127.0.0.1:8016/" spellcheck="false">
@@ -55,6 +60,28 @@
           <p id="kindle-status-detail">Open Kindle, sign in, and begin reading to create the first update.</p>
         </div>
       </div>
+    </section>
+    </div>
+    <section id="debug-tab-panel" data-options-tab-panel="debug" hidden>
+      <div id="debug-heading"><div><p class="eyebrow">Diagnostics</p><h2>Chrome history debug</h2></div><span id="debug-history-state">Not scanned</span></div>
+      <p class="help">This stays inside the extension. It shows full URLs only for diagnosis; Captain's Log still receives domains only.</p>
+      <div id="debug-actions">
+        <button id="debug-refresh-history" type="button">Read Chrome history</button>
+        <button id="debug-refresh-messages" type="button" class="secondary">Refresh messages</button>
+        <button id="debug-copy-report" type="button" class="secondary">Copy report</button>
+        <button id="debug-clear-messages" type="button" class="secondary danger">Clear messages</button>
+      </div>
+      <div id="debug-history-summary">Use “Read Chrome history” to inspect what the History API exposes to this extension.</div>
+      <div id="debug-history-controls">
+        <label for="debug-history-filter">Visits</label>
+        <select id="debug-history-filter"><option value="all">All visits</option><option value="remote">Synced (`isLocal: false`)</option><option value="local">Desktop (`isLocal: true`)</option><option value="unknown">Unknown `isLocal`</option></select>
+        <button id="debug-history-previous" type="button" class="secondary">Previous</button>
+        <span id="debug-history-page">Page 0 of 0</span>
+        <button id="debug-history-next" type="button" class="secondary">Next</button>
+      </div>
+      <div id="debug-history-list" aria-live="polite"></div>
+      <div id="debug-message-heading"><h3>Extension messages</h3><span>Newest first · up to 1,000 stored messages</span></div>
+      <pre id="debug-message-list" aria-live="polite">No debug messages recorded yet.</pre>
     </section>
   </main>
   <script src="options.js"></script>
