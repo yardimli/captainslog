@@ -13,3 +13,5 @@ When Chrome **History and tabs** sync is enabled, the extension also scans histo
 Use **Sync past data** in the extension settings to ignore the incremental cursor and rescan the complete history range Chrome still retains. The scan pages through the available history index and the server safely ignores visits it has already imported.
 
 The **Debug** tab contains a paginated raw-history inspector and up to 1,000 extension diagnostic messages. The history view shows each visit's full URL, timestamp, transition, and `isLocal` value locally so sync and classification problems can be diagnosed. **Copy report** copies the current status, history snapshot, and messages as JSON; full URLs in that report should be treated as private.
+
+IP-address and other non-domain history entries are skipped individually and reported as skipped; they never stop the remaining batches. Visits are sent newest-first so recent daily logs are filled before older history.

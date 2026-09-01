@@ -37,7 +37,7 @@ const normalizeKindleUrl = value => {
 };
 
 async function settings() {
-  const keys = ['appUrl', 'pairingKey', 'clientId', 'connectionStatus', 'lastSentAt', 'lastDomain', 'lastError', 'lastMobileHistorySyncAt', 'lastMobileHistoryImportCount', 'mobileHistoryLastError', 'kindleEnabled', 'kindleUrl', 'kindleStatus', 'kindleLastSyncAt', 'kindleLastTitle', 'kindleLastProgress', 'kindleLastError', 'kindleLastFingerprint'];
+  const keys = ['appUrl', 'pairingKey', 'clientId', 'connectionStatus', 'lastSentAt', 'lastDomain', 'lastError', 'lastMobileHistorySyncAt', 'lastMobileHistoryImportCount', 'lastMobileHistoryRejectedCount', 'mobileHistoryLastError', 'kindleEnabled', 'kindleUrl', 'kindleStatus', 'kindleLastSyncAt', 'kindleLastTitle', 'kindleLastProgress', 'kindleLastError', 'kindleLastFingerprint'];
   const saved = await chrome.storage.local.get(keys);
   const updates = {};
   if (!saved.appUrl) updates.appUrl = DEFAULT_APP_URL;
@@ -84,6 +84,13 @@ async function sha256(value) {
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
+function isTrackableHostname(hostname) {
+  const host = String(hostname || '').replace(/^\[|\]$/g, '');
+  if (!host || host.includes(':')) return false;
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host)) return false;
+  return true;
+}
+
 async function remoteHistoryVisits(startTime, endTime, appOrigin) {
   const pageSize = 10000;
   const seenUrls = new Set();
@@ -106,7 +113,7 @@ async function remoteHistoryVisits(startTime, endTime, appOrigin) {
         } catch (_error) {
           return [];
         }
-        if (!['http:', 'https:'].includes(url.protocol) || url.origin === appOrigin) return [];
+        if (!['http:', 'https:'].includes(url.protocol) || url.origin === appOrigin || !isTrackableHostname(url.hostname)) return [];
         const pageVisits = await chrome.history.getVisits({url: page.url});
         counts.visits += pageVisits.length;
         counts.local += pageVisits.filter(visit => visit.isLocal === true).length;
@@ -128,7 +135,7 @@ async function remoteHistoryVisits(startTime, endTime, appOrigin) {
     searchEndTime = oldestVisitTime - 1;
   }
   await debugLog('info', 'history-scan-complete', {...counts, remoteVisitsSelected: visits.length});
-  return visits.sort((left, right) => left.visited_at.localeCompare(right.visited_at));
+  return visits.sort((left, right) => right.visited_at.localeCompare(left.visited_at));
 }
 
 async function syncMobileHistory(fullScan = false) {
@@ -153,6 +160,7 @@ async function syncMobileHistory(fullScan = false) {
     await debugLog('info', 'mobile-sync-window', {fullScan, start: new Date(startTime).toISOString(), end: new Date(endTime).toISOString(), appOrigin: new URL(appUrl).origin});
     const visits = await remoteHistoryVisits(startTime, endTime, new URL(appUrl).origin);
     let imported = 0;
+    let rejected = 0;
     const batches = visits.length ? Array.from({length: Math.ceil(visits.length / 500)}, (_value, index) => visits.slice(index * 500, (index + 1) * 500)) : [[]];
     for (const [index, batch] of batches.entries()) {
       await debugLog('info', 'mobile-api-request', {batch: index + 1, batches: batches.length, visits: batch.length});
@@ -162,18 +170,20 @@ async function syncMobileHistory(fullScan = false) {
         body: JSON.stringify({visits: batch})
       });
       const body = await response.json().catch(() => ({}));
-      await debugLog(response.ok ? 'info' : 'error', 'mobile-api-response', {batch: index + 1, status: response.status, ok: response.ok, imported: body.imported, duplicates: body.duplicates, message: body.message});
+      await debugLog(response.ok ? 'info' : 'error', 'mobile-api-response', {batch: index + 1, status: response.status, ok: response.ok, imported: body.imported, duplicates: body.duplicates, rejected: body.rejected, message: body.message});
       if (!response.ok) throw new Error(body.message || `Mobile history import returned ${response.status}.`);
       imported += Number(body.imported || 0);
+      rejected += Number(body.rejected || 0);
     }
     await chrome.storage.local.set({
       lastMobileHistorySyncAt: new Date(endTime).toISOString(),
       lastMobileHistoryImportCount: imported,
+      lastMobileHistoryRejectedCount: rejected,
       mobileHistoryLastError: null,
       connectionStatus: 'connected',
       lastError: null
     });
-    await debugLog('info', 'mobile-sync-complete', {fullScan, visitsFound: visits.length, imported});
+    await debugLog('info', 'mobile-sync-complete', {fullScan, visitsFound: visits.length, imported, rejected});
   } catch (error) {
     await chrome.storage.local.set({mobileHistoryLastError: error.message || String(error)});
     await debugLog('error', 'mobile-sync-failed', {fullScan, message: error.message || String(error), stack: error.stack || null});

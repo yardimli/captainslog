@@ -131,7 +131,7 @@ async function renderDebugMessages() {
 }
 
 async function render() {
-  const data = await chrome.storage.local.get(['appUrl', 'connectionStatus', 'lastSentAt', 'lastDomain', 'lastError', 'lastMobileHistorySyncAt', 'lastMobileHistoryImportCount', 'mobileHistoryLastError', 'kindleEnabled', 'kindleUrl', 'kindleStatus', 'kindleLastSyncAt', 'kindleLastTitle', 'kindleLastProgress', 'kindleLastError']);
+  const data = await chrome.storage.local.get(['appUrl', 'connectionStatus', 'lastSentAt', 'lastDomain', 'lastError', 'lastMobileHistorySyncAt', 'lastMobileHistoryImportCount', 'lastMobileHistoryRejectedCount', 'mobileHistoryLastError', 'kindleEnabled', 'kindleUrl', 'kindleStatus', 'kindleLastSyncAt', 'kindleLastTitle', 'kindleLastProgress', 'kindleLastError']);
   appUrl.value = data.appUrl || DEFAULT_APP_URL;
   const state = data.connectionStatus || 'unpaired';
   statusDot.dataset.state = state;
@@ -153,7 +153,8 @@ async function render() {
     mobileHistoryDetail.textContent = data.mobileHistoryLastError;
   } else if (data.lastMobileHistorySyncAt) {
     const count = Number(data.lastMobileHistoryImportCount || 0);
-    mobileHistoryDetail.textContent = `Last scan ${formatTime(data.lastMobileHistorySyncAt)} · ${count} new ${count === 1 ? 'visit' : 'visits'}`;
+    const rejected = Number(data.lastMobileHistoryRejectedCount || 0);
+    mobileHistoryDetail.textContent = `Last scan ${formatTime(data.lastMobileHistorySyncAt)} · ${count} new ${count === 1 ? 'visit' : 'visits'}${rejected ? ` · ${rejected} skipped` : ''}`;
   } else {
     mobileHistoryDetail.textContent = 'Waiting for the first synchronized history scan.';
   }
@@ -250,13 +251,14 @@ document.getElementById('debug-clear-messages').addEventListener('click', async 
   await renderDebugMessages();
 });
 document.getElementById('debug-copy-report').addEventListener('click', async () => {
-  const data = await chrome.storage.local.get(['debugMessages', 'connectionStatus', 'lastMobileHistorySyncAt', 'lastMobileHistoryImportCount', 'mobileHistoryLastError']);
+  const data = await chrome.storage.local.get(['debugMessages', 'connectionStatus', 'lastMobileHistorySyncAt', 'lastMobileHistoryImportCount', 'lastMobileHistoryRejectedCount', 'mobileHistoryLastError']);
   const report = {
     generatedAt: new Date().toISOString(),
     status: {
       connectionStatus: data.connectionStatus,
       lastMobileHistorySyncAt: data.lastMobileHistorySyncAt,
       lastMobileHistoryImportCount: data.lastMobileHistoryImportCount,
+      lastMobileHistoryRejectedCount: data.lastMobileHistoryRejectedCount,
       mobileHistoryLastError: data.mobileHistoryLastError
     },
     historySummary: debugHistorySummary.textContent,

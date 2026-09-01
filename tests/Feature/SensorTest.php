@@ -322,7 +322,7 @@ class SensorTest extends TestCase
         $this->assertContains('history', $manifest['permissions']);
         $this->assertContains('kindle-tracker.js', $manifest['content_scripts'][0]['js']);
         $this->assertFileExists(public_path('captainslog-chrome-extension/kindle-tracker.js'));
-        $this->assertSame('1.4.0', $manifest['version']);
+        $this->assertSame('1.4.1', $manifest['version']);
         $options = file_get_contents(public_path('captainslog-chrome-extension/options.html'));
         $this->assertStringContainsString('Sync past data', $options);
         $this->assertStringContainsString('Chrome history debug', $options);
@@ -350,17 +350,18 @@ class SensorTest extends TestCase
             ['url' => 'https://example.com/five', 'visited_at' => '2026-09-01T10:45:00+08:00', 'visit_key' => hash('sha256', 'visit-5')],
             ['url' => 'https://example.com/later', 'visited_at' => '2026-09-01T11:15:00+08:00', 'visit_key' => hash('sha256', 'visit-6')],
             ['url' => 'https://news.example.org/story', 'visited_at' => '2026-09-01T10:50:00+08:00', 'visit_key' => hash('sha256', 'visit-7')],
+            ['url' => 'http://127.0.0.1/private', 'visited_at' => '2026-09-01T10:55:00+08:00', 'visit_key' => hash('sha256', 'visit-invalid-ip')],
         ];
 
         $this->withHeader('X-CaptainsLog-Key', $key)
             ->postJson(route('api.sensors.browser.mobile-history'), ['visits' => $visits])
             ->assertCreated()
-            ->assertJson(['imported' => 7, 'duplicates' => 0, 'blocks' => 2]);
+            ->assertJson(['imported' => 7, 'duplicates' => 0, 'rejected' => 1, 'blocks' => 2]);
 
         $this->withHeader('X-CaptainsLog-Key', $key)
             ->postJson(route('api.sensors.browser.mobile-history'), ['visits' => $visits])
             ->assertCreated()
-            ->assertJson(['imported' => 0, 'duplicates' => 7, 'blocks' => 0]);
+            ->assertJson(['imported' => 0, 'duplicates' => 7, 'rejected' => 1, 'blocks' => 0]);
 
         $this->assertDatabaseCount('mobile_browsing_visits', 7);
         $this->assertDatabaseCount('log_blocks', 2);
@@ -391,7 +392,7 @@ class SensorTest extends TestCase
         $this->withHeader('X-CaptainsLog-Key', $key)
             ->postJson(route('api.sensors.browser.mobile-history'), ['visits' => []])
             ->assertCreated()
-            ->assertExactJson(['imported' => 0, 'duplicates' => 0, 'blocks' => 0]);
+            ->assertExactJson(['imported' => 0, 'duplicates' => 0, 'rejected' => 0, 'blocks' => 0]);
 
         $this->assertNotNull($sensor->fresh()->last_checked_at);
     }

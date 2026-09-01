@@ -8,7 +8,6 @@ use App\Models\MobileBrowsingVisit;
 use App\Models\Sensor;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class MobileBrowsingRecorder
 {
@@ -16,9 +15,10 @@ class MobileBrowsingRecorder
     {
         $imported = 0;
         $duplicates = 0;
+        $rejected = 0;
         $blocks = collect();
 
-        DB::transaction(function () use ($sensor, $visits, &$imported, &$duplicates, $blocks) {
+        DB::transaction(function () use ($sensor, $visits, &$imported, &$duplicates, &$rejected, $blocks) {
             foreach ($visits as $visit) {
                 if (MobileBrowsingVisit::where('user_id', $sensor->user_id)->where('visit_key', $visit['visit_key'])->exists()) {
                     $duplicates++;
@@ -28,10 +28,17 @@ class MobileBrowsingRecorder
 
                 $visitedAt = Carbon::parse($visit['visited_at'])->setTimezone(config('app.timezone'));
                 if ($visitedAt->gt(now()->addMinutes(5))) {
-                    throw ValidationException::withMessages(['visits' => 'Mobile history visits cannot be in the future.']);
+                    $rejected++;
+
+                    continue;
                 }
 
                 $domain = $this->fullHostname($visit['url']);
+                if ($domain === null) {
+                    $rejected++;
+
+                    continue;
+                }
                 $log = DailyLog::where('user_id', $sensor->user_id)->whereDate('log_date', $visitedAt)->first()
                     ?? DailyLog::create(['user_id' => $sensor->user_id, 'log_date' => $visitedAt->copy()->startOfDay()]);
                 $hourStart = $visitedAt->copy()->startOfHour();
@@ -74,7 +81,7 @@ class MobileBrowsingRecorder
             $sensor->update(['last_checked_at' => now(), 'last_error' => null]);
         });
 
-        return ['imported' => $imported, 'duplicates' => $duplicates, 'blocks' => $blocks->count()];
+        return ['imported' => $imported, 'duplicates' => $duplicates, 'rejected' => $rejected, 'blocks' => $blocks->count()];
     }
 
     private function refreshBlock(LogBlock $block): void
@@ -93,12 +100,12 @@ class MobileBrowsingRecorder
         ]);
     }
 
-    private function fullHostname(string $url): string
+    private function fullHostname(string $url): ?string
     {
         $host = strtolower((string) parse_url($url, PHP_URL_HOST));
         $host = trim($host, '.');
         if ($host === '' || filter_var($host, FILTER_VALIDATE_IP)) {
-            throw ValidationException::withMessages(['visits' => 'Send HTTP or HTTPS URLs with domain names.']);
+            return null;
         }
 
         return $host;
