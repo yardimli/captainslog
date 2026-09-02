@@ -336,6 +336,25 @@ function mutateDayState(mutator) {
     return renderDayState(state, {scroll:{x:window.scrollX, y:window.scrollY}});
 }
 
+let pageLoadingRequests = 0;
+function beginPageLoading() {
+    pageLoadingRequests += 1;
+    const overlay = document.querySelector('[data-page-loading-overlay]');
+    if (!overlay) return;
+    overlay.classList.remove('hidden');
+    overlay.classList.add('grid');
+    document.body.setAttribute('aria-busy', 'true');
+}
+
+function finishPageLoading() {
+    pageLoadingRequests = Math.max(0, pageLoadingRequests - 1);
+    if (pageLoadingRequests > 0) return;
+    const overlay = document.querySelector('[data-page-loading-overlay]');
+    overlay?.classList.add('hidden');
+    overlay?.classList.remove('grid');
+    document.body.removeAttribute('aria-busy');
+}
+
 async function fetchDayState(url, {fresh = false} = {}) {
     const key = dayStateKey(url);
     if (!fresh && dayStateCache.has(key)) return dayStateCache.get(key);
@@ -367,18 +386,28 @@ async function navigateToDay(url, {history = true, fresh = false} = {}) {
         scheduleDayReturnReminder();
         return true;
     }
-    const state = await fetchDayState(url, {fresh:true});
-    if (history) window.history.pushState({dayState:true}, '', state.url || url);
-    renderDayState(state);
-    window.scrollTo(0, 0);
-    scheduleDayReturnReminder();
-    return true;
+    beginPageLoading();
+    try {
+        const state = await fetchDayState(url, {fresh:true});
+        if (history) window.history.pushState({dayState:true}, '', state.url || url);
+        renderDayState(state);
+        window.scrollTo(0, 0);
+        scheduleDayReturnReminder();
+        return true;
+    } finally {
+        finishPageLoading();
+    }
 }
 
-async function refreshDayView() {
+async function refreshDayView({loading = true} = {}) {
     if (!document.querySelector('#daily-log-page-container')) return false;
-    const state = await fetchDayState(window.location.href, {fresh:true});
-    return renderDayState(state, {scroll:{x:window.scrollX, y:window.scrollY}});
+    if (loading) beginPageLoading();
+    try {
+        const state = await fetchDayState(window.location.href, {fresh:true});
+        return renderDayState(state, {scroll:{x:window.scrollX, y:window.scrollY}});
+    } finally {
+        if (loading) finishPageLoading();
+    }
 }
 
 function startTodayActivityRefresh() {
@@ -391,7 +420,7 @@ function startTodayActivityRefresh() {
         if (document.querySelector('[data-overlay][data-open="true"], [data-modal-backdrop]')) return;
         running = true;
         lastRefresh = Date.now();
-        try { await refreshDayView(); } catch (_) { /* Retry on the next interval. */ }
+        try { await refreshDayView({loading:false}); } catch (_) { /* Retry on the next interval. */ }
         finally { running = false; }
     };
 

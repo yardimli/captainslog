@@ -48,12 +48,16 @@ class DayStateTest extends TestCase
             ->assertSee('data-calendar-focus-date', false)
             ->assertSee('data-calendar-today-url', false)
             ->assertSee('data-session-expired-overlay', false)
+            ->assertSee('data-page-loading-overlay', false)
             ->assertSee('data-sync-status', false)
             ->assertSee('data-session-keepalive-url', false)
             ->assertSee('data-login-url', false);
 
         $script = file_get_contents(resource_path('js/app.js'));
         $this->assertStringContainsString('function showSessionExpired()', $script);
+        $this->assertStringContainsString('function beginPageLoading()', $script);
+        $this->assertStringContainsString('function finishPageLoading()', $script);
+        $this->assertStringContainsString('refreshDayView({loading:false})', $script);
         $this->assertStringContainsString("'X-Day-State': 'json'", $script);
         $this->assertStringContainsString('mutateDayState', $script);
         $this->assertStringContainsString('function renderTimelineItem(item)', $script);
