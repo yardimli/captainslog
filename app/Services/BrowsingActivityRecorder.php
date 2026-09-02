@@ -110,28 +110,78 @@ class BrowsingActivityRecorder
 
     private function hourBlock(DailyLog $log, Carbon $hourStart, Carbon $observed): LogBlock
     {
-        $existing = BrowsingActivity::where('daily_log_id', $log->id)
-            ->where('started_at', '>=', $hourStart)
-            ->where('started_at', '<', $hourStart->copy()->addHour())
-            ->with('logBlock')
-            ->first()?->logBlock;
-        if ($existing) {
-            return $existing;
+        $block = $this->findOrCreateHourBlock($log, $hourStart, $observed);
+        $this->repairHourAssignments($log, $hourStart, $block);
+
+        return $block;
+    }
+
+    private function findOrCreateHourBlock(DailyLog $log, Carbon $hourStart, Carbon $observed): LogBlock
+    {
+        $block = $log->blocks()
+            ->where('type', 'sensor_browser')
+            ->where('occurred_at', '>=', $hourStart)
+            ->where('occurred_at', '<', $hourStart->copy()->addHour())
+            ->first();
+        if (! $block) {
+            $block = $log->blocks()->create([
+                'type' => 'sensor_browser',
+                'emoji' => '🌐',
+                'content' => 'Browsing · 1 domain · under 1 min',
+                'position' => ((int) $log->blocks()->max('position')) + 1,
+                'occurred_at' => $observed,
+                'metadata' => [
+                    'sensor' => Sensor::BROWSER,
+                    'hour_start' => $hourStart->toIso8601String(),
+                    'total_seconds' => 0,
+                    'domain_count' => 1,
+                ],
+            ]);
         }
 
-        return $log->blocks()->create([
-            'type' => 'sensor_browser',
-            'emoji' => '🌐',
-            'content' => 'Browsing · 1 domain · under 1 min',
-            'position' => ((int) $log->blocks()->max('position')) + 1,
-            'occurred_at' => $observed,
-            'metadata' => [
-                'sensor' => Sensor::BROWSER,
-                'hour_start' => $hourStart->toIso8601String(),
-                'total_seconds' => 0,
-                'domain_count' => 1,
-            ],
-        ]);
+        return $block;
+    }
+
+    private function repairHourAssignments(DailyLog $log, Carbon $hourStart, LogBlock $block): void
+    {
+        $mislinked = BrowsingActivity::where('daily_log_id', $log->id)
+            ->where('started_at', '>=', $hourStart)
+            ->where('started_at', '<', $hourStart->copy()->addHour())
+            ->where('log_block_id', '!=', $block->id)
+            ->get();
+        if ($mislinked->isEmpty()) {
+            return;
+        }
+
+        $oldBlocks = LogBlock::whereIn('id', $mislinked->pluck('log_block_id')->unique())->get();
+        BrowsingActivity::whereKey($mislinked->pluck('id'))->update(['log_block_id' => $block->id]);
+        foreach ($oldBlocks as $oldBlock) {
+            $this->splitMislinkedHours($log, $oldBlock);
+            if ($oldBlock->browsingActivities()->exists()) {
+                $this->refreshBlock($oldBlock);
+            } else {
+                $oldBlock->delete();
+            }
+        }
+        $this->refreshBlock($block);
+    }
+
+    private function splitMislinkedHours(DailyLog $log, LogBlock $block): void
+    {
+        $blockHour = filled(data_get($block->metadata, 'hour_start'))
+            ? Carbon::parse(data_get($block->metadata, 'hour_start'))->setTimezone(config('app.timezone'))->startOfHour()
+            : $block->occurred_at->copy()->startOfHour();
+        $groups = $block->browsingActivities()->get()
+            ->filter(fn (BrowsingActivity $activity) => ! $activity->started_at->copy()->startOfHour()->equalTo($blockHour))
+            ->groupBy(fn (BrowsingActivity $activity) => $activity->started_at->format('Y-m-d H'));
+
+        foreach ($groups as $activities) {
+            $observed = $activities->min('started_at');
+            $hourStart = $observed->copy()->startOfHour();
+            $target = $this->findOrCreateHourBlock($log, $hourStart, $observed);
+            BrowsingActivity::whereKey($activities->pluck('id'))->update(['log_block_id' => $target->id]);
+            $this->refreshBlock($target);
+        }
     }
 
     private function refreshBlock(LogBlock $block): void

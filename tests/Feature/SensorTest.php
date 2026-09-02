@@ -285,6 +285,80 @@ class SensorTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_browser_sensor_does_not_reuse_a_block_from_an_older_hour_when_an_activity_is_mislinked(): void
+    {
+        Carbon::setTestNow('2026-09-02 23:37:20');
+        $user = User::factory()->create();
+        $key = str_repeat('p', 64);
+        $sensor = Sensor::create([
+            'user_id' => $user->id,
+            'type' => Sensor::BROWSER,
+            'username' => 'Chrome extension',
+            'pairing_key_hash' => hash('sha256', $key),
+            'enabled' => true,
+        ]);
+        $log = $user->dailyLogs()->create(['log_date' => '2026-09-02']);
+        $oldBlock = $log->blocks()->create([
+            'type' => 'sensor_browser',
+            'content' => 'Browsing · 2 domains · 1 min',
+            'occurred_at' => '2026-09-02 19:11:04',
+            'metadata' => ['sensor' => Sensor::BROWSER, 'hour_start' => '2026-09-02T19:00:00+08:00'],
+            'position' => 1,
+        ]);
+        $oldActivity = BrowsingActivity::create([
+            'user_id' => $user->id,
+            'daily_log_id' => $log->id,
+            'log_block_id' => $oldBlock->id,
+            'domain' => 'older.example.com',
+            'client_id' => 'old-client',
+            'started_at' => '2026-09-02 19:11:04',
+            'last_seen_at' => '2026-09-02 19:12:04',
+            'ended_at' => '2026-09-02 19:12:04',
+            'duration_seconds' => 60,
+        ]);
+        BrowsingActivity::create([
+            'user_id' => $user->id,
+            'daily_log_id' => $log->id,
+            'log_block_id' => $oldBlock->id,
+            'domain' => 'mislinked.example.com',
+            'client_id' => 'old-client',
+            'started_at' => '2026-09-02 23:32:52',
+            'last_seen_at' => '2026-09-02 23:32:52',
+            'ended_at' => '2026-09-02 23:32:52',
+            'duration_seconds' => 0,
+        ]);
+        BrowsingActivity::create([
+            'user_id' => $user->id,
+            'daily_log_id' => $log->id,
+            'log_block_id' => $oldBlock->id,
+            'domain' => 'also-mislinked.example.com',
+            'client_id' => 'old-client',
+            'started_at' => '2026-09-02 21:15:00',
+            'last_seen_at' => '2026-09-02 21:16:00',
+            'ended_at' => '2026-09-02 21:16:00',
+            'duration_seconds' => 60,
+        ]);
+
+        $response = $this->withHeader('X-CaptainsLog-Key', $key)->postJson(route('api.sensors.browser.activity'), [
+            'url' => 'https://github.com',
+            'observed_at' => now()->toIso8601String(),
+            'client_id' => 'current-client',
+        ])->assertCreated();
+
+        $activity = BrowsingActivity::where('domain', 'github.com')->firstOrFail();
+        $this->assertNotSame($oldBlock->id, $activity->log_block_id);
+        $this->assertSame('23', $activity->logBlock->occurred_at->format('H'));
+        $this->assertSame('sensor_browser', $activity->logBlock->type);
+        $this->assertSame($activity->log_block_id, BrowsingActivity::where('domain', 'mislinked.example.com')->value('log_block_id'));
+        $this->assertSame($oldBlock->id, $oldActivity->fresh()->log_block_id);
+        $repairedActivity = BrowsingActivity::where('domain', 'also-mislinked.example.com')->firstOrFail();
+        $this->assertNotSame($oldBlock->id, $repairedActivity->log_block_id);
+        $this->assertSame('21', $repairedActivity->logBlock->occurred_at->format('H'));
+        $this->assertSame('Browsing · 1 domain · 1 min', $oldBlock->fresh()->content);
+        $this->assertSame('2026-09-02', $response->json('log_date'));
+        Carbon::setTestNow();
+    }
+
     public function test_browser_sensor_api_rejects_unknown_keys_and_extension_bundle_is_present(): void
     {
         $this->withHeader('X-CaptainsLog-Key', str_repeat('x', 64))->postJson(route('api.sensors.browser.activity'), [
