@@ -557,6 +557,15 @@ class CaptainsLogTest extends TestCase
         $this->assertStringNotContainsString('function gapTime', $script);
     }
 
+    public function test_empty_daily_log_space_opens_the_default_composer(): void
+    {
+        $script = file_get_contents(resource_path('js/app.js'));
+
+        $this->assertStringContainsString("e.target === document.querySelector('#timeline')", $script);
+        $this->assertStringContainsString("e.target === document.querySelector('#daily-log-page-container')", $script);
+        $this->assertStringContainsString('if (emptyLogSpace && !timelineItem && !composerTrigger) configureComposer();', $script);
+    }
+
     public function test_recorded_planner_entries_can_be_hidden_but_scheduled_controls_cannot(): void
     {
         Carbon::setTestNow('2026-08-16 14:00:00');

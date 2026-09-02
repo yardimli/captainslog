@@ -9,14 +9,15 @@ let debugWriteQueue = Promise.resolve();
 
 function debugLog(level, event, details = {}) {
   const entry = {at: new Date().toISOString(), level, event, details};
-  console[level === 'error' ? 'error' : 'log'](`[Captain's Log] ${event}`, details);
+  const detailText = JSON.stringify(details);
+  console[level === 'error' ? 'warn' : 'log'](`[Captain's Log] ${event}${detailText === '{}' ? '' : ` ${detailText}`}`);
   debugWriteQueue = debugWriteQueue.then(async () => {
     const stored = await chrome.storage.local.get(['debugMessages']);
     const messages = Array.isArray(stored.debugMessages) ? stored.debugMessages : [];
     messages.push(entry);
     await chrome.storage.local.set({debugMessages: messages.slice(-DEBUG_MESSAGE_LIMIT)});
   }).catch(error => {
-    console.error('[Captain\'s Log] Could not store debug message', error);
+    console.warn(`[Captain's Log] Could not store debug message: ${error.message || String(error)}`);
   });
   return debugWriteQueue;
 }
@@ -37,7 +38,7 @@ const normalizeKindleUrl = value => {
 };
 
 async function settings() {
-  const keys = ['appUrl', 'pairingKey', 'clientId', 'connectionStatus', 'lastSentAt', 'lastDomain', 'lastError', 'lastMobileHistorySyncAt', 'lastMobileHistoryImportCount', 'lastMobileHistoryRejectedCount', 'mobileHistoryLastError', 'kindleEnabled', 'kindleUrl', 'kindleStatus', 'kindleLastSyncAt', 'kindleLastTitle', 'kindleLastProgress', 'kindleLastError', 'kindleLastFingerprint'];
+  const keys = ['appUrl', 'pairingKey', 'clientId', 'connectionStatus', 'lastSentAt', 'lastDomain', 'lastLogDate', 'lastError', 'lastMobileHistorySyncAt', 'lastMobileHistoryImportCount', 'lastMobileHistoryRejectedCount', 'mobileHistoryLastError', 'kindleEnabled', 'kindleUrl', 'kindleStatus', 'kindleLastSyncAt', 'kindleLastTitle', 'kindleLastProgress', 'kindleLastError', 'kindleLastFingerprint'];
   const saved = await chrome.storage.local.get(keys);
   const updates = {};
   if (!saved.appUrl) updates.appUrl = DEFAULT_APP_URL;
@@ -72,7 +73,7 @@ async function sendActiveBrowsing() {
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.message || `Captain's Log returned ${response.status}.`);
-    await chrome.storage.local.set({connectionStatus: 'connected', lastSentAt: new Date().toISOString(), lastDomain: body.domain || browsingUrl.hostname, lastError: null});
+    await chrome.storage.local.set({connectionStatus: 'connected', lastSentAt: new Date().toISOString(), lastDomain: body.domain || browsingUrl.hostname, lastLogDate: body.log_date || null, lastError: null});
   } catch (error) {
     await chrome.storage.local.set({connectionStatus: 'error', lastError: error.message || String(error)});
   }
@@ -234,10 +235,29 @@ async function closeKindleSyncTab(tabId) {
   await chrome.alarms.clear(`${KINDLE_SYNC_TIMEOUT_PREFIX}${tabId}`);
   await chrome.tabs.remove(tabId).catch(() => {});
   const current = await chrome.storage.session.get(['kindleSyncTabId']);
-  if (current.kindleSyncTabId === tabId) await chrome.storage.session.remove(['kindleSyncTabId']);
+  if (current.kindleSyncTabId === tabId) await chrome.storage.session.remove(['kindleSyncTabId', 'kindleSyncReportFailure']);
 }
 
-async function syncKindleInBackground() {
+async function handleKindleSyncTimeout(tabId) {
+  const current = await chrome.storage.session.get(['kindleSyncTabId', 'kindleSyncReportFailure']);
+  if (current.kindleSyncTabId !== tabId) return;
+  const reportFailure = current.kindleSyncReportFailure === true;
+  await closeKindleSyncTab(tabId);
+  const config = await settings();
+  if (reportFailure) {
+    await setKindleStatus('error', {kindleLastError: 'Kindle opened the recent book but no reading position was detected. Use Open / resync Kindle to check the reader.'});
+    return;
+  }
+  await setKindleStatus(config.kindleLastSyncAt ? 'connected' : 'ready', {kindleLastError: null});
+}
+
+async function expireKindleSession(tabId, message) {
+  const current = await chrome.storage.session.get(['kindleSyncTabId']);
+  if (tabId && current.kindleSyncTabId === tabId) await closeKindleSyncTab(tabId);
+  await setKindleStatus('expired', {kindleLastError: message});
+}
+
+async function syncKindleInBackground(reportFailure = false) {
   const config = await settings();
   if (!config.kindleEnabled) return {ok: false, disabled: true};
   try {
@@ -269,11 +289,13 @@ async function syncKindleInBackground() {
       return {ok: true, empty: true};
     }
 
+    const libraryPercentage = Number(book.percentageRead);
+    if (String(book.percentageRead ?? '').trim() !== '' && Number.isFinite(libraryPercentage) && libraryPercentage >= 0 && libraryPercentage <= 100) {
+      return sendKindleProgress({title: book.title, author: Array.isArray(book.authors) ? book.authors.join(', ') : (book.author || null), asin: book.asin || null, percentage_read: libraryPercentage, location: null});
+    }
+
     const readerPath = book.webReaderUrl || book.readerUrl || book.readUrl;
     if (!readerPath) {
-      if (book.percentageRead !== null && book.percentageRead !== undefined) {
-        return sendKindleProgress({title: book.title, author: Array.isArray(book.authors) ? book.authors.join(', ') : (book.author || null), asin: book.asin || null, percentage_read: Number(book.percentageRead), location: null});
-      }
       throw new Error('Kindle did not provide a reader URL for the most recent book.');
     }
 
@@ -282,7 +304,7 @@ async function syncKindleInBackground() {
     const previous = await chrome.storage.session.get(['kindleSyncTabId']);
     await closeKindleSyncTab(previous.kindleSyncTabId);
     const tab = await chrome.tabs.create({url: readerUrl.toString(), active: false});
-    await chrome.storage.session.set({kindleSyncTabId: tab.id});
+    await chrome.storage.session.set({kindleSyncTabId: tab.id, kindleSyncReportFailure: reportFailure});
     await chrome.alarms.create(`${KINDLE_SYNC_TIMEOUT_PREFIX}${tab.id}`, {delayInMinutes: 2});
     return {ok: true, loading: true};
   } catch (error) {
@@ -295,7 +317,15 @@ async function sendKindleProgress(progress) {
   const config = await settings();
   if (!config.kindleEnabled) return {ok: false, disabled: true};
   const fingerprint = JSON.stringify([progress.asin || '', progress.title, progress.percentage_read ?? '', progress.location || '']);
-  if (fingerprint === config.kindleLastFingerprint) return {ok: true, unchanged: true};
+  if (fingerprint === config.kindleLastFingerprint) {
+    await setKindleStatus('connected', {
+      kindleLastSyncAt: new Date().toISOString(),
+      kindleLastTitle: config.kindleLastTitle || progress.title,
+      kindleLastProgress: config.kindleLastProgress ?? progress.percentage_read ?? progress.location,
+      kindleLastError: null
+    });
+    return {ok: true, unchanged: true};
+  }
   try {
     const response = await fetch(new URL('api/sensors/kindle/progress', normalizeAppUrl(config.appUrl)), {
       method: 'POST',
@@ -350,14 +380,14 @@ chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name === KINDLE_CHECK_ALARM) syncKindleInBackground();
   if (alarm.name.startsWith(KINDLE_SYNC_TIMEOUT_PREFIX)) {
     const tabId = Number(alarm.name.slice(KINDLE_SYNC_TIMEOUT_PREFIX.length));
-    closeKindleSyncTab(tabId).then(() => setKindleStatus('error', {kindleLastError: 'Kindle opened the recent book but no reading position was detected. Use Open / resync Kindle to check the reader.'}));
+    handleKindleSyncTimeout(tabId);
   }
 });
 chrome.tabs.onActivated.addListener(() => sendActiveBrowsing());
-chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (tab.active && (changeInfo.url || changeInfo.status === 'complete')) sendActiveBrowsing();
   if (changeInfo.url && /amazon\.[^/]+\/ap\/signin/i.test(changeInfo.url)) settings().then(config => {
-    if (config.kindleEnabled) setKindleStatus('expired', {kindleLastError: 'Kindle redirected to sign in. Sign in and use Resync Kindle.'});
+    if (config.kindleEnabled) expireKindleSession(tabId, 'Kindle redirected to sign in. Sign in and use Resync Kindle.');
   });
 });
 chrome.windows.onFocusChanged.addListener(windowId => {
@@ -379,13 +409,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   else if (message?.type === 'mobile-history-sync-past') operation = syncMobileHistory(true);
   else if (message?.type === 'kindle-connect') operation = connectKindle();
   else if (message?.type === 'kindle-check') operation = checkKindleSession();
-  else if (message?.type === 'kindle-sync-now') operation = syncKindleInBackground();
+  else if (message?.type === 'kindle-sync-now') operation = syncKindleInBackground(true);
   else if (message?.type === 'kindle-progress') operation = sendKindleProgress(message.progress || {}).then(async result => {
     const sync = await chrome.storage.session.get(['kindleSyncTabId']);
     if (result?.ok && sender.tab?.id === sync.kindleSyncTabId) await closeKindleSyncTab(sender.tab.id);
     return result;
   });
-  else if (message?.type === 'kindle-session-expired') operation = setKindleStatus('expired', {kindleLastError: 'Kindle is asking you to sign in. Sign in and use Resync Kindle.'});
+  else if (message?.type === 'kindle-session-expired') operation = expireKindleSession(sender.tab?.id, 'Kindle is asking you to sign in. Sign in and use Resync Kindle.');
   else return false;
   operation.then(result => sendResponse(result || {ok: true})).catch(error => sendResponse({ok: false, error: error.message}));
   return true;

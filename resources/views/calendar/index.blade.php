@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
-    <div id="calendar-page-container" class="mx-auto max-w-7xl space-y-4 p-4 sm:p-6 lg:p-8">
+    <div id="calendar-page-container" class="mx-auto max-w-7xl space-y-4 p-4 sm:p-6 lg:p-8" data-calendar-focus-date="{{ $focus->toDateString() }}" data-calendar-today-url="{{ route('calendar', now()->toDateString()) }}?view={{ $view }}">
         <div id="calendar-navigation-controls" class="panel flex flex-wrap items-center gap-2">
             @php $jump = $view === 'month' ? 'month' : ($view === 'week' ? 'week' : 'day'); @endphp
             <a class="btn-secondary" href="{{ route('calendar', $focus->copy()->sub(1, $jump)->toDateString()) }}?view={{ $view }}">← Previous</a>

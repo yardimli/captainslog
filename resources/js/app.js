@@ -125,9 +125,55 @@ window.addEventListener('pagehide', () => {
 const dayStateCache = new Map();
 const dayStateRequests = new Map();
 let activeDayState = null;
+const DAY_RETURN_REMINDER_DELAY = 60 * 60 * 1000;
+let dayReturnReminderTimer = null;
+let dayReturnPromptOpen = false;
 const supportsDayStateNavigation = () => Boolean(document.querySelector('#daily-log-page-container'));
 const snapshotDayState = () => activeDayState ? structuredClone(activeDayState) : null;
 const restoreDayState = state => { if (state) renderDayState(state, {scroll:{x:window.scrollX, y:window.scrollY}}); };
+
+function localDateKey(date = new Date()) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function viewedCalendarDate() {
+    return activeDayState?.date || document.querySelector('[data-calendar-focus-date]')?.dataset.calendarFocusDate || null;
+}
+
+function scheduleDayReturnReminder() {
+    clearTimeout(dayReturnReminderTimer);
+    dayReturnReminderTimer = null;
+    if (!viewedCalendarDate()) return;
+    dayReturnReminderTimer = window.setTimeout(showDayReturnReminder, DAY_RETURN_REMINDER_DELAY);
+}
+
+async function showDayReturnReminder() {
+    dayReturnReminderTimer = null;
+    const promptedDate = viewedCalendarDate();
+    if (!promptedDate) return;
+    if (promptedDate === localDateKey()) { scheduleDayReturnReminder(); return; }
+    if (dayReturnPromptOpen) return;
+
+    dayReturnPromptOpen = true;
+    const goToToday = await modal({
+        title: 'Return to today?',
+        message: 'You have been viewing another date for an hour. Would you like to stay here or return to today?',
+        confirmText: 'Go to today',
+        cancelText: 'Stay on this day',
+    });
+    dayReturnPromptOpen = false;
+
+    if (viewedCalendarDate() !== promptedDate) { scheduleDayReturnReminder(); return; }
+    if (!goToToday) { scheduleDayReturnReminder(); return; }
+
+    const todayUrl = activeDayState?.navigation?.today_url || document.querySelector('[data-calendar-today-url]')?.dataset.calendarTodayUrl;
+    if (!todayUrl) return;
+    if (supportsDayStateNavigation()) {
+        navigateToDay(todayUrl).catch(error => { toast(error.message, true); scheduleDayReturnReminder(); });
+    } else {
+        window.location.href = todayUrl;
+    }
+}
 
 function dayStateKey(url = window.location.href) {
     const parsed = new URL(url, window.location.href);
@@ -317,12 +363,14 @@ async function navigateToDay(url, {history = true, fresh = false} = {}) {
         if (history) window.history.pushState({dayState:true}, '', cached.url || url);
         renderDayState(cached);
         window.scrollTo(0, 0);
+        scheduleDayReturnReminder();
         return true;
     }
     const state = await fetchDayState(url, {fresh:true});
     if (history) window.history.pushState({dayState:true}, '', state.url || url);
     renderDayState(state);
     window.scrollTo(0, 0);
+    scheduleDayReturnReminder();
     return true;
 }
 
@@ -330,6 +378,28 @@ async function refreshDayView() {
     if (!document.querySelector('#daily-log-page-container')) return false;
     const state = await fetchDayState(window.location.href, {fresh:true});
     return renderDayState(state, {scroll:{x:window.scrollX, y:window.scrollY}});
+}
+
+function startTodayActivityRefresh() {
+    const interval = 60 * 1000;
+    let lastRefresh = Date.now();
+    let running = false;
+
+    const refresh = async () => {
+        if (running || document.hidden || !activeDayState?.is_today || backgroundSyncQueue.size > 0) return;
+        if (document.querySelector('[data-overlay][data-open="true"], [data-modal-backdrop]')) return;
+        running = true;
+        lastRefresh = Date.now();
+        try { await refreshDayView(); } catch (_) { /* Retry on the next interval. */ }
+        finally { running = false; }
+    };
+
+    window.setInterval(refresh, interval);
+    const refreshWhenDue = () => {
+        if (!document.hidden && Date.now() - lastRefresh >= interval) refresh();
+    };
+    document.addEventListener('visibilitychange', refreshWhenDue);
+    window.addEventListener('focus', refreshWhenDue);
 }
 
 const reloadScrollKey = `captainslog.reload-scroll:${window.location.pathname}${window.location.search}`;
@@ -408,6 +478,8 @@ function startSessionKeepAlive() {
 
 startSessionKeepAlive();
 captureCurrentDayState();
+scheduleDayReturnReminder();
+startTodayActivityRefresh();
 
 document.addEventListener('click', event => {
     const link = event.target.closest('a[href]');
@@ -1351,6 +1423,8 @@ document.addEventListener('click', async e => {
         else if (timelineItem.matches('[data-time-gap]')) configureComposer({time:timelineItem.dataset.from});
         else configureComposer({time:timelineItem.dataset.timelineTime || timelineItem.dataset.currentTime});
     }
+    const emptyLogSpace = e.target === document.querySelector('#timeline') || e.target === document.querySelector('#daily-log-page-container');
+    if (emptyLogSpace && !timelineItem && !composerTrigger) configureComposer();
     const visibility = e.target.closest('[data-planner-visibility]');
     if (visibility) {
         visibility.disabled = true;

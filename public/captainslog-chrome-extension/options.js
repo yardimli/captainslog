@@ -131,13 +131,14 @@ async function renderDebugMessages() {
 }
 
 async function render() {
-  const data = await chrome.storage.local.get(['appUrl', 'connectionStatus', 'lastSentAt', 'lastDomain', 'lastError', 'lastMobileHistorySyncAt', 'lastMobileHistoryImportCount', 'lastMobileHistoryRejectedCount', 'mobileHistoryLastError', 'kindleEnabled', 'kindleUrl', 'kindleStatus', 'kindleLastSyncAt', 'kindleLastTitle', 'kindleLastProgress', 'kindleLastError']);
+  const data = await chrome.storage.local.get(['appUrl', 'connectionStatus', 'lastSentAt', 'lastDomain', 'lastLogDate', 'lastError', 'lastMobileHistorySyncAt', 'lastMobileHistoryImportCount', 'lastMobileHistoryRejectedCount', 'mobileHistoryLastError', 'kindleEnabled', 'kindleUrl', 'kindleStatus', 'kindleLastSyncAt', 'kindleLastTitle', 'kindleLastProgress', 'kindleLastError']);
   appUrl.value = data.appUrl || DEFAULT_APP_URL;
   const state = data.connectionStatus || 'unpaired';
   statusDot.dataset.state = state;
   if (state === 'connected') {
     statusLabel.textContent = 'Connected';
-    statusDetail.textContent = data.lastDomain ? `Last sent ${data.lastDomain} · ${formatTime(data.lastSentAt)}` : 'Connected and waiting for a browsed site.';
+    const recordedDate = data.lastLogDate ? ` · recorded on ${data.lastLogDate}` : '';
+    statusDetail.textContent = data.lastDomain ? `Last sent ${data.lastDomain} · ${formatTime(data.lastSentAt)}${recordedDate}` : 'Connected and waiting for a browsed site.';
   } else if (state === 'error') {
     statusLabel.textContent = 'Needs attention';
     statusDetail.textContent = data.lastError || 'Could not reach Captain\'s Log.';

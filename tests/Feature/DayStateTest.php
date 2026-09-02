@@ -43,6 +43,8 @@ class DayStateTest extends TestCase
         $this->actingAs(User::factory()->create())
             ->get(route('calendar'))
             ->assertOk()
+            ->assertSee('data-calendar-focus-date', false)
+            ->assertSee('data-calendar-today-url', false)
             ->assertSee('data-session-expired-overlay', false)
             ->assertSee('data-sync-status', false)
             ->assertSee('data-session-keepalive-url', false)
@@ -57,5 +59,13 @@ class DayStateTest extends TestCase
         $this->assertStringContainsString('if (!supportsDayStateNavigation() || url.origin', $script);
         $this->assertStringContainsString('const backgroundSyncQueue = new Map()', $script);
         $this->assertStringContainsString('scheduleSyncRun(key, entry)', $script);
+        $this->assertStringContainsString('const DAY_RETURN_REMINDER_DELAY = 60 * 60 * 1000', $script);
+        $this->assertStringContainsString("title: 'Return to today?'", $script);
+        $this->assertStringContainsString("confirmText: 'Go to today'", $script);
+        $this->assertStringContainsString("cancelText: 'Stay on this day'", $script);
+        $this->assertStringContainsString('scheduleDayReturnReminder();', $script);
+        $this->assertStringContainsString('function startTodayActivityRefresh()', $script);
+        $this->assertStringContainsString('!activeDayState?.is_today || backgroundSyncQueue.size > 0', $script);
+        $this->assertStringContainsString("'[data-overlay][data-open=\"true\"], [data-modal-backdrop]'", $script);
     }
 }

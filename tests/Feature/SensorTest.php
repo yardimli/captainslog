@@ -314,6 +314,7 @@ class SensorTest extends TestCase
         $this->assertStringContainsString('syncMobileHistory(true)', $worker);
         $this->assertStringContainsString('sensors/browser/pair/', $worker);
         $this->assertStringContainsString('browsingUrl.hostname', $worker);
+        $this->assertStringContainsString('lastLogDate: body.log_date || null', $worker);
         $this->assertStringContainsString('api/sensors/kindle/progress', $worker);
         $this->assertStringContainsString('/kindle-library/search', $worker);
         $this->assertStringContainsString("credentials: 'include'", $worker);
