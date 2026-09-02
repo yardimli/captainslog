@@ -142,7 +142,9 @@ class DayLogController extends Controller
         $timing = sprintf('day-view;dur=%.1f', (hrtime(true) - $startedAt) / 1_000_000);
 
         if ($request->header('X-Day-State') === 'json') {
-            return response()->json($dayState)->header('Server-Timing', $timing);
+            return response()->json($dayState)
+                ->header('Server-Timing', $timing)
+                ->header('Cache-Control', 'no-store, private');
         }
 
         return response()->view('logs.show', $viewData)->header('Server-Timing', $timing);

@@ -342,6 +342,7 @@ async function fetchDayState(url, {fresh = false} = {}) {
     if (dayStateRequests.has(key)) return dayStateRequests.get(key);
     const request = fetch(url, {
             credentials: 'same-origin',
+            cache: fresh ? 'no-store' : 'default',
             headers: {Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-Day-State': 'json'},
         })
         .then(async response => {

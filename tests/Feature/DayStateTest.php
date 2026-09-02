@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Models\DailyLog;
+use App\Models\Sensor;
 use App\Models\TaskDefinition;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -67,5 +69,38 @@ class DayStateTest extends TestCase
         $this->assertStringContainsString('function startTodayActivityRefresh()', $script);
         $this->assertStringContainsString('!activeDayState?.is_today || backgroundSyncQueue.size > 0', $script);
         $this->assertStringContainsString("'[data-overlay][data-open=\"true\"], [data-modal-backdrop]'", $script);
+    }
+
+    public function test_fresh_day_state_contains_new_browser_activity_and_disables_caching(): void
+    {
+        Carbon::setTestNow('2026-09-02 23:10:00');
+        $user = User::factory()->create();
+        $key = str_repeat('b', 64);
+        Sensor::create([
+            'user_id' => $user->id,
+            'type' => Sensor::BROWSER,
+            'username' => 'Chrome extension',
+            'pairing_key_hash' => hash('sha256', $key),
+            'enabled' => true,
+        ]);
+
+        $this->withHeader('X-CaptainsLog-Key', $key)->postJson(route('api.sensors.browser.activity'), [
+            'url' => 'https://www.izedebiyat.com/story',
+            'observed_at' => now()->toIso8601String(),
+            'client_id' => 'chrome-day-state-test',
+        ])->assertCreated();
+
+        $response = $this->actingAs($user)
+            ->withHeader('X-Day-State', 'json')
+            ->get(route('logs.show', '2026-09-02'));
+
+        $response->assertOk()
+            ->assertHeader('Cache-Control', 'no-store, private')
+            ->assertJsonFragment(['type' => 'sensor_browser'])
+            ->assertJsonFragment(['domain' => 'www.izedebiyat.com', 'seconds' => 0]);
+
+        $script = file_get_contents(resource_path('js/app.js'));
+        $this->assertStringContainsString("cache: fresh ? 'no-store' : 'default'", $script);
+        Carbon::setTestNow();
     }
 }
