@@ -1314,6 +1314,14 @@ document.addEventListener('submit', async event => {
     if (confirmed) { form.dataset.confirmed = 'true'; form.requestSubmit(); }
 });
 
+document.addEventListener('submit', async event => {
+    const form = event.target.closest('[data-confirm-demo-delete]');
+    if (!form || form.dataset.confirmed === 'true') return;
+    event.preventDefault();
+    const confirmed = await modal({title:'Delete all demo data?', message:'Every temporary demo user and all data belonging to those demo accounts will be permanently deleted. Shared demo assets will remain available.', confirmText:'Delete demo data'});
+    if (confirmed) { form.dataset.confirmed = 'true'; form.requestSubmit(); }
+});
+
 document.addEventListener('submit', event => {
     const form = event.target.closest('[data-event-autosave-form]'); if (!form) return;
     event.preventDefault(); scheduleEventAutosave(form, 0);
@@ -1424,7 +1432,9 @@ document.addEventListener('click', async e => {
         else if (timelineItem.matches('[data-time-gap]')) configureComposer({time:timelineItem.dataset.from});
         else configureComposer({time:timelineItem.dataset.timelineTime || timelineItem.dataset.currentTime});
     }
-    const emptyLogSpace = e.target === document.querySelector('#timeline') || e.target === document.querySelector('#daily-log-page-container');
+    const emptyLogSpace = e.target === document.querySelector('#timeline')
+        || e.target === document.querySelector('#daily-log-page-container')
+        || (e.target === document.querySelector('#page-content') && supportsDayStateNavigation());
     if (emptyLogSpace && !timelineItem && !composerTrigger) configureComposer();
     const visibility = e.target.closest('[data-planner-visibility]');
     if (visibility) {

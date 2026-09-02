@@ -64,6 +64,7 @@
             <a class="nav-link {{ request()->routeIs('tasks.*') ? 'nav-active' : '' }}" href="{{ route('tasks.index') }}">Event setup</a>
             <a class="nav-link {{ request()->routeIs('sensors.*') ? 'nav-active' : '' }}" href="{{ route('sensors.index') }}">Sensors</a>
             <a class="nav-link {{ request()->routeIs('api-usage.*') ? 'nav-active' : '' }}" href="{{ route('api-usage.index') }}">API usage</a>
+            @if(auth()->user()->is_admin)<a class="nav-link {{ request()->routeIs('admin.*') ? 'nav-active' : '' }}" href="{{ route('admin.users') }}">Admin</a>@endif
             <a class="nav-link {{ request()->routeIs('profile.*') ? 'nav-active' : '' }}" href="{{ route('profile.edit') }}">Account settings</a>
             @if(request()->routeIs('logs.show') && request()->boolean('show_hidden'))
                 <a class="nav-link font-semibold text-amber-700 dark:text-amber-300" href="{{ route('logs.show', $activeLogDate) }}" data-hidden-entries-toggle>Hide hidden entries</a>

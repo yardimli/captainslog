@@ -563,6 +563,7 @@ class CaptainsLogTest extends TestCase
 
         $this->assertStringContainsString("e.target === document.querySelector('#timeline')", $script);
         $this->assertStringContainsString("e.target === document.querySelector('#daily-log-page-container')", $script);
+        $this->assertStringContainsString("e.target === document.querySelector('#page-content') && supportsDayStateNavigation()", $script);
         $this->assertStringContainsString('if (emptyLogSpace && !timelineItem && !composerTrigger) configureComposer();', $script);
     }
 

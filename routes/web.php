@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\ApiUsageController;
 use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\CalendarController;
@@ -106,6 +107,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/logs/{dailyLog}/chat', [OpenRouterController::class, 'chat'])->name('openrouter.chat');
     Route::post('/chat-actions/{proposal}/confirm', [OpenRouterController::class, 'confirmChatAction'])->name('openrouter.chat-actions.confirm');
     Route::post('/logs/{dailyLog}/images', [OpenRouterController::class, 'image'])->name('openrouter.images');
+
+    Route::middleware('admin')->prefix('admin')->name('admin.')->group(function () {
+        Route::get('/users', [AdminController::class, 'users'])->name('users');
+        Route::delete('/demo-data', [AdminController::class, 'destroyDemoData'])->name('demo-data.destroy');
+    });
 });
 
 require __DIR__.'/auth.php';

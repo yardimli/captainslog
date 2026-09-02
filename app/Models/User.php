@@ -29,6 +29,7 @@ class User extends Authenticatable
         'week_starts_on',
         'default_chat_model',
         'is_guest',
+        'is_admin',
         'guest_token_hash',
         'demo_seed_version',
     ];
@@ -54,6 +55,7 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'openrouter_api_key' => 'encrypted',
         'is_guest' => 'boolean',
+        'is_admin' => 'boolean',
         'week_starts_on' => 'integer',
         'demo_seed_version' => 'integer',
     ];
