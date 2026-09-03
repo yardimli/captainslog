@@ -30,6 +30,23 @@ struct ActivityUpload {
     observed_at: String,
 }
 
+#[derive(Deserialize, Serialize)]
+struct ActivityIncrement {
+    application: String,
+    process_name: String,
+    started_at: String,
+    ended_at: String,
+    duration_seconds: u32,
+}
+
+#[derive(Deserialize)]
+struct ActivityBatchUpload {
+    app_url: String,
+    pairing_key: String,
+    client_id: String,
+    activities: Vec<ActivityIncrement>,
+}
+
 #[derive(Serialize)]
 struct UploadResult {
     status: u16,
@@ -71,6 +88,34 @@ async fn send_activity(payload: ActivityUpload) -> Result<UploadResult, String> 
             "process_name": payload.process_name,
             "client_id": payload.client_id,
             "observed_at": payload.observed_at,
+        }))
+        .send().await.map_err(|error| format!("Could not reach Total Log: {error}"))?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        return Err(if status.as_u16() == 401 {
+            "Desktop sensor is not paired yet. Finish pairing in your browser.".into()
+        } else {
+            format!("Total Log returned {}: {}", status.as_u16(), body)
+        });
+    }
+
+    Ok(UploadResult { status: status.as_u16() })
+}
+
+#[tauri::command]
+async fn send_activity_batch(payload: ActivityBatchUpload) -> Result<UploadResult, String> {
+    if payload.activities.is_empty() {
+        return Err("There is no desktop activity to upload yet.".into());
+    }
+    let base = total_log_url(&payload.app_url)?;
+    let endpoint = base.join("api/sensors/desktop/activity").map_err(|error| error.to_string())?;
+    let response = reqwest::Client::new().post(endpoint)
+        .header("Accept", "application/json")
+        .header("X-TotalLog-Key", payload.pairing_key)
+        .json(&serde_json::json!({
+            "client_id": payload.client_id,
+            "activities": payload.activities,
         }))
         .send().await.map_err(|error| format!("Could not reach Total Log: {error}"))?;
     let status = response.status();
@@ -167,6 +212,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             current_activity,
             send_activity,
+            send_activity_batch,
             send_kindle_progress,
             open_kindle,
             sync_kindle,

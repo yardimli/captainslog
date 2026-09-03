@@ -76,7 +76,7 @@ The integration follows OpenRouter's APIs for [chat completions](https://openrou
 
 ### Automatic sensors
 
-- Pair the Tauri Windows tray app to track foreground application time in hourly desktop-activity entries; window titles and full executable paths remain local.
+- Pair the Tauri Windows tray app to collect foreground application time locally, upload one aggregate batch every five minutes, and show per-app totals for the last five minutes, last hour, and today. Timeline entries remain grouped hourly; window titles and full executable paths stay local.
 - Link GitHub to add commit project names at their commit times. Commits for the same project and hour share one timeline entry, with every individual commit available in its side panel.
 - Connect a Google account with read-only Calendar OAuth to mirror the primary calendar into the current month. Recurring instances are expanded, and renamed, moved, or removed Google events update their matching log entries.
 - Google Calendar refresh tokens are encrypted. The current month refreshes hourly and is also checked, with a fifteen-minute throttle, when its calendar or daily logs are opened.

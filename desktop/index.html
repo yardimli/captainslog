@@ -14,7 +14,11 @@
           <p class="eyebrow">Desktop sensor</p>
           <h1>Total Log</h1>
         </div>
-        <span id="platform-badge" class="badge">Starting…</span>
+        <div class="masthead-actions">
+          <span id="server-health" class="connection-health" data-state="waiting"><span class="connection-dot" aria-hidden="true"></span><span id="server-health-label">Checking connection</span></span>
+          <button id="connection-toggle" type="button" class="quiet compact" aria-expanded="false" aria-controls="connection-panel">Connection settings</button>
+          <span id="platform-badge" class="badge">Starting…</span>
+        </div>
       </header>
 
       <section class="hero panel" aria-labelledby="now-heading">
@@ -29,12 +33,16 @@
         </div>
       </section>
 
-      <section class="grid">
-        <article class="panel">
-          <p class="eyebrow">Connection</p>
-          <h2>Pair with your server</h2>
+      <section id="connection-panel" class="panel connection-panel" hidden>
+          <div class="panel-heading"><div><p class="eyebrow">Connection</p><h2>Pair with your server</h2></div><button id="connection-close" type="button" class="quiet compact">Close</button></div>
+          <fieldset class="url-presets">
+            <legend>Total Log server</legend>
+            <label><input type="radio" name="url-mode" value="hosted" /> Hosted site</label>
+            <label><input type="radio" name="url-mode" value="localhost" /> Localhost</label>
+            <label><input type="radio" name="url-mode" value="custom" /> Custom</label>
+          </fieldset>
           <label for="app-url">Total Log URL</label>
-          <input id="app-url" type="url" value="http://127.0.0.1:8016/" spellcheck="false" />
+          <input id="app-url" type="url" value="https://captainslog.playground.computer/" spellcheck="false" />
           <label for="pairing-key">Pairing key</label>
           <div class="input-row">
             <input id="pairing-key" type="password" autocomplete="off" spellcheck="false" />
@@ -45,15 +53,14 @@
             <button id="new-key-button" type="button" class="secondary">New key</button>
           </div>
           <p id="connection-status" class="status muted">Settings are kept only on this PC.</p>
-        </article>
+      </section>
 
-        <article class="panel">
+      <section class="panel activity-panel">
           <p class="eyebrow">Recent activity</p>
-          <h2>Foreground applications</h2>
-          <ol id="activity-list" class="activity-list">
-            <li class="empty">No samples yet.</li>
-          </ol>
-        </article>
+          <h2>Application time</h2>
+          <div class="activity-list-head" aria-hidden="true"><span>Application</span><span>5 min</span><span>Hour</span><span>Today</span></div>
+          <ol id="activity-list" class="activity-list"><li class="empty">No activity collected yet.</li></ol>
+          <p class="activity-help muted">Collected locally and uploaded as one batch every five minutes.</p>
       </section>
 
       <section class="panel kindle-panel" aria-labelledby="kindle-heading">

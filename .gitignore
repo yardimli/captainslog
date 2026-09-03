@@ -24,3 +24,5 @@ yarn-error.log
 /.idea
 /.vscode
 *.json
+!/public/data/
+!/public/data/data-by-group.json

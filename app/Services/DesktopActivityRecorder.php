@@ -9,6 +9,7 @@ use App\Models\Sensor;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
 class DesktopActivityRecorder
@@ -69,6 +70,46 @@ class DesktopActivityRecorder
             $sensor->update(['last_checked_at' => now(), 'last_error' => null]);
 
             return $activity;
+        });
+    }
+
+    public function recordBatch(Sensor $sensor, string $clientId, array $increments): Collection
+    {
+        return DB::transaction(function () use ($sensor, $clientId, $increments) {
+            $recorded = collect();
+            foreach ($increments as $increment) {
+                $started = Carbon::parse($increment['started_at'])->setTimezone(config('app.timezone'));
+                $ended = Carbon::parse($increment['ended_at'])->setTimezone(config('app.timezone'));
+                if ($started->isAfter($ended) || $ended->diffInSeconds(now(), true) > 604800) {
+                    throw ValidationException::withMessages(['activities' => 'Desktop activity times must be ordered and no more than seven days old.']);
+                }
+                $duration = (int) $increment['duration_seconds'];
+                if ($duration > $started->diffInSeconds($ended) + 10) {
+                    throw ValidationException::withMessages(['activities' => 'Desktop activity duration cannot exceed its time range.']);
+                }
+                $application = trim(strip_tags($increment['application']));
+                $processName = strtolower(trim(basename(str_replace('\\', '/', $increment['process_name']))));
+                $log = $this->dailyLog($sensor->user, $started);
+                $activity = DesktopActivity::create([
+                    'user_id' => $sensor->user_id,
+                    'daily_log_id' => $log->id,
+                    'log_block_id' => $this->hourBlock($log, $started->copy()->startOfHour(), $started)->id,
+                    'application' => $application,
+                    'process_name' => $processName,
+                    'client_id' => $clientId,
+                    'started_at' => $started,
+                    'last_seen_at' => $ended,
+                    'ended_at' => $ended,
+                    'duration_seconds' => $duration,
+                ]);
+                $recorded->push($activity);
+            }
+            $recorded->pluck('log_block_id')->unique()->each(function (int $blockId) {
+                $this->refreshBlock(LogBlock::findOrFail($blockId));
+            });
+            $sensor->update(['last_checked_at' => now(), 'last_error' => null]);
+
+            return $recorded;
         });
     }
 

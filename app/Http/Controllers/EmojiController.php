@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class EmojiController extends Controller
@@ -68,6 +69,20 @@ class EmojiController extends Controller
     private function groups()
     {
         $path = public_path('data/data-by-group.json');
+        if (! is_readable($path)) {
+            Log::warning('Full emoji dataset is missing; serving the built-in fallback.', ['path' => $path]);
+
+            return collect([[
+                'name' => 'Common',
+                'slug' => 'common',
+                'emojis' => collect(['😀', '😂', '😊', '😍', '🤔', '😎', '🥳', '😴', '👍', '👏', '🙏', '💪', '❤️', '🔥', '✨', '✅', '⭐', '📖', '✍️', '💻', '🏃', '🍽️', '🌙', '🚀'])
+                    ->map(fn (string $emoji, int $index) => [
+                        'emoji' => $emoji,
+                        'name' => 'Common emoji '.($index + 1),
+                        'slug' => 'common_'.($index + 1),
+                    ])->all(),
+            ]]);
+        }
         $cacheKey = 'unicode-emoji-json.'.filemtime($path);
 
         return collect(Cache::remember($cacheKey, now()->addDay(), fn () => json_decode(file_get_contents($path), true, flags: JSON_THROW_ON_ERROR)));

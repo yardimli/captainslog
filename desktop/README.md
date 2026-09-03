@@ -6,7 +6,8 @@ This is the Tauri 2 + Rust desktop sensor for Total Log. It currently provides:
 - Windows idle-time detection;
 - a tray icon that keeps monitoring after the settings window closes;
 - dedicated desktop-sensor pairing with the Laravel application;
-- foreground-application heartbeats sent every 30 seconds while the computer is active;
+- local foreground-application sampling with one aggregated upload every five minutes while the computer is active;
+- per-application totals for the last five minutes, last hour, and today;
 - a dedicated Kindle Cloud Reader window whose Amazon session remains in WebView2;
 - hourly Kindle checks that send only book and reading-progress details;
 - a clear boundary for the optional browser extension, which is only needed for exact browser domains and synchronized mobile Chrome history.

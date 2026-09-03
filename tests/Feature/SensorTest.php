@@ -313,6 +313,35 @@ class SensorTest extends TestCase
             ->assertUnprocessable()->assertJsonValidationErrors('process_name');
     }
 
+    public function test_desktop_sensor_accepts_one_five_minute_activity_batch(): void
+    {
+        Carbon::setTestNow('2026-09-03 10:05:00');
+        $user = User::factory()->create();
+        $key = str_repeat('f', 64);
+        Sensor::create([
+            'user_id' => $user->id,
+            'type' => Sensor::DESKTOP,
+            'username' => 'Windows desktop app',
+            'pairing_key_hash' => hash('sha256', $key),
+            'enabled' => true,
+        ]);
+
+        $this->withHeader('X-TotalLog-Key', $key)->postJson(route('api.sensors.desktop.activity'), [
+            'client_id' => 'desktop-batch-client',
+            'activities' => [
+                ['application' => 'Code', 'process_name' => 'Code.exe', 'started_at' => '2026-09-03T10:00:00+08:00', 'ended_at' => '2026-09-03T10:03:00+08:00', 'duration_seconds' => 120],
+                ['application' => 'Firefox', 'process_name' => 'firefox.exe', 'started_at' => '2026-09-03T10:01:00+08:00', 'ended_at' => '2026-09-03T10:05:00+08:00', 'duration_seconds' => 150],
+            ],
+        ])->assertCreated()->assertJsonPath('recorded', 2)->assertJsonPath('duration_seconds', 270);
+
+        $this->assertDatabaseCount('desktop_activities', 2);
+        $this->assertSame(270, DesktopActivity::sum('duration_seconds'));
+        $this->actingAs($user)->get('/logs/2026-09-03')->assertOk()
+            ->assertSee('Desktop activity · 2 apps · 4 min')
+            ->assertSee('Code')->assertSee('Firefox');
+        Carbon::setTestNow();
+    }
+
     public function test_browser_sensor_groups_domains_into_hourly_log_blocks_and_closes_after_inactivity(): void
     {
         Carbon::setTestNow('2026-08-17 10:00:00');

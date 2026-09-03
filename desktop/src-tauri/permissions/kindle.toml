@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "allow-kindle-progress-observed"
+description = "Allows the restricted Kindle Cloud Reader window to report book progress to the desktop host."
+commands.allow = ["kindle_progress_observed"]
+
+[[permission]]
+identifier = "allow-kindle-status-observed"
+description = "Allows the restricted Kindle Cloud Reader window to report connection status to the desktop host."
+commands.allow = ["kindle_status_observed"]

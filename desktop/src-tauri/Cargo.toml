@@ -1,6 +1,6 @@
 [package]
 name = "total-log-desktop"
-version = "0.2.0"
+version = "0.3.1"
 description = "Windows activity sensor for Total Log"
 authors = ["Total Log"]
 edition = "2021"

@@ -22,6 +22,15 @@ type KindleProgress = {
 };
 
 type KindleStatusReport = { status: string; message: string | null };
+type UrlMode = 'hosted' | 'localhost' | 'custom';
+
+type ActivitySlice = {
+  application: string;
+  process_name: string;
+  started_at_ms: number;
+  ended_at_ms: number;
+  duration_seconds: number;
+};
 
 const appName = document.querySelector<HTMLElement>('#application-name')!;
 const windowTitle = document.querySelector<HTMLElement>('#window-title')!;
@@ -31,17 +40,222 @@ const list = document.querySelector<HTMLOListElement>('#activity-list')!;
 const appUrl = document.querySelector<HTMLInputElement>('#app-url')!;
 const pairingKey = document.querySelector<HTMLInputElement>('#pairing-key')!;
 const connectionStatus = document.querySelector<HTMLElement>('#connection-status')!;
+const connectionPanel = document.querySelector<HTMLElement>('#connection-panel')!;
+const connectionToggle = document.querySelector<HTMLButtonElement>('#connection-toggle')!;
+const serverHealth = document.querySelector<HTMLElement>('#server-health')!;
+const serverHealthLabel = document.querySelector<HTMLElement>('#server-health-label')!;
 const kindleUrl = document.querySelector<HTMLInputElement>('#kindle-url')!;
 const kindleStatus = document.querySelector<HTMLElement>('#kindle-status')!;
-const samples: ActivitySnapshot[] = [];
 const clientId = localStorage.getItem('totalLogDesktop.clientId') || crypto.randomUUID().replaceAll('-', '');
-let lastSyncAt = 0;
-let syncRunning = false;
-let lastAttemptedIdentity = '';
+const HISTORY_KEY = 'totalLogDesktop.activityHistory';
+const PENDING_KEY = 'totalLogDesktop.pendingActivity';
+const LAST_BATCH_KEY = 'totalLogDesktop.lastActivityBatchAt';
+const FIVE_MINUTES_MS = 5 * 60 * 1000;
+const HOSTED_URL = 'https://captainslog.playground.computer/';
+const LOCALHOST_URL = 'http://127.0.0.1:8016/';
+let activityHistory = readSlices(HISTORY_KEY);
+let pendingActivity = readSlices(PENDING_KEY);
+let previousSnapshot: ActivitySnapshot | null = null;
+let activityUploadRunning = false;
+let lastBatchAt = Number(localStorage.getItem(LAST_BATCH_KEY)) || Date.now();
 let kindleUploadRunning = false;
+let kindleResponseTimer: number | null = null;
 
 const randomKey = () => `${crypto.randomUUID().replaceAll('-', '')}${crypto.randomUUID().replaceAll('-', '')}`;
 const seconds = (value: number) => value < 60 ? `${value}s` : `${Math.floor(value / 60)}m ${value % 60}s`;
+
+function setConnectionHealth(state: 'working' | 'error' | 'waiting' | 'disconnected', detail?: string) {
+  const labels = {working: 'Connection working', error: 'Connection not working', waiting: 'Checking connection', disconnected: 'Not connected'};
+  serverHealth.dataset.state = state;
+  serverHealthLabel.textContent = labels[state];
+  localStorage.setItem('totalLogDesktop.connectionHealth', state);
+  if (detail) connectionStatus.textContent = detail;
+}
+
+function setConnectionPanel(open: boolean) {
+  connectionPanel.hidden = !open;
+  connectionToggle.setAttribute('aria-expanded', String(open));
+  if (open) connectionPanel.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+}
+
+function selectedUrlMode(): UrlMode {
+  return (document.querySelector<HTMLInputElement>('input[name="url-mode"]:checked')?.value || 'hosted') as UrlMode;
+}
+
+function inferUrlMode(value: string): UrlMode {
+  if (value === HOSTED_URL) return 'hosted';
+  if (value === LOCALHOST_URL) return 'localhost';
+  return 'custom';
+}
+
+function applyUrlMode(mode: UrlMode, changedByUser = false) {
+  const previous = appUrl.value;
+  const previousMode = (localStorage.getItem('totalLogDesktop.urlMode') || inferUrlMode(previous)) as UrlMode;
+  if (previousMode === 'custom' && previous && previous !== 'https://') {
+    localStorage.setItem('totalLogDesktop.customAppUrl', previous);
+  }
+  const customUrl = localStorage.getItem('totalLogDesktop.customAppUrl') || (inferUrlMode(previous) === 'custom' ? previous : 'https://');
+  document.querySelector<HTMLInputElement>(`input[name="url-mode"][value="${mode}"]`)!.checked = true;
+  localStorage.setItem('totalLogDesktop.urlMode', mode);
+  appUrl.readOnly = mode !== 'custom';
+  appUrl.value = mode === 'hosted' ? HOSTED_URL : mode === 'localhost' ? LOCALHOST_URL : customUrl;
+  if (mode !== 'custom' || appUrl.value !== 'https://') localStorage.setItem('totalLogDesktop.appUrl', appUrl.value);
+  if (changedByUser && previous !== appUrl.value) {
+    localStorage.setItem('totalLogDesktop.syncEnabled', 'false');
+    setConnectionHealth('disconnected', 'Server changed. Pair this desktop app with the selected server before syncing.');
+  }
+}
+
+function readSlices(key: string): ActivitySlice[] {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(value) ? value.filter(item => item && Number.isFinite(item.started_at_ms) && Number.isFinite(item.duration_seconds)) : [];
+  } catch (_error) {
+    return [];
+  }
+}
+
+function hourKey(timestamp: number): string {
+  const date = new Date(timestamp);
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}`;
+}
+
+function appendSlice(target: ActivitySlice[], slice: ActivitySlice) {
+  const last = target.at(-1);
+  if (last && last.application === slice.application && last.process_name === slice.process_name
+    && hourKey(last.started_at_ms) === hourKey(slice.started_at_ms) && slice.started_at_ms - last.ended_at_ms <= 10_000) {
+    last.ended_at_ms = slice.ended_at_ms;
+    last.duration_seconds += slice.duration_seconds;
+  } else {
+    target.push({...slice});
+  }
+}
+
+function saveActivity() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  activityHistory = activityHistory.filter(item => item.ended_at_ms >= today.getTime());
+  const oldestPending = Date.now() - (7 * 24 * 60 * 60 * 1000);
+  pendingActivity = pendingActivity.filter(item => item.ended_at_ms >= oldestPending);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(activityHistory));
+  localStorage.setItem(PENDING_KEY, JSON.stringify(pendingActivity));
+}
+
+function tracked(snapshot: ActivitySnapshot | null): snapshot is ActivitySnapshot {
+  return Boolean(snapshot?.supported && snapshot.process_id && snapshot.idle_seconds < 180 && snapshot.application
+    && snapshot.application.toLowerCase() !== 'total-log-desktop');
+}
+
+function collectActivity(snapshot: ActivitySnapshot) {
+  if (tracked(previousSnapshot)) {
+    const elapsed = Math.round((snapshot.captured_at_unix_ms - previousSnapshot.captured_at_unix_ms) / 1000);
+    if (elapsed > 0 && elapsed <= 10) {
+      const slice: ActivitySlice = {
+        application: previousSnapshot.application,
+        process_name: previousSnapshot.executable.split(/[\\/]/).at(-1) || previousSnapshot.application,
+        started_at_ms: previousSnapshot.captured_at_unix_ms,
+        ended_at_ms: snapshot.captured_at_unix_ms,
+        duration_seconds: elapsed,
+      };
+      appendSlice(activityHistory, slice);
+      appendSlice(pendingActivity, slice);
+      saveActivity();
+    }
+  }
+  previousSnapshot = snapshot;
+  renderActivityList();
+  if (Date.now() - lastBatchAt >= FIVE_MINUTES_MS) uploadActivityBatch();
+}
+
+function overlappingSeconds(slice: ActivitySlice, start: number, end: number): number {
+  const overlap = Math.max(0, Math.min(slice.ended_at_ms, end) - Math.max(slice.started_at_ms, start));
+  const span = Math.max(1, slice.ended_at_ms - slice.started_at_ms);
+  return slice.duration_seconds * overlap / span;
+}
+
+function minutesLabel(value: number): string {
+  if (value < 1) return '—';
+  const minutes = value / 60;
+  return `${minutes < 10 ? minutes.toFixed(1) : Math.round(minutes)}m`;
+}
+
+function renderActivityList() {
+  const now = Date.now();
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const totals = new Map<string, {application: string; process: string; five: number; hour: number; today: number}>();
+  for (const slice of activityHistory) {
+    const key = `${slice.application}\n${slice.process_name}`;
+    const row = totals.get(key) || {application: slice.application, process: slice.process_name, five: 0, hour: 0, today: 0};
+    row.five += overlappingSeconds(slice, now - FIVE_MINUTES_MS, now);
+    row.hour += overlappingSeconds(slice, now - 60 * 60 * 1000, now);
+    row.today += overlappingSeconds(slice, today.getTime(), now);
+    totals.set(key, row);
+  }
+  const rows = [...totals.values()].filter(row => row.today >= 1).sort((left, right) => right.today - left.today);
+  if (!rows.length) {
+    list.innerHTML = '<li class="empty">No activity collected yet.</li>';
+    return;
+  }
+  list.replaceChildren(...rows.map(item => {
+    const row = document.createElement('li');
+    row.innerHTML = '<div class="app-identity"><strong></strong><small></small></div><span></span><span></span><span></span>';
+    row.querySelector('strong')!.textContent = item.application;
+    row.querySelector('small')!.textContent = item.process;
+    const values = row.querySelectorAll<HTMLElement>(':scope > span');
+    values[0].textContent = minutesLabel(item.five);
+    values[1].textContent = minutesLabel(item.hour);
+    values[2].textContent = minutesLabel(item.today);
+    return row;
+  }));
+}
+
+function aggregatePending(slices: ActivitySlice[]) {
+  const totals = new Map<string, ActivitySlice>();
+  for (const slice of slices) {
+    const key = `${slice.application}\n${slice.process_name}\n${hourKey(slice.started_at_ms)}`;
+    const current = totals.get(key);
+    if (current) {
+      current.started_at_ms = Math.min(current.started_at_ms, slice.started_at_ms);
+      current.ended_at_ms = Math.max(current.ended_at_ms, slice.ended_at_ms);
+      current.duration_seconds += slice.duration_seconds;
+    } else {
+      totals.set(key, {...slice});
+    }
+  }
+  return [...totals.values()].map(item => ({
+    application: item.application,
+    process_name: item.process_name,
+    started_at: new Date(item.started_at_ms).toISOString(),
+    ended_at: new Date(item.ended_at_ms).toISOString(),
+    duration_seconds: Math.min(3600, Math.round(item.duration_seconds)),
+  }));
+}
+
+async function uploadActivityBatch() {
+  if (activityUploadRunning || localStorage.getItem('totalLogDesktop.syncEnabled') !== 'true') return;
+  lastBatchAt = Date.now();
+  localStorage.setItem(LAST_BATCH_KEY, String(lastBatchAt));
+  if (!pendingActivity.length) return;
+  activityUploadRunning = true;
+  const sending = pendingActivity;
+  pendingActivity = [];
+  saveActivity();
+  try {
+    const activities = aggregatePending(sending);
+    await invoke('send_activity_batch', {payload: {
+      app_url: normalizedBaseUrl().toString(), pairing_key: pairingKey.value, client_id: clientId, activities,
+    }});
+    const totalSeconds = activities.reduce((sum, item) => sum + item.duration_seconds, 0);
+    setConnectionHealth('working', `Connected · sent ${minutesLabel(totalSeconds)} at ${new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`);
+  } catch (error) {
+    pendingActivity = [...sending, ...pendingActivity];
+    saveActivity();
+    setConnectionHealth('error', error instanceof Error ? error.message : String(error));
+  } finally {
+    activityUploadRunning = false;
+  }
+}
 
 function normalizedBaseUrl(): URL {
   const url = new URL(appUrl.value.trim());
@@ -71,6 +285,8 @@ function kindleProgressLabel(progress: KindleProgress): string {
 }
 
 async function uploadKindleProgress(progress: KindleProgress) {
+  if (kindleResponseTimer !== null) window.clearTimeout(kindleResponseTimer);
+  kindleResponseTimer = null;
   if (kindleUploadRunning) return;
   if (localStorage.getItem('totalLogDesktop.syncEnabled') !== 'true') {
     kindleStatus.textContent = 'Kindle is signed in. Pair the desktop app before sending reading progress.';
@@ -105,6 +321,11 @@ async function syncKindle() {
   try {
     kindleStatus.textContent = 'Checking your most recently read Kindle book…';
     await invoke('sync_kindle', {kindleUrl: normalizedKindleUrl().toString()});
+    if (kindleResponseTimer !== null) window.clearTimeout(kindleResponseTimer);
+    kindleResponseTimer = window.setTimeout(() => {
+      kindleResponseTimer = null;
+      kindleStatus.textContent = 'Kindle did not answer. Open the Kindle window, confirm you are signed in, then try Sync now.';
+    }, 20_000);
   } catch (error) {
     kindleStatus.textContent = error instanceof Error ? error.message : String(error);
   }
@@ -117,51 +338,21 @@ function render(snapshot: ActivitySnapshot) {
   platformBadge.textContent = snapshot.supported ? (snapshot.idle_seconds >= 180 ? 'Away' : 'Tracking') : 'Windows only';
   platformBadge.classList.toggle('away', snapshot.idle_seconds >= 180);
 
-  const previous = samples.at(0);
-  if (!previous || previous.process_id !== snapshot.process_id || previous.window_title !== snapshot.window_title) {
-    samples.unshift(snapshot);
-    samples.splice(8);
-    list.replaceChildren(...samples.map(item => {
-      const row = document.createElement('li');
-      const date = new Date(item.captured_at_unix_ms);
-      row.innerHTML = `<span><strong></strong><small></small></span><time></time>`;
-      row.querySelector('strong')!.textContent = item.application;
-      row.querySelector('small')!.textContent = item.window_title || item.executable;
-      row.querySelector('time')!.textContent = date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-      return row;
-    }));
-  }
-  syncActivity(snapshot);
+  collectActivity(snapshot);
 }
 
-async function syncActivity(snapshot: ActivitySnapshot) {
-  if (syncRunning || localStorage.getItem('totalLogDesktop.syncEnabled') !== 'true') return;
-  if (!snapshot.supported || snapshot.idle_seconds >= 180 || snapshot.process_id === 0 || !snapshot.application) return;
-  if (snapshot.application.toLowerCase() === 'total-log-desktop') return;
-  const processName = snapshot.executable.split(/[\\/]/).at(-1) || snapshot.application;
-  const identity = `${snapshot.application}\n${processName}`;
-  if (identity === lastAttemptedIdentity && Date.now() - lastSyncAt < 30_000) return;
-  syncRunning = true;
-  lastSyncAt = Date.now();
-  lastAttemptedIdentity = identity;
-  try {
-    await invoke('send_activity', {payload: {
-      app_url: normalizedBaseUrl().toString(), pairing_key: pairingKey.value, client_id: clientId,
-      application: snapshot.application, process_name: processName, observed_at: new Date().toISOString(),
-    }});
-    connectionStatus.textContent = `Connected · last update ${new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`;
-  } catch (error) {
-    connectionStatus.textContent = error instanceof Error ? error.message : String(error);
-  } finally {
-    syncRunning = false;
-  }
-}
-
-appUrl.value = localStorage.getItem('totalLogDesktop.appUrl') || appUrl.value;
+const savedAppUrl = localStorage.getItem('totalLogDesktop.appUrl') || HOSTED_URL;
+appUrl.value = savedAppUrl;
+const savedUrlMode = localStorage.getItem('totalLogDesktop.urlMode');
+applyUrlMode(['hosted', 'localhost', 'custom'].includes(savedUrlMode || '') ? savedUrlMode as UrlMode : inferUrlMode(savedAppUrl));
 pairingKey.value = localStorage.getItem('totalLogDesktop.pairingKey') || randomKey();
 kindleUrl.value = localStorage.getItem('totalLogDesktop.kindleUrl') || kindleUrl.value;
 localStorage.setItem('totalLogDesktop.clientId', clientId);
 saveSettings();
+const savedConnectionHealth = localStorage.getItem('totalLogDesktop.connectionHealth');
+setConnectionHealth(localStorage.getItem('totalLogDesktop.syncEnabled') === 'true'
+  ? (['working', 'error', 'waiting'].includes(savedConnectionHealth || '') ? savedConnectionHealth as 'working' | 'error' | 'waiting' : 'waiting')
+  : 'disconnected');
 
 const previousKindleTitle = localStorage.getItem('totalLogDesktop.kindleLastTitle');
 const previousKindleProgress = localStorage.getItem('totalLogDesktop.kindleLastProgress');
@@ -179,7 +370,7 @@ document.querySelector('#new-key-button')?.addEventListener('click', () => {
   pairingKey.value = randomKey();
   localStorage.setItem('totalLogDesktop.syncEnabled', 'false');
   saveSettings();
-  connectionStatus.textContent = 'A new local key was generated. Pair it before syncing.';
+  setConnectionHealth('disconnected', 'A new local key was generated. Pair it before syncing.');
 });
 
 document.querySelector('#pair-button')?.addEventListener('click', async () => {
@@ -189,16 +380,31 @@ document.querySelector('#pair-button')?.addEventListener('click', async () => {
     const url = new URL(`sensors/desktop/pair/${encodeURIComponent(pairingKey.value)}`, normalizedBaseUrl());
     await openUrl(url.toString());
     localStorage.setItem('totalLogDesktop.syncEnabled', 'true');
-    connectionStatus.textContent = 'Finish signing in and approve pairing in your browser.';
+    lastBatchAt = Date.now();
+    localStorage.setItem(LAST_BATCH_KEY, String(lastBatchAt));
+    setConnectionHealth('waiting', 'Finish signing in and approve pairing in your browser. The light will turn green after the next five-minute upload.');
   } catch (error) {
-    connectionStatus.textContent = error instanceof Error ? error.message : String(error);
+    setConnectionHealth('error', error instanceof Error ? error.message : String(error));
   }
 });
 
 appUrl.addEventListener('change', () => {
-  try { saveSettings(); } catch (error) { connectionStatus.textContent = error instanceof Error ? error.message : String(error); }
+  try {
+    saveSettings();
+    if (selectedUrlMode() === 'custom') localStorage.setItem('totalLogDesktop.customAppUrl', normalizedBaseUrl().toString());
+    localStorage.setItem('totalLogDesktop.syncEnabled', 'false');
+    setConnectionHealth('disconnected', 'Custom server saved. Pair this desktop app before syncing.');
+  } catch (error) {
+    setConnectionHealth('error', error instanceof Error ? error.message : String(error));
+  }
 });
 pairingKey.addEventListener('change', saveSettings);
+
+connectionToggle.addEventListener('click', () => setConnectionPanel(connectionPanel.hidden));
+document.querySelector('#connection-close')?.addEventListener('click', () => setConnectionPanel(false));
+document.querySelectorAll<HTMLInputElement>('input[name="url-mode"]').forEach(radio => radio.addEventListener('change', () => {
+  if (radio.checked) applyUrlMode(radio.value as UrlMode, true);
+}));
 
 document.querySelector('#kindle-connect')?.addEventListener('click', async () => {
   try {
@@ -232,6 +438,8 @@ async function bootstrap() {
     listen<ActivitySnapshot>('activity-update', event => render(event.payload)),
     listen<KindleProgress>('kindle-progress', event => uploadKindleProgress(event.payload)),
     listen<KindleStatusReport>('kindle-status', event => {
+      if (kindleResponseTimer !== null) window.clearTimeout(kindleResponseTimer);
+      kindleResponseTimer = null;
       const labels: Record<string, string> = {
         syncing: 'Checking your most recently read Kindle book…',
         ready: 'Kindle is connected, but no recent book was found.',
@@ -247,6 +455,10 @@ async function bootstrap() {
 }
 
 window.setInterval(syncKindle, 60 * 60 * 1000);
+window.setInterval(() => {
+  renderActivityList();
+  if (Date.now() - lastBatchAt >= FIVE_MINUTES_MS) uploadActivityBatch();
+}, 10_000);
 
 bootstrap().catch(error => {
   platformBadge.textContent = 'Error';
