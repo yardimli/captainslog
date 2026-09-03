@@ -52,8 +52,12 @@
                 <svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4M9 11h6M9 15h6"/></svg>
             </a>
         @endif
+        @unless(request()->routeIs('calendar', 'logs.*'))
+            <a class="nav-link grid h-9 w-9 place-items-center p-0" href="{{ route('calendar') }}" aria-label="Open calendar" title="Calendar">
+                <svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M8 14h2M12 14h2M16 14h2M8 18h2M12 18h2"/></svg>
+            </a>
+        @endunless
         @include('partials.theme-selector')
-        <form method="POST" action="{{ route('logout') }}">@csrf<button class="nav-link p-2" aria-label="Sign out" title="Sign out"><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg></button></form>
         <button type="button" class="nav-link p-2" data-mobile-nav-toggle aria-expanded="false" aria-controls="account-navigation" aria-label="Open navigation" title="Menu"><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
     </div>
 
@@ -77,6 +81,11 @@
             @else
                 <a class="nav-link font-semibold text-indigo-600 dark:text-indigo-400" href="{{ route('logs.show', $activeLogDate) }}?panel=chat">Chat with log</a>
             @endif
+            <div class="navigation-divider my-1 border-t border-slate-200 dark:border-slate-800"></div>
+            <form method="POST" action="{{ route('logout') }}" data-navigation-sign-out>
+                @csrf
+                <button class="nav-link flex w-full items-center gap-2 text-left" aria-label="Sign out" title="Sign out"><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg><span>Sign out</span></button>
+            </form>
         </div>
     </div>
 </nav>

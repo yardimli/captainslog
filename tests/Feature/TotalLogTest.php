@@ -56,6 +56,30 @@ class TotalLogTest extends TestCase
             ->assertDontSee('href="'.route('calendar', '2026-08-15').'?view=week"', false);
     }
 
+    public function test_calendar_uses_week_and_month_icons_and_caps_activity_markers_at_thirty_two(): void
+    {
+        $user = User::factory()->create();
+        $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-19']);
+        foreach (range(1, 35) as $position) {
+            $log->blocks()->create(['type' => 'text', 'content' => "Entry {$position}", 'position' => $position]);
+        }
+
+        $response = $this->actingAs($user)->get(route('calendar', '2026-08-19').'?view=week')->assertOk()
+            ->assertSee('data-calendar-view="week"', false)
+            ->assertSee('aria-label="Week view"', false)
+            ->assertSee('data-calendar-view="month"', false)
+            ->assertSee('aria-label="Month view"', false)
+            ->assertSee('data-calendar-view-current="week"', false)
+            ->assertDontSee('<select data-calendar-view', false)
+            ->assertDontSee('data-day-url', false)
+            ->assertSee('35 recorded activities');
+
+        $this->assertSame(32, substr_count($response->getContent(), 'data-calendar-activity-marker '));
+        $this->get(route('calendar', '2026-08-19').'?view=day')->assertOk()
+            ->assertSee('data-calendar-view-current="week"', false);
+        $this->assertStringNotContainsString('totallog.calendarView', file_get_contents(resource_path('js/app.js')));
+    }
+
     public function test_daily_log_exposes_composer_and_chat_through_responsive_navigation(): void
     {
         $user = User::factory()->create();
@@ -85,11 +109,17 @@ class TotalLogTest extends TestCase
             ->assertDontSee('Generate image')
             ->assertSee('aria-label="Toggle theme"', false)
             ->assertSee('aria-label="Sign out"', false)
+            ->assertSee('data-navigation-sign-out', false)
             ->assertDontSee('md:hidden', false);
 
         $this->get(route('calendar'))->assertOk()
             ->assertSee(route('logs.show', today()->toDateString()).'?panel=chat')
+            ->assertDontSee('aria-label="Open calendar"', false)
             ->assertDontSee(route('logs.show', today()->toDateString()).'?panel=image');
+
+        $this->get(route('tasks.index'))->assertOk()
+            ->assertSee('aria-label="Open notes"', false)
+            ->assertSee('aria-label="Open calendar"', false);
     }
 
     public function test_account_display_and_chat_preferences_are_saved_and_applied(): void
@@ -255,7 +285,9 @@ class TotalLogTest extends TestCase
             ->assertSee('data-emoji-picker', false)
             ->assertSee('data-emoji-search', false)
             ->assertSee('data-emoji-url="'.route('emojis.index', [], false).'"', false)
-            ->assertSee('data-emoji-category-template', false)
+            ->assertSee('aria-label="Emoji category"', false)
+            ->assertSee('data-emoji-categories', false)
+            ->assertDontSee('data-emoji-category-template', false)
             ->assertSee('data-emoji-option-template', false)
             ->assertSee('data-emoji-loading-spinner', false)
             ->assertSee('overflow-x-hidden', false)
@@ -290,10 +322,10 @@ class TotalLogTest extends TestCase
         $this->assertStringContainsString('window.setTimeout(() => requestEmojis', $script);
         $this->assertStringContainsString("loading?.classList.toggle('grid', busy)", $script);
         $this->assertStringContainsString('option.title = emoji.name', $script);
+        $this->assertStringContainsString("categorySelect?.addEventListener('change'", $script);
         $this->assertStringNotContainsString('data-by-group.json', $script);
         $styles = file_get_contents(resource_path('css/app.css'));
-        $this->assertStringContainsString('.block-emoji-picker-category-tabs::-webkit-scrollbar', $styles);
-        $this->assertStringContainsString('scrollbar-width: none', $styles);
+        $this->assertStringNotContainsString('.block-emoji-picker-category-tabs', $styles);
 
         $created = $this->postJson(route('blocks.store', $log), [
             'type' => 'text', 'content' => 'Custom emoji note', 'emoji' => '🌈', 'occurred_at' => '09:15',

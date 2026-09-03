@@ -779,16 +779,15 @@ function initEmojiPicker(picker) {
     const toggle = picker.querySelector('[data-emoji-toggle]');
     const menu = picker.querySelector('[data-emoji-menu]');
     const search = picker.querySelector('[data-emoji-search]');
-    const categoryList = picker.querySelector('[data-emoji-categories]');
+    const categorySelect = picker.querySelector('[data-emoji-categories]');
     const grid = picker.querySelector('[data-emoji-grid]');
-    const categoryTemplate = picker.querySelector('[data-emoji-category-template]');
     const optionTemplate = picker.querySelector('[data-emoji-option-template]');
     const loading = picker.querySelector('[data-emoji-loading]');
     const loadingMessage = picker.querySelector('[data-emoji-loading-message]');
     const loadingSpinner = picker.querySelector('[data-emoji-loading-spinner]');
     const empty = picker.querySelector('[data-emoji-empty]');
     const host = picker.closest('.panel');
-    let categories = [], activeCategory = '', hydrated = false, searchTimer, requestRevision = 0;
+    let activeCategory = '', hydrated = false, searchTimer, requestRevision = 0;
     const close = () => { menu?.classList.add('hidden'); menu?.classList.remove('flex'); host?.classList.remove('emoji-picker-host-active'); toggle?.setAttribute('aria-expanded', 'false'); };
     const setLoading = busy => {
         loading?.classList.toggle('hidden', !busy);
@@ -801,15 +800,9 @@ function initEmojiPicker(picker) {
         }
         if (busy) empty?.classList.add('hidden');
     };
-    const markCategory = category => {
-        activeCategory = category.dataset.emojiCategory;
-        categories.forEach(item => {
-            const active = item === category;
-            item.classList.toggle('bg-indigo-100', active); item.classList.toggle('text-indigo-700', active);
-            item.classList.toggle('dark:bg-indigo-950', active); item.classList.toggle('dark:text-indigo-200', active);
-            item.classList.toggle('text-slate-500', !active);
-            item.setAttribute('aria-selected', active ? 'true' : 'false');
-        });
+    const markCategory = slug => {
+        activeCategory = slug || '';
+        if (categorySelect && categorySelect.value !== activeCategory) categorySelect.value = activeCategory;
     };
     const renderOptions = (emojis, revision) => {
         const nodes = (emojis || []).map(emoji => {
@@ -837,23 +830,16 @@ function initEmojiPicker(picker) {
             const body = await loadEmojiPage(picker.dataset.emojiUrl, params);
             if (revision !== requestRevision) return;
             if (!hydrated) {
-                const categoryNodes = (body.categories || []).map(group => {
-                const category = categoryTemplate.content.firstElementChild.cloneNode(true);
-                    category.dataset.emojiCategory = group.slug;
-                category.textContent = group.name;
-                    category.addEventListener('click', async () => {
-                        clearTimeout(searchTimer);
-                        if (search) search.value = '';
-                        markCategory(category);
-                        await requestEmojis({group:category.dataset.emojiCategory});
+                const categoryOptions = (body.categories || []).map(group => {
+                    const option = document.createElement('option');
+                    option.value = group.slug;
+                    option.textContent = group.name;
+                    return option;
                 });
-                    return category;
-                });
-                categoryList.replaceChildren(...categoryNodes);
-                categories = categoryNodes;
+                categorySelect?.replaceChildren(...categoryOptions);
                 hydrated = true;
             }
-            const selected = categories.find(category => category.dataset.emojiCategory === (body.group || activeCategory)) || categories[0];
+            const selected = body.group || activeCategory || categorySelect?.options[0]?.value || '';
             if (selected && !params.q) markCategory(selected);
             renderOptions(body.emojis, revision);
         } catch (error) {
@@ -877,6 +863,12 @@ function initEmojiPicker(picker) {
         clearTimeout(searchTimer);
         const query = search.value.trim();
         searchTimer = window.setTimeout(() => requestEmojis(query ? {q:query} : {group:activeCategory}), 300);
+    });
+    categorySelect?.addEventListener('change', async () => {
+        clearTimeout(searchTimer);
+        if (search) search.value = '';
+        markCategory(categorySelect.value);
+        await requestEmojis({group:activeCategory});
     });
 }
 
@@ -1645,16 +1637,6 @@ document.addEventListener('keydown', async event => {
         setMobileNavigation(false);
     }
 });
-
-const viewSelect = document.querySelector('[data-calendar-view]');
-if (viewSelect) {
-    const params = new URLSearchParams(location.search), saved = localStorage.getItem('totallog.calendarView');
-    const navigate = view => { localStorage.setItem('totallog.calendarView', view); if (view === 'day') { location.href = viewSelect.dataset.dayUrl; return; } params.set('view', view); location.href = `${location.pathname}?${params}`; };
-    const requested = params.get('view') || saved;
-    if (requested === 'day') location.replace(viewSelect.dataset.dayUrl);
-    else if (!params.has('view') && saved && saved !== viewSelect.value) { params.set('view', saved); location.replace(`${location.pathname}?${params}`); }
-    viewSelect.addEventListener('change', () => navigate(viewSelect.value));
-}
 
 document.querySelectorAll('[data-color-input]').forEach(input => {
     const preview = document.getElementById(input.dataset.colorInput);

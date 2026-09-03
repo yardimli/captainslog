@@ -26,6 +26,7 @@ class NotesFeatureTest extends TestCase
             ->assertDontSee('id="notes-page-heading"', false)
             ->assertSee('aria-label="Open today\'s log"', false)
             ->assertSee('href="'.route('logs.show', today()->toDateString()).'"', false)
+            ->assertSee('aria-label="Open calendar"', false)
             ->assertDontSee('aria-label="Open notes"', false);
 
         $this->assertDatabaseHas('notebooks', ['user_id' => $user->id, 'name' => 'Notes', 'is_default' => true]);

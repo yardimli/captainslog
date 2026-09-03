@@ -1,17 +1,20 @@
 @extends('layouts.app')
 
 @section('content')
-    <div id="calendar-page-container" class="mx-auto max-w-7xl space-y-4 p-4 sm:p-6 lg:p-8" data-calendar-focus-date="{{ $focus->toDateString() }}" data-calendar-today-url="{{ route('calendar', now()->toDateString()) }}?view={{ $view }}">
+    <div id="calendar-page-container" class="mx-auto max-w-7xl space-y-4 p-4 sm:p-6 lg:p-8" data-calendar-focus-date="{{ $focus->toDateString() }}" data-calendar-view-current="{{ $view }}" data-calendar-today-url="{{ route('calendar', now()->toDateString()) }}?view={{ $view }}">
         <div id="calendar-navigation-controls" class="panel flex flex-wrap items-center gap-2">
             @php $jump = $view === 'month' ? 'month' : ($view === 'week' ? 'week' : 'day'); @endphp
             <a class="btn-secondary" href="{{ route('calendar', $focus->copy()->sub(1, $jump)->toDateString()) }}?view={{ $view }}">← Previous</a>
             <a class="btn-secondary" href="{{ route('calendar', now()->toDateString()) }}?view={{ $view }}">Today</a>
             <a class="btn-secondary" href="{{ route('calendar', $focus->copy()->add(1, $jump)->toDateString()) }}?view={{ $view }}">Next →</a>
-            <label class="ml-auto flex items-center gap-2 text-sm">View
-                <select data-calendar-view data-day-url="{{ route('logs.show', $focus->toDateString()) }}" class="rounded-xl border-slate-300 bg-white py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
-                    @foreach(['day','week','month'] as $mode)<option value="{{ $mode }}" @selected($view===$mode)>{{ ucfirst($mode) }}</option>@endforeach
-                </select>
-            </label>
+            <div class="ml-auto flex items-center gap-1" role="group" aria-label="Calendar view">
+                <a href="{{ route('calendar', $focus->toDateString()) }}?view=week" class="nav-link grid h-9 w-9 place-items-center p-0 {{ $view === 'week' ? 'nav-active' : '' }}" data-calendar-view="week" aria-label="Week view" title="Week view" @if($view === 'week') aria-current="page" @endif>
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M6 14h2M10 14h2M14 14h2M18 14h1"/></svg>
+                </a>
+                <a href="{{ route('calendar', $focus->toDateString()) }}?view=month" class="nav-link grid h-9 w-9 place-items-center p-0 {{ $view === 'month' ? 'nav-active' : '' }}" data-calendar-view="month" aria-label="Month view" title="Month view" @if($view === 'month') aria-current="page" @endif>
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M7 14h2M11 14h2M15 14h2M7 18h2M11 18h2M15 18h2"/></svg>
+                </a>
+            </div>
         </div>
         <div id="calendar-day-grid" class="grid {{ $view === 'day' ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-4 lg:grid-cols-7' }} gap-2">
             @foreach($days as $day)
@@ -21,6 +24,13 @@
                     <div class="calendar-day-summary mt-5 space-y-1 text-xs text-slate-500">
                         @if($item)<p>{{ $item->blocks_count }} log {{ Str::plural('entry', $item->blocks_count) }}</p>@else<p class="opacity-0 transition group-hover:opacity-100">Open log →</p>@endif
                     </div>
+                    @if($item?->blocks_count)
+                        <div class="mt-2 flex flex-wrap items-center" aria-label="{{ $item->blocks_count }} recorded activities" data-calendar-activity-markers>
+                            @for($marker = 0; $marker < min($item->blocks_count, 32); $marker++)
+                                <span class="m-[5px] block h-[5px] w-[5px] shrink-0 bg-indigo-500 dark:bg-indigo-400" data-calendar-activity-marker aria-hidden="true"></span>
+                            @endfor
+                        </div>
+                    @endif
                 </a>
             @endforeach
         </div>

@@ -17,11 +17,10 @@ class CalendarController extends Controller
         if ($focus->format('Y-m') === now()->format('Y-m')) {
             $this->googleCalendar->syncUser($request->user());
         }
-        $view = in_array($request->query('view'), ['day', 'week', 'month'], true) ? $request->query('view') : 'week';
+        $view = in_array($request->query('view'), ['week', 'month'], true) ? $request->query('view') : 'week';
         $weekStart = $request->user()->week_starts_on ?? 1;
         $weekEnd = ($weekStart + 6) % 7;
         [$start, $end] = match ($view) {
-            'day' => [$focus->copy(), $focus->copy()],
             'month' => [$focus->copy()->startOfMonth()->startOfWeek($weekStart), $focus->copy()->endOfMonth()->endOfWeek($weekEnd)],
             default => [$focus->copy()->startOfWeek($weekStart), $focus->copy()->endOfWeek($weekEnd)],
         };
