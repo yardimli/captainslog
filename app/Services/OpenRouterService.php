@@ -83,7 +83,7 @@ class OpenRouterService
                 ->withToken($apiKey)
                 ->withHeaders([
                     'HTTP-Referer' => config('app.url'),
-                    'X-Title' => config('app.name', 'Total Record'),
+                    'X-Title' => config('app.name', 'Total Log'),
                 ])
                 ->withOptions(['http_errors' => false]);
             /** @var Response $result */

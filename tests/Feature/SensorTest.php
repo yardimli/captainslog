@@ -49,10 +49,10 @@ class SensorTest extends TestCase
         $this->assertFalse($sensor->fresh()->enabled);
 
         $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
-        $block = $log->blocks()->create(['type' => 'sensor_github', 'content' => 'captainslog', 'metadata' => ['sensor' => 'github', 'github_sha' => 'abc']]);
+        $block = $log->blocks()->create(['type' => 'sensor_github', 'content' => 'totallog', 'metadata' => ['sensor' => 'github', 'github_sha' => 'abc']]);
         $this->delete(route('sensors.github.unlink'))->assertRedirect()->assertSessionHas('status');
         $this->assertDatabaseMissing('sensors', ['id' => $sensor->id]);
-        $this->assertDatabaseHas('log_blocks', ['id' => $block->id, 'content' => 'captainslog']);
+        $this->assertDatabaseHas('log_blocks', ['id' => $block->id, 'content' => 'totallog']);
     }
 
     public function test_github_link_rejects_a_token_for_another_username(): void
@@ -80,18 +80,18 @@ class SensorTest extends TestCase
                     'total_count' => 4,
                     'items' => [[
                         'sha' => 'commit-one',
-                        'html_url' => 'https://github.com/octocat/captainslog/commit/commit-one',
-                        'repository' => ['name' => 'captainslog', 'full_name' => 'octocat/captainslog'],
+                        'html_url' => 'https://github.com/octocat/totallog/commit/commit-one',
+                        'repository' => ['name' => 'totallog', 'full_name' => 'octocat/totallog'],
                         'commit' => ['message' => 'Add navigation controls', 'author' => ['date' => '2026-08-15T09:35:00Z']],
                     ], [
                         'sha' => 'commit-two',
-                        'html_url' => 'https://github.com/octocat/captainslog/commit/commit-two',
-                        'repository' => ['name' => 'captainslog', 'full_name' => 'octocat/captainslog'],
+                        'html_url' => 'https://github.com/octocat/totallog/commit/commit-two',
+                        'repository' => ['name' => 'totallog', 'full_name' => 'octocat/totallog'],
                         'commit' => ['message' => "Group sensor entries\n\nMore details", 'author' => ['date' => '2026-08-15T09:50:00Z']],
                     ], [
                         'sha' => 'commit-three',
-                        'html_url' => 'https://github.com/octocat/captainslog/commit/commit-three',
-                        'repository' => ['name' => 'captainslog', 'full_name' => 'octocat/captainslog'],
+                        'html_url' => 'https://github.com/octocat/totallog/commit/commit-three',
+                        'repository' => ['name' => 'totallog', 'full_name' => 'octocat/totallog'],
                         'commit' => ['message' => 'Start the next hour', 'author' => ['date' => '2026-08-15T10:05:00Z']],
                     ], [
                         'sha' => 'commit-other',
@@ -106,7 +106,7 @@ class SensorTest extends TestCase
         });
 
         $this->actingAs($user)->get('/logs/2026-08-15')->assertOk()
-            ->assertSee('captainslog')
+            ->assertSee('totallog')
             ->assertSee('2 commits')
             ->assertSee('data-timeline-github', false)
             ->assertSee('Add navigation controls')
@@ -114,7 +114,7 @@ class SensorTest extends TestCase
             ->assertSee('data-github-event-list', false);
         $pastLog = DailyLog::where('user_id', $user->id)->whereDate('log_date', '2026-08-15')->firstOrFail();
         $this->assertSame(3, $pastLog->blocks()->where('type', 'sensor_github')->count());
-        $grouped = $pastLog->blocks()->where('type', 'sensor_github')->where('content', 'captainslog')->get()
+        $grouped = $pastLog->blocks()->where('type', 'sensor_github')->where('content', 'totallog')->get()
             ->first(fn ($block) => $block->occurred_at->format('H') === '17');
         $this->assertNotNull($grouped);
         $this->assertCount(2, $grouped->metadata['commits']);
@@ -126,7 +126,7 @@ class SensorTest extends TestCase
         Http::assertSentCount(2);
         Http::assertSent(fn (Request $request) => $request->hasHeader('Authorization', 'Bearer secret')
             && $request->hasHeader('X-GitHub-Api-Version', '2022-11-28'));
-        $this->assertDatabaseHas('log_blocks', ['type' => 'sensor_github', 'content' => 'captainslog']);
+        $this->assertDatabaseHas('log_blocks', ['type' => 'sensor_github', 'content' => 'totallog']);
         $this->assertDatabaseHas('log_blocks', ['type' => 'sensor_github', 'content' => 'No Git commits today']);
         $this->assertDatabaseCount('sensor_day_syncs', 2);
         Carbon::setTestNow();
@@ -141,9 +141,9 @@ class SensorTest extends TestCase
         foreach ([['legacy-one', '09:10:00'], ['legacy-two', '09:45:00']] as [$sha, $time]) {
             $log->blocks()->forceCreate([
                 'type' => 'sensor_github',
-                'content' => 'captainslog',
+                'content' => 'totallog',
                 'occurred_at' => '2026-08-15 '.$time,
-                'metadata' => ['sensor' => Sensor::GITHUB, 'github_sha' => $sha, 'repository' => 'octocat/captainslog', 'url' => 'https://github.com/octocat/captainslog/commit/'.$sha, 'empty' => false],
+                'metadata' => ['sensor' => Sensor::GITHUB, 'github_sha' => $sha, 'repository' => 'octocat/totallog', 'url' => 'https://github.com/octocat/totallog/commit/'.$sha, 'empty' => false],
             ]);
         }
         Http::fake();
@@ -227,7 +227,7 @@ class SensorTest extends TestCase
         $this->get(route('sensors.index'))->assertOk()
             ->assertSee('Chrome browsing')
             ->assertSee('Extension paired')
-            ->assertSee('public/captainslog-chrome-extension')
+            ->assertSee('public/totallog-chrome-extension')
             ->assertSee('data-confirm-browser-unlink', false);
 
         $this->delete(route('sensors.browser.unlink'))->assertRedirect()->assertSessionHas('status');
@@ -248,7 +248,7 @@ class SensorTest extends TestCase
         ]);
 
         $send = function (string $url) use ($key) {
-            return $this->withHeader('X-CaptainsLog-Key', $key)->postJson(route('api.sensors.browser.activity'), [
+            return $this->withHeader('X-TotalLog-Key', $key)->postJson(route('api.sensors.browser.activity'), [
                 'url' => $url,
                 'observed_at' => now()->toIso8601String(),
                 'client_id' => 'chrome-test-client',
@@ -257,7 +257,7 @@ class SensorTest extends TestCase
 
         $send('https://docs.github.com/en/rest?private=query')->assertCreated()->assertJsonPath('domain', 'docs.github.com');
         Carbon::setTestNow('2026-08-17 10:01:00');
-        $send('https://github.com/yardimli/captainslog')->assertCreated()->assertJsonPath('domain', 'github.com');
+        $send('https://github.com/yardimli/totallog')->assertCreated()->assertJsonPath('domain', 'github.com');
         Carbon::setTestNow('2026-08-17 10:02:00');
         $send('https://news.ycombinator.com/item?id=1')->assertCreated()->assertJsonPath('domain', 'news.ycombinator.com');
 
@@ -339,7 +339,7 @@ class SensorTest extends TestCase
             'duration_seconds' => 60,
         ]);
 
-        $response = $this->withHeader('X-CaptainsLog-Key', $key)->postJson(route('api.sensors.browser.activity'), [
+        $response = $this->withHeader('X-TotalLog-Key', $key)->postJson(route('api.sensors.browser.activity'), [
             'url' => 'https://github.com',
             'observed_at' => now()->toIso8601String(),
             'client_id' => 'current-client',
@@ -361,25 +361,25 @@ class SensorTest extends TestCase
 
     public function test_browser_sensor_api_rejects_unknown_keys_and_extension_bundle_is_present(): void
     {
-        $this->withHeader('X-CaptainsLog-Key', str_repeat('x', 64))->postJson(route('api.sensors.browser.activity'), [
+        $this->withHeader('X-TotalLog-Key', str_repeat('x', 64))->postJson(route('api.sensors.browser.activity'), [
             'url' => 'https://example.com',
             'client_id' => 'unknown-client',
         ])->assertUnauthorized();
 
-        $manifestPath = public_path('captainslog-chrome-extension/manifest.json');
+        $manifestPath = public_path('totallog-chrome-extension/manifest.json');
         $this->assertFileExists($manifestPath);
         $manifest = json_decode(file_get_contents($manifestPath), true, flags: JSON_THROW_ON_ERROR);
         $this->assertSame(3, $manifest['manifest_version']);
         $this->assertSame('service-worker.js', $manifest['background']['service_worker']);
-        $this->assertSame(file_get_contents(public_path('favicon.svg')), file_get_contents(public_path('captainslog-chrome-extension/favicon.svg')));
+        $this->assertSame(file_get_contents(public_path('favicon.svg')), file_get_contents(public_path('totallog-chrome-extension/favicon.svg')));
         foreach ([16, 32, 48, 128] as $size) {
-            $iconPath = public_path("captainslog-chrome-extension/icons/icon-{$size}.png");
+            $iconPath = public_path("totallog-chrome-extension/icons/icon-{$size}.png");
             $this->assertFileExists($iconPath);
             $this->assertSame([$size, $size], array_slice(getimagesize($iconPath), 0, 2));
             $this->assertSame("icons/icon-{$size}.png", $manifest['icons'][(string) $size]);
         }
-        $this->assertFileExists(public_path('captainslog-chrome-extension/options.html'));
-        $worker = file_get_contents(public_path('captainslog-chrome-extension/service-worker.js'));
+        $this->assertFileExists(public_path('totallog-chrome-extension/options.html'));
+        $worker = file_get_contents(public_path('totallog-chrome-extension/service-worker.js'));
         $this->assertStringContainsString('http://127.0.0.1:8016/', $worker);
         $this->assertStringContainsString('api/sensors/browser/activity', $worker);
         $this->assertStringContainsString('api/sensors/browser/mobile-history', $worker);
@@ -396,9 +396,9 @@ class SensorTest extends TestCase
         $this->assertContains('cookies', $manifest['optional_permissions']);
         $this->assertContains('history', $manifest['permissions']);
         $this->assertContains('kindle-tracker.js', $manifest['content_scripts'][0]['js']);
-        $this->assertFileExists(public_path('captainslog-chrome-extension/kindle-tracker.js'));
+        $this->assertFileExists(public_path('totallog-chrome-extension/kindle-tracker.js'));
         $this->assertSame('1.4.1', $manifest['version']);
-        $options = file_get_contents(public_path('captainslog-chrome-extension/options.html'));
+        $options = file_get_contents(public_path('totallog-chrome-extension/options.html'));
         $this->assertStringContainsString('Sync past data', $options);
         $this->assertStringContainsString('Chrome history debug', $options);
         $this->assertStringContainsString('data-options-tab="debug"', $options);
@@ -428,12 +428,12 @@ class SensorTest extends TestCase
             ['url' => 'http://127.0.0.1/private', 'visited_at' => '2026-09-01T10:55:00+08:00', 'visit_key' => hash('sha256', 'visit-invalid-ip')],
         ];
 
-        $this->withHeader('X-CaptainsLog-Key', $key)
+        $this->withHeader('X-TotalLog-Key', $key)
             ->postJson(route('api.sensors.browser.mobile-history'), ['visits' => $visits])
             ->assertCreated()
             ->assertJson(['imported' => 7, 'duplicates' => 0, 'rejected' => 1, 'blocks' => 2]);
 
-        $this->withHeader('X-CaptainsLog-Key', $key)
+        $this->withHeader('X-TotalLog-Key', $key)
             ->postJson(route('api.sensors.browser.mobile-history'), ['visits' => $visits])
             ->assertCreated()
             ->assertJson(['imported' => 0, 'duplicates' => 7, 'rejected' => 1, 'blocks' => 0]);
@@ -464,7 +464,7 @@ class SensorTest extends TestCase
             'enabled' => true,
         ]);
 
-        $this->withHeader('X-CaptainsLog-Key', $key)
+        $this->withHeader('X-TotalLog-Key', $key)
             ->postJson(route('api.sensors.browser.mobile-history'), ['visits' => []])
             ->assertCreated()
             ->assertExactJson(['imported' => 0, 'duplicates' => 0, 'rejected' => 0, 'blocks' => 0]);
@@ -485,7 +485,7 @@ class SensorTest extends TestCase
             'enabled' => true,
         ]);
 
-        $send = fn (float $percentage) => $this->withHeader('X-CaptainsLog-Key', $key)->postJson(route('api.sensors.kindle.progress'), [
+        $send = fn (float $percentage) => $this->withHeader('X-TotalLog-Key', $key)->postJson(route('api.sensors.kindle.progress'), [
             'title' => '<b>The Left Hand of Darkness</b>',
             'author' => 'Ursula K. Le Guin',
             'asin' => 'B000FC1HBY',
@@ -519,7 +519,7 @@ class SensorTest extends TestCase
             'https://oauth2.googleapis.com/token' => Http::sequence()
                 ->push(['access_token' => 'oauth-access', 'refresh_token' => 'refresh-secret'])
                 ->push(['access_token' => 'sync-access']),
-            'https://openidconnect.googleapis.com/v1/userinfo' => Http::response(['sub' => 'google-user-1', 'email' => 'captain@example.com']),
+            'https://openidconnect.googleapis.com/v1/userinfo' => Http::response(['sub' => 'google-user-1', 'email' => 'guest@example.com']),
             'https://www.googleapis.com/calendar/v3/calendars/primary/events*' => Http::response(['items' => [[
                 'id' => 'timed-event',
                 'status' => 'confirmed',
@@ -550,7 +550,7 @@ class SensorTest extends TestCase
             ->assertSessionHas('status');
 
         $sensor = Sensor::where('user_id', $user->id)->where('type', Sensor::GOOGLE_CALENDAR)->firstOrFail();
-        $this->assertSame('captain@example.com', $sensor->username);
+        $this->assertSame('guest@example.com', $sensor->username);
         $this->assertSame('refresh-secret', $sensor->token);
         $this->assertNotSame('refresh-secret', DB::table('sensors')->where('id', $sensor->id)->value('token'));
         $this->assertTrue($sensor->enabled);
@@ -573,7 +573,7 @@ class SensorTest extends TestCase
             'services.google_calendar.client_secret' => 'google-client-secret',
         ]);
         $user = User::factory()->create();
-        $sensor = Sensor::create(['user_id' => $user->id, 'type' => Sensor::GOOGLE_CALENDAR, 'username' => 'captain@example.com', 'token' => 'refresh-secret', 'enabled' => true, 'settings' => ['calendar_id' => 'primary']]);
+        $sensor = Sensor::create(['user_id' => $user->id, 'type' => Sensor::GOOGLE_CALENDAR, 'username' => 'guest@example.com', 'token' => 'refresh-secret', 'enabled' => true, 'settings' => ['calendar_id' => 'primary']]);
         Http::fake([
             'https://oauth2.googleapis.com/token' => Http::response(['access_token' => 'sync-access']),
             'https://www.googleapis.com/calendar/v3/calendars/primary/events*' => Http::sequence()

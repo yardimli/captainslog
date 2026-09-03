@@ -1,4 +1,4 @@
-# Total Record revision verification
+# Total Log revision verification
 
 Last reviewed: 2026-08-17
 
@@ -58,7 +58,7 @@ The media controls are inside a native `<details>` disclosure. New entries start
 - `resources/views/logs/partials/composer.blade.php` — defines the Attach Media `<details>` panel and its upload/recording controls.
 - `resources/views/logs/show.blade.php` — exposes `data-has-media` on recorded timeline entries.
 - `resources/js/app.js` — `configureComposer()` sets `mediaPanel.open` only for edited entries that already have media; disclosure initialization updates its label.
-- `tests/Feature/CaptainsLogTest.php` — verifies entries expose media state and the composer media panel.
+- `tests/Feature/TotalLogTest.php` — verifies entries expose media state and the composer media panel.
 
 ## 5. Descriptive IDs and semantic first classes for `<div>` elements
 
@@ -83,7 +83,7 @@ The time-picker panel uses `max-h-[80dvh]`, and its positioning logic no longer 
 
 - `resources/views/partials/javascript-templates.blade.php` — applies `max-h-[80dvh]` to the time dialog.
 - `resources/js/app.js` — positions the dialog without mutating its CSS maximum height.
-- `tests/Feature/CaptainsLogTest.php` — verifies the `80dvh` class and absence of the removed manual control.
+- `tests/Feature/TotalLogTest.php` — verifies the `80dvh` class and absence of the removed manual control.
 
 ## 7. Open timeline slots default to their start time
 
@@ -95,7 +95,7 @@ Click position is no longer interpolated into a five-minute value between the sl
 
 - `resources/views/logs/show.blade.php` — renders `data-from` and `data-to` on open timeline slots.
 - `resources/js/app.js` — uses `configureComposer({time: timelineItem.dataset.from})`.
-- `tests/Feature/CaptainsLogTest.php` — verifies the start-time behavior and confirms the old `gapTime()` calculation is absent.
+- `tests/Feature/TotalLogTest.php` — verifies the start-time behavior and confirms the old `gapTime()` calculation is absent.
 
 ## 8. Delete modal layering and full-day AJAX refresh
 
@@ -109,7 +109,7 @@ Confirmation modals render at z-index 120, above the composer overlay at z-index
 - `resources/views/logs/show.blade.php` — marks `#daily-log-page-heading` and `#daily-log-page-container` as day-view fragments.
 - `resources/js/app.js` — implements `refreshDayView()`, `refreshDayViewOrReload()`, AJAX delete/edit handling, overlay closing, and fragment replacement.
 - `app/Http/Controllers/LogBlockController.php` and `app/Http/Controllers/TaskEventController.php` — return JSON responses used by the AJAX workflow.
-- `tests/Feature/CaptainsLogTest.php` — checks the fragments, refresh implementation, and modal layer.
+- `tests/Feature/TotalLogTest.php` — checks the fragments, refresh implementation, and modal layer.
 
 ## 9. Simplified live-update time picker
 
@@ -121,7 +121,7 @@ The bottom Manual input, Cancel, and Use this time controls were removed. Wheel 
 
 - `resources/views/partials/javascript-templates.blade.php` — contains only the wheel UI and top `data-time-dialog-cancel` action.
 - `resources/js/app.js` — implements live value updates, original-value rollback, outside close, and hour-plus-minute auto-close.
-- `tests/Feature/CaptainsLogTest.php` — verifies the top cancel exists and the removed manual/apply controls do not.
+- `tests/Feature/TotalLogTest.php` — verifies the top cancel exists and the removed manual/apply controls do not.
 
 ## 10. Stable scrollbar gutter while overlays are open
 
@@ -146,7 +146,7 @@ The image request previously called `compact('model', 'prompt')` inside an arrow
 
 - `app/Services/OpenRouterService.php` — builds explicit image and transcription request arrays.
 - `app/Http/Controllers/OpenRouterController.php` — validates the selected model/prompt, creates the generated-image block, stores returned image data, and creates the attachment.
-- `tests/Feature/CaptainsLogTest.php` — sends `bytedance-seed/seedream-5-0-lite` with `a coffee mug with a lid`, verifies the outgoing OpenRouter payload, stored attachment, and API-call log.
+- `tests/Feature/TotalLogTest.php` — sends `bytedance-seed/seedream-5-0-lite` with `a coffee mug with a lid`, verifies the outgoing OpenRouter payload, stored attachment, and API-call log.
 
 ## 12. Save edited log entries when the aside closes; red Cancel discards
 
@@ -162,7 +162,7 @@ This behavior supersedes the earlier immediate event autosave inside the aside; 
 - `resources/views/logs/partials/composer.blade.php` — provides the edit/create form and status message.
 - `resources/js/app.js` — `configureComposer()` hides submit in edit mode; `saveComposerDraft()` handles close-to-save; Cancel closes without saving; Close/backdrop/Escape save and refresh.
 - `app/Http/Controllers/LogBlockController.php` and `app/Http/Controllers/TaskEventController.php` — accept the AJAX PATCH updates.
-- `tests/Feature/CaptainsLogTest.php` — verifies the edit controls and close-to-save implementation markers.
+- `tests/Feature/TotalLogTest.php` — verifies the edit controls and close-to-save implementation markers.
 
 ## 13. Image entries use the log-entry edit and delete flow
 
@@ -180,7 +180,7 @@ Deleting the entry closes the aside and refreshes the complete day timeline thro
 - `resources/views/partials/javascript-templates.blade.php` — provides the Blade-owned image-preview template used by the aside.
 - `resources/js/app.js` — fills the preview template with the entry's image URLs when edit mode opens.
 - `app/Http/Controllers/LogBlockController.php` — removes attachment files and records as part of deleting their log entry.
-- `tests/Feature/CaptainsLogTest.php` — verifies the timeline omits the image filename/delete link and that deleting the block removes the stored file, attachment row, and log block.
+- `tests/Feature/TotalLogTest.php` — verifies the timeline omits the image filename/delete link and that deleting the block removes the stored file, attachment row, and log block.
 
 **Browser verification:** Confirmed that an image timeline entry displays only its time and media label, opens with one thumbnail in the aside, and disappears after confirming **Delete entry**. A database and storage check confirmed that both the attachment record and image file were removed.
 
@@ -200,7 +200,7 @@ Existing records were backfilled with semantic defaults: 📝 text, 🖼️ uplo
 - `resources/views/logs/show.blade.php`, `resources/views/logs/partials/composer.blade.php`, `resources/views/logs/partials/block.blade.php`, `resources/views/events/edit.blade.php`, and `resources/views/tasks/index.blade.php` — expose, edit, and render emojis.
 - `resources/js/app.js` — filters categories/search results, selects emojis, tracks dirty state, and persists changes through AJAX.
 - `app/Http/Controllers` and `app/Services/ChatActionExecutor.php` — validate and persist custom/default emojis through manual, media, event, and smart-chat flows.
-- `tests/Feature/CaptainsLogTest.php` — verifies defaults, custom values, picker markup, uploads, chat, image generation, and smart-chat propagation.
+- `tests/Feature/TotalLogTest.php` — verifies defaults, custom values, picker markup, uploads, chat, image generation, and smart-chat propagation.
 
 ## 15. Guest demo upgraded with emojis, side editing, and image entries
 
@@ -238,7 +238,7 @@ The aside contains the complete event definition—friendly name, searchable emo
 - `resources/views/tasks/index.blade.php` — provides the event list, JSON-backed row data, page-heading Add action, and reusable right-side editor.
 - `resources/js/app.js` — populates/reset the shared editor, switches POST/PATCH actions, restores recurrence and time-slot state, and supports right-side overlay animation beyond the log composer.
 - `app/Http/Controllers/TaskController.php` — returns create/update JSON responses for the AJAX aside while retaining normal redirect responses.
-- `tests/Feature/CaptainsLogTest.php` — verifies the event list/aside markers, serialized time slots, and AJAX create/update persistence.
+- `tests/Feature/TotalLogTest.php` — verifies the event list/aside markers, serialized time slots, and AJAX create/update persistence.
 
 **Browser verification:** Confirmed there are no inline `<details>` editors; selecting **Dog walk** opened an aside populated with 🐕, weekly days Monday/Wednesday/Friday, 08:00 and 18:30 slots, sticky state, values, and bottom Delete. Saving renamed the list row through AJAX. **Add event** reopened the same aside reset to ✅, no slots, no Delete, and the Create action.
 

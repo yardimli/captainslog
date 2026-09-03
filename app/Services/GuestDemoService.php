@@ -18,7 +18,7 @@ use Illuminate\Support\Str;
 
 class GuestDemoService
 {
-    public const COOKIE = 'captainslog_guest';
+    public const COOKIE = 'totallog_guest';
 
     private const SEED_VERSION = 2;
 
@@ -35,7 +35,7 @@ class GuestDemoService
         if (! $user) {
             $token = Str::random(64);
             $user = User::create([
-                'name' => 'Guest Captain',
+                'name' => 'Guest User',
                 'email' => 'guest-'.Str::lower(Str::random(24)).'@demo.invalid',
                 'password' => Hash::make(Str::random(64)),
                 'is_guest' => true,
@@ -176,13 +176,13 @@ class GuestDemoService
                 ['content' => "T'Paw detected the pill hidden in cheese at six meters. Tried peanut butter. Resistance was futile, eventually."],
             ],
             4 => [
-                ['content' => 'Captain’s log: sunrise yoga on the observation deck. Spot sat on the mat during savasana and claimed salvage rights.'],
+                ['content' => 'Total log: sunrise yoga on the observation deck. Spot sat on the mat during savasana and claimed salvage rights.'],
                 ['content' => 'Red-alert moment: delivery arrived without the low-calorie dressing. Used the STOP technique and only drafted one strongly worded subspace message.'],
                 ['type' => 'chat_assistant', 'content' => 'Computer: Daily victory detected—stairs used instead of turbolift. Commendation pending.'],
             ],
             3 => [
                 ['content' => "Worf's medication administered on schedule. He performed the traditional beagle maneuver: swallowing the cheese and returning the tablet."],
-                ['content' => 'Led chair yoga for the senior officers. Captain’s chair refused to participate but provided excellent lumbar support.'],
+                ['content' => 'Led chair yoga for the senior officers. Total chair refused to participate but provided excellent lumbar support.'],
                 ['content' => 'Dinner: one sensible bowl of soup and a completely classified number of bread rolls. The logs have been sealed by Starfleet Wellness.'],
             ],
             2 => [

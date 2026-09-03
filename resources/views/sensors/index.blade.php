@@ -46,7 +46,7 @@
                     @if($googleCalendarSensor->last_error)<div id="google-calendar-sensor-error" class="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"><strong>Last sync failed.</strong> {{ $googleCalendarSensor->last_error }}</div>@endif
                     <div id="google-calendar-actions" class="grid gap-2 sm:grid-cols-2"><form method="POST" action="{{ route('sensors.google-calendar.sync') }}" data-ajax>@csrf<button class="btn-secondary w-full">Sync this month now</button></form><a class="btn-secondary w-full justify-center" href="{{ route('sensors.google-calendar.connect') }}">Reconnect Google</a></div>
                     <form method="POST" action="{{ route('sensors.google-calendar.unlink') }}" data-confirm-sensor-unlink>@csrf @method('DELETE')<button class="btn-secondary w-full border-rose-300 text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:hover:bg-rose-950">Unlink Google Calendar</button></form>
-                    <p class="text-center text-xs text-slate-500">Captain’s Log requests read-only calendar access. The refresh token is encrypted; event attendees are not stored.</p>
+                    <p class="text-center text-xs text-slate-500">Total Log requests read-only calendar access. The refresh token is encrypted; event attendees are not stored.</p>
                 </div>
             @else
                 <div id="google-calendar-connect-controls" class="mt-5 space-y-4 border-t border-slate-200 pt-5 dark:border-slate-800">
@@ -71,7 +71,7 @@
             <div id="browser-sensor-installation" class="mt-5 space-y-4 border-t border-slate-200 pt-5 dark:border-slate-800">
                 <div id="browser-extension-instructions" class="rounded-2xl bg-slate-50 p-4 text-sm dark:bg-slate-900">
                     <p class="font-bold">Install the included Chrome extension</p>
-                    <ol class="mt-2 list-decimal space-y-1 pl-5 text-slate-500"><li>Open <strong>chrome://extensions</strong> and enable Developer mode.</li><li>Choose <strong>Load unpacked</strong>.</li><li>Select <code class="rounded bg-slate-200 px-1 dark:bg-slate-800">public/captainslog-chrome-extension</code>.</li><li>Open the extension settings and press <strong>Connect to Total Record</strong>.</li></ol>
+                    <ol class="mt-2 list-decimal space-y-1 pl-5 text-slate-500"><li>Open <strong>chrome://extensions</strong> and enable Developer mode.</li><li>Choose <strong>Load unpacked</strong>.</li><li>Select <code class="rounded bg-slate-200 px-1 dark:bg-slate-800">public/totallog-chrome-extension</code>.</li><li>Open the extension settings and press <strong>Connect to Total Log</strong>.</li></ol>
                     <p class="mt-3 text-xs text-slate-500">The extension starts with <code>http://127.0.0.1:8016/</code>. You can change the app URL in its settings.</p>
                 </div>
                 <div id="mobile-browser-sensor-info" class="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950 dark:border-violet-900 dark:bg-violet-950 dark:text-violet-100"><p class="font-bold">Mobile browsing</p><p class="mt-1 text-xs leading-relaxed opacity-80">Enable <strong>History and tabs</strong> sync in Chrome on the iPhone and this desktop. Synced non-local visits are grouped into hourly log blocks and counted once per page visit. If several remote devices use the account, Chrome combines them.</p></div>

@@ -42,7 +42,7 @@ return [
 
     'nominatim' => [
         'url' => env('NOMINATIM_URL', 'https://nominatim.openstreetmap.org/reverse'),
-        'user_agent' => env('NOMINATIM_USER_AGENT', 'TotalRecord/1.0 (+'.env('APP_URL', 'http://localhost').')'),
+        'user_agent' => env('NOMINATIM_USER_AGENT', 'TotalLog/1.0 (+'.env('APP_URL', 'http://localhost').')'),
     ],
 
 ];

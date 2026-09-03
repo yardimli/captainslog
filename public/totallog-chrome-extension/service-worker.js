@@ -1,23 +1,23 @@
 const DEFAULT_APP_URL = 'http://127.0.0.1:8016/';
 const DEFAULT_KINDLE_URL = 'https://read.amazon.com/kindle-library';
-const HEARTBEAT_ALARM = 'captainslog-browsing-heartbeat';
-const MOBILE_HISTORY_ALARM = 'captainslog-mobile-history';
-const KINDLE_CHECK_ALARM = 'captainslog-kindle-session-check';
-const KINDLE_SYNC_TIMEOUT_PREFIX = 'captainslog-kindle-sync-timeout-';
+const HEARTBEAT_ALARM = 'totallog-browsing-heartbeat';
+const MOBILE_HISTORY_ALARM = 'totallog-mobile-history';
+const KINDLE_CHECK_ALARM = 'totallog-kindle-session-check';
+const KINDLE_SYNC_TIMEOUT_PREFIX = 'totallog-kindle-sync-timeout-';
 const DEBUG_MESSAGE_LIMIT = 1000;
 let debugWriteQueue = Promise.resolve();
 
 function debugLog(level, event, details = {}) {
   const entry = {at: new Date().toISOString(), level, event, details};
   const detailText = JSON.stringify(details);
-  console[level === 'error' ? 'warn' : 'log'](`[Total Record] ${event}${detailText === '{}' ? '' : ` ${detailText}`}`);
+  console[level === 'error' ? 'warn' : 'log'](`[Total Log] ${event}${detailText === '{}' ? '' : ` ${detailText}`}`);
   debugWriteQueue = debugWriteQueue.then(async () => {
     const stored = await chrome.storage.local.get(['debugMessages']);
     const messages = Array.isArray(stored.debugMessages) ? stored.debugMessages : [];
     messages.push(entry);
     await chrome.storage.local.set({debugMessages: messages.slice(-DEBUG_MESSAGE_LIMIT)});
   }).catch(error => {
-    console.warn(`[Total Record] Could not store debug message: ${error.message || String(error)}`);
+    console.warn(`[Total Log] Could not store debug message: ${error.message || String(error)}`);
   });
   return debugWriteQueue;
 }
@@ -68,11 +68,11 @@ async function sendActiveBrowsing() {
     if (browsingUrl.origin === new URL(appUrl).origin) return;
     const response = await fetch(new URL('api/sensors/browser/activity', appUrl), {
       method: 'POST',
-      headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CaptainsLog-Key': config.pairingKey},
+      headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-TotalLog-Key': config.pairingKey},
       body: JSON.stringify({url: `${browsingUrl.protocol}//${browsingUrl.hostname}`, observed_at: new Date().toISOString(), client_id: config.clientId})
     });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.message || `Total Record returned ${response.status}.`);
+    if (!response.ok) throw new Error(body.message || `Total Log returned ${response.status}.`);
     await chrome.storage.local.set({connectionStatus: 'connected', lastSentAt: new Date().toISOString(), lastDomain: body.domain || browsingUrl.hostname, lastLogDate: body.log_date || null, lastError: null});
   } catch (error) {
     await chrome.storage.local.set({connectionStatus: 'error', lastError: error.message || String(error)});
@@ -149,7 +149,7 @@ async function syncMobileHistory(fullScan = false) {
   await debugLog('info', 'mobile-sync-started', {fullScan});
   try {
     const config = await settings();
-    if (!config.pairingKey) throw new Error('Connect the extension to Captain\'s Log before syncing mobile history.');
+    if (!config.pairingKey) throw new Error('Connect the extension to Total Log before syncing mobile history.');
     const appUrl = normalizeAppUrl(config.appUrl);
     const endTime = Date.now();
     const initialStart = endTime - (90 * 24 * 60 * 60 * 1000);
@@ -167,7 +167,7 @@ async function syncMobileHistory(fullScan = false) {
       await debugLog('info', 'mobile-api-request', {batch: index + 1, batches: batches.length, visits: batch.length});
       const response = await fetch(new URL('api/sensors/browser/mobile-history', appUrl), {
         method: 'POST',
-        headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CaptainsLog-Key': config.pairingKey},
+        headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-TotalLog-Key': config.pairingKey},
         body: JSON.stringify({visits: batch})
       });
       const body = await response.json().catch(() => ({}));
@@ -329,11 +329,11 @@ async function sendKindleProgress(progress) {
   try {
     const response = await fetch(new URL('api/sensors/kindle/progress', normalizeAppUrl(config.appUrl)), {
       method: 'POST',
-      headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CaptainsLog-Key': config.pairingKey},
+      headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-TotalLog-Key': config.pairingKey},
       body: JSON.stringify({...progress, observed_at: new Date().toISOString(), client_id: config.clientId})
     });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.message || `Total Record returned ${response.status}.`);
+    if (!response.ok) throw new Error(body.message || `Total Log returned ${response.status}.`);
     await setKindleStatus('connected', {
       kindleLastSyncAt: new Date().toISOString(),
       kindleLastTitle: body.title || progress.title,

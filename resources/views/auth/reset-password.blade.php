@@ -1,7 +1,7 @@
 @extends('layouts.guest')
 @section('eyebrow', 'Account recovery')
 @section('title', 'Choose a new password')
-@section('subtitle', 'Set a fresh password to securely return to your total record.')
+@section('subtitle', 'Set a fresh password to securely return to your total log.')
 @section('content')
     <form method="POST" action="{{ route('password.store') }}" class="space-y-5">
         @csrf

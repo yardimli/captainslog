@@ -15,7 +15,7 @@ class BrowserSensorApiController extends Controller
             'observed_at' => ['nullable', 'date'],
             'client_id' => ['required', 'string', 'max:64', 'regex:/^[A-Za-z0-9_-]+$/'],
         ]);
-        $key = (string) $request->header('X-CaptainsLog-Key');
+        $key = (string) $request->header('X-TotalLog-Key');
         abort_unless(preg_match('/^[A-Za-z0-9_-]{32,128}$/', $key), 401, 'Browser sensor key required.');
         $sensor = Sensor::with('user')
             ->where('type', Sensor::BROWSER)

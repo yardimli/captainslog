@@ -432,7 +432,7 @@ function startTodayActivityRefresh() {
     window.addEventListener('focus', refreshWhenDue);
 }
 
-const reloadScrollKey = `captainslog.reload-scroll:${window.location.pathname}${window.location.search}`;
+const reloadScrollKey = `totallog.reload-scroll:${window.location.pathname}${window.location.search}`;
 function reloadAtCurrentScroll() {
     try { sessionStorage.setItem(reloadScrollKey, JSON.stringify({x:window.scrollX, y:window.scrollY})); } catch (_) {}
     window.location.reload();
@@ -552,7 +552,7 @@ function applyTheme(theme) {
     const selected = colorThemes.includes(theme) ? theme : 'light';
     document.documentElement.dataset.theme = selected;
     document.documentElement.classList.toggle('dark', selected === 'dark' || selected === 'red');
-    localStorage.setItem('captainslog.theme', selected);
+    localStorage.setItem('totallog.theme', selected);
     document.querySelectorAll('[data-theme-icon]').forEach(icon => icon.classList.toggle('hidden', icon.dataset.themeIcon !== selected));
     document.querySelectorAll('[data-theme-option]').forEach(option => {
         const active = option.dataset.themeOption === selected;
@@ -1644,8 +1644,8 @@ document.addEventListener('keydown', async event => {
 
 const viewSelect = document.querySelector('[data-calendar-view]');
 if (viewSelect) {
-    const params = new URLSearchParams(location.search), saved = localStorage.getItem('captainslog.calendarView');
-    const navigate = view => { localStorage.setItem('captainslog.calendarView', view); if (view === 'day') { location.href = viewSelect.dataset.dayUrl; return; } params.set('view', view); location.href = `${location.pathname}?${params}`; };
+    const params = new URLSearchParams(location.search), saved = localStorage.getItem('totallog.calendarView');
+    const navigate = view => { localStorage.setItem('totallog.calendarView', view); if (view === 'day') { location.href = viewSelect.dataset.dayUrl; return; } params.set('view', view); location.href = `${location.pathname}?${params}`; };
     const requested = params.get('view') || saved;
     if (requested === 'day') location.replace(viewSelect.dataset.dayUrl);
     else if (!params.has('view') && saved && saved !== viewSelect.value) { params.set('view', saved); location.replace(`${location.pathname}?${params}`); }
@@ -1693,7 +1693,7 @@ function requestModelList(url) {
 async function loadModels(select) {
     if (select.dataset.modelsInitialized === 'true') return;
     select.dataset.modelsInitialized = 'true';
-    const kind = select.dataset.modelSelect, modelKind = kind === 'chat-default' ? 'chat' : kind, key = `captainslog.models.${modelKind}`, choiceKey = `captainslog.model.${modelKind}`, accountChoice = select.dataset.selected || '';
+    const kind = select.dataset.modelSelect, modelKind = kind === 'chat-default' ? 'chat' : kind, key = `totallog.models.${modelKind}`, choiceKey = `totallog.model.${modelKind}`, accountChoice = select.dataset.selected || '';
     const render = models => {
         const choice = kind === 'chat-default' ? accountChoice : (localStorage.getItem(choiceKey) || accountChoice);
         const options = models.map(model => { const option = cloneTemplate('select-option-template'); option.textContent = model.name || model.id; option.value = model.id; return option; });

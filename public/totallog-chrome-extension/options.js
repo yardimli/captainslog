@@ -141,10 +141,10 @@ async function render() {
     statusDetail.textContent = data.lastDomain ? `Last sent ${data.lastDomain} · ${formatTime(data.lastSentAt)}${recordedDate}` : 'Connected and waiting for a browsed site.';
   } else if (state === 'error') {
     statusLabel.textContent = 'Needs attention';
-    statusDetail.textContent = data.lastError || 'Could not reach Captain\'s Log.';
+    statusDetail.textContent = data.lastError || 'Could not reach Total Log.';
   } else if (state === 'pairing') {
     statusLabel.textContent = 'Pairing';
-    statusDetail.textContent = 'Finish signing in and approve the pairing in the opened Captain\'s Log tab.';
+    statusDetail.textContent = 'Finish signing in and approve the pairing in the opened Total Log tab.';
   } else {
     statusLabel.textContent = 'Not connected';
     statusDetail.textContent = 'Save the app URL, then connect this extension to your signed-in account.';

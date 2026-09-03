@@ -1,5 +1,5 @@
 {
-    "name": "total-record",
+    "name": "total-log",
     "private": true,
     "scripts": {
         "dev": "vite",

@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/yardimli/captainslog/main/docs/images/captains-log-logo.png" alt="Total Record logo" width="190">
+  <img src="https://raw.githubusercontent.com/yardimli/totallog/main/docs/images/total-log-logo.png" alt="Total Log logo" width="190">
 </p>
 
-<h1 align="center">Total Record</h1>
+<h1 align="center">Total Log</h1>
 
 <p align="center">
   A private, media-rich daily journal for recording ordinary missions, recurring events, and AI-assisted reflections.
@@ -15,9 +15,9 @@
   <img alt="MariaDB" src="https://img.shields.io/badge/MariaDB-ready-003545?logo=mariadb&logoColor=white">
 </p>
 
-Total Record combines a calendar, block-based daily journal, standalone Notes library, repeatable event tracking, and OpenRouter tools in a responsive Laravel application. Every calendar, log, and note URL is refreshable, while everyday interactions stay quick.
+Total Log combines a calendar, block-based daily journal, standalone Notes library, repeatable event tracking, and OpenRouter tools in a responsive Laravel application. Every calendar, log, and note URL is refreshable, while everyday interactions stay quick.
 
-![Total Record landing page and guest simulation](https://raw.githubusercontent.com/yardimli/captainslog/main/docs/images/landing-demo.png)
+![Total Log landing page and guest simulation](https://raw.githubusercontent.com/yardimli/totallog/main/docs/images/landing-demo.png)
 
 ## Features
 
@@ -38,7 +38,7 @@ Total Record combines a calendar, block-based daily journal, standalone Notes li
 - Text blocks can be edited or deleted without replacing the rest of the daily log.
 - Updates use normal HTML forms and vanilla-JavaScript AJAX while retaining usable, refreshable pages.
 
-![Interactive daily log guest demo](https://raw.githubusercontent.com/yardimli/captainslog/main/docs/images/daily-log-demo.png)
+![Interactive daily log guest demo](https://raw.githubusercontent.com/yardimli/totallog/main/docs/images/daily-log-demo.png)
 
 ### Repeating events and buttons
 
@@ -80,10 +80,10 @@ The integration follows OpenRouter's APIs for [chat completions](https://openrou
 - Link GitHub to add commit project names at their commit times. Commits for the same project and hour share one timeline entry, with every individual commit available in its side panel.
 - Connect a Google account with read-only Calendar OAuth to mirror the primary calendar into the current month. Recurring instances are expanded, and renamed, moved, or removed Google events update their matching log entries.
 - Google Calendar refresh tokens are encrypted. The current month refreshes hourly and is also checked, with a fifteen-minute throttle, when its calendar or daily logs are opened.
-- Install the included Manifest V3 Chrome extension from `public/captainslog-chrome-extension` to track active browsing hostnames, including subdomains.
+- Install the included Manifest V3 Chrome extension from `public/totallog-chrome-extension` to track active browsing hostnames, including subdomains.
 - Browsing activity is grouped into one log entry per hour, with full-hostname totals available from the entry's side panel.
 - The extension sends a one-minute heartbeat while Chrome is active; three minutes without activity closes the session.
-- Pairing uses a random extension key opened against the configured Total Record URL. Laravel stores only its SHA-256 hash.
+- Pairing uses a random extension key opened against the configured Total Log URL. Laravel stores only its SHA-256 hash.
 - The extension defaults to `http://127.0.0.1:8016/`, and its options page supports a different app URL.
 - Only the active site's origin is transmitted; page paths, query strings, and page titles never leave the extension.
 
@@ -130,8 +130,8 @@ The landing page runs the real journal code without requiring registration.
 ### 1. Install dependencies
 
 ```bash
-git clone https://github.com/yardimli/captainslog.git
-cd captainslog
+git clone https://github.com/yardimli/totallog.git
+cd totallog
 composer install
 npm install
 ```
@@ -147,13 +147,13 @@ On Windows PowerShell, use `Copy-Item .env.example .env` instead of `cp`.
 
 ### 2. Configure MariaDB
 
-Create an empty database named `captainslog`, then update the database section in `.env`:
+Create an empty database named `totallog`, then update the database section in `.env`:
 
 ```dotenv
 DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=captainslog
+DB_DATABASE=totallog
 DB_USERNAME=your_database_user
 DB_PASSWORD=your_database_password
 ```
@@ -205,7 +205,7 @@ npm run build
 4. Open a daily log and fetch the available models.
 5. Choose chat and image models; the browser remembers those choices locally.
 
-OpenRouter usage is billed by OpenRouter according to the selected model. Total Record stores the usage and cost metadata returned by the API so it can be reviewed by day.
+OpenRouter usage is billed by OpenRouter according to the selected model. Total Log stores the usage and cost metadata returned by the API so it can be reviewed by day.
 
 ## Verification
 
@@ -220,7 +220,7 @@ The feature suite covers authentication, refreshable and user-owned logs, block 
 
 ## Project assets
 
-- Generated brand artwork: `docs/images/captains-log-logo.png`
+- Generated brand artwork: `docs/images/total-log-logo.png`
 - Application logo component: `resources/views/components/application-logo.blade.php`
 - Browser favicon: `public/favicon.svg`
 - README screenshots: `docs/images/landing-demo.png` and `docs/images/daily-log-demo.png`

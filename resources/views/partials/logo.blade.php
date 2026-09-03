@@ -1,4 +1,4 @@
-<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Total Record" class="{{ $class ?? '' }}">
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Total Log" class="{{ $class ?? '' }}">
     <rect width="64" height="64" rx="17" fill="#4f46e5"/>
     <path d="M13 19.5c7.2 0 13.1 2.1 18 6.4v25.4c-4.9-4.1-10.8-6.2-18-6.2V19.5Z" fill="#f8fafc"/>
     <path d="M51 19.5c-7.2 0-13.1 2.1-18 6.4v25.4c4.9-4.1 10.8-6.2 18-6.2V19.5Z" fill="#e2e8f0"/>

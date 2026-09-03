@@ -4,9 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@hasSection('title')@yield('title') - @endif{{ config('app.name', 'Total Record') }}</title>
+    <title>@hasSection('title')@yield('title') - @endif{{ config('app.name', 'Total Log') }}</title>
     <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
-    <script>(()=>{const themes=['light','paper','blue','red','dark'],saved=localStorage.getItem('captainslog.theme'),theme=themes.includes(saved)?saved:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.dataset.theme=theme;document.documentElement.classList.toggle('dark',theme==='dark'||theme==='red')})()</script>
+    <script>(()=>{const themes=['light','paper','blue','red','dark'],saved=localStorage.getItem('totallog.theme'),theme=themes.includes(saved)?saved:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.dataset.theme=theme;document.documentElement.classList.toggle('dark',theme==='dark'||theme==='red')})()</script>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="min-h-screen overflow-x-hidden bg-slate-100 font-sans text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100">
@@ -17,7 +17,7 @@
             <div id="guest-hero-content" class="relative">
                 <a href="{{ route('demo.index') }}" class="inline-flex items-center gap-3 text-xl font-black">
                     @include('partials.logo', ['class' => 'h-12 w-12 shadow-lg shadow-indigo-500/30'])
-                    <span>Total Record</span>
+                    <span>Total Log</span>
                 </a>
                 <div id="guest-hero-copy" class="mt-20 max-w-xl">
                     <p class="text-xs font-bold uppercase tracking-[.24em] text-indigo-300">Your days, kept with context</p>
@@ -36,7 +36,7 @@
             <header class="flex h-16 items-center gap-3 border-b border-slate-200 bg-white/80 px-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80 sm:px-8">
                 <a href="{{ route('demo.index') }}" class="flex items-center gap-2 font-black lg:hidden">
                     @include('partials.logo', ['class' => 'h-9 w-9'])
-                    <span>Total Record</span>
+                    <span>Total Log</span>
                 </a>
                 <a href="{{ route('demo.index') }}#demo" class="ml-auto text-sm font-semibold text-slate-500 hover:text-indigo-600 dark:text-slate-300 dark:hover:text-indigo-400">Try the live demo</a>
                 <a href="{{ route('login') }}" class="nav-link p-2" aria-label="Sign in" title="Sign in"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 7l5 5-5 5M19 12H7M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5"/></svg></a>

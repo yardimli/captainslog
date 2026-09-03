@@ -88,7 +88,7 @@ class DayStateTest extends TestCase
             'enabled' => true,
         ]);
 
-        $this->withHeader('X-CaptainsLog-Key', $key)->postJson(route('api.sensors.browser.activity'), [
+        $this->withHeader('X-TotalLog-Key', $key)->postJson(route('api.sensors.browser.activity'), [
             'url' => 'https://www.izedebiyat.com/story',
             'observed_at' => now()->toIso8601String(),
             'client_id' => 'chrome-day-state-test',

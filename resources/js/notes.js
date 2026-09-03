@@ -165,7 +165,7 @@ function initializeNoteEditor() {
     const isUntitled = () => !titleField.value.trim() || titleField.value.trim().toLowerCase() === 'untitled';
 
     const selectedAiModel = () => document.querySelector('#note-ai-model')?.value
-        || window.localStorage.getItem('captainslog.model.chat')
+        || window.localStorage.getItem('totallog.model.chat')
         || config.default_model
         || '';
 

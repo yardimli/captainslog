@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
-class CaptainsLogTest extends TestCase
+class TotalLogTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -701,7 +701,7 @@ class CaptainsLogTest extends TestCase
     {
         Http::fake(function ($request) {
             $schema = data_get($request->data(), 'response_format.json_schema.name');
-            if ($schema === 'captains_log_intent') {
+            if ($schema === 'total_log_intent') {
                 return Http::response(['id' => 'classify-123', 'model' => 'test/model', 'choices' => [['message' => ['content' => json_encode(['intent' => 'question', 'normalized_request' => 'Summarize this day.'])]]], 'usage' => ['total_tokens' => 6, 'cost' => 0.0001]], 200);
             }
 
@@ -761,7 +761,7 @@ class CaptainsLogTest extends TestCase
         Carbon::setTestNow('2026-08-16 13:20:00');
         Http::fake(function ($request) {
             $schema = data_get($request->data(), 'response_format.json_schema.name');
-            $content = $schema === 'captains_log_intent'
+            $content = $schema === 'total_log_intent'
                 ? ['intent' => 'action', 'normalized_request' => 'Create and record a wellness event.']
                 : ['actions' => [
                     ['type' => 'add_log_entry', 'date' => '2026-08-17', 'time' => '08:15', 'content' => 'Prepared for the morning mission.', 'emoji' => '🚀', 'event_name' => null, 'value' => null, 'notes' => null, 'name' => null, 'color' => null, 'options' => null, 'recurrence_type' => null, 'recurrence_days' => null, 'scheduled_times' => null, 'visible_after' => null, 'is_sticky' => null],
