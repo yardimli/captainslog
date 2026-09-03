@@ -9,7 +9,7 @@ This is the Tauri 2 + Rust desktop sensor for Total Log. It currently provides:
 - local foreground-application sampling with one aggregated upload every five minutes while the computer is active;
 - per-application totals for the last five minutes, last hour, and today;
 - a dedicated Kindle Cloud Reader window whose Amazon session remains in WebView2;
-- hourly Kindle checks that send only book and reading-progress details;
+- manual Kindle library capture that logs the first displayed book's title and author without collecting reading position;
 - a loopback-only bridge for the optional browser extension, which forwards exact browser domains and synchronized mobile Chrome history using the desktop app's pairing key.
 
 ## Windows prerequisites

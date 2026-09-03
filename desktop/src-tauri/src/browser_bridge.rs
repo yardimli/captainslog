@@ -61,18 +61,22 @@ impl BrowserBridge {
             .iter()
             .find(|header| header.field.equiv("Origin"))
             .is_some_and(|header| header.value.as_str().starts_with("chrome-extension://"));
-
-        if !origin_allowed {
-            respond_json(
-                request,
-                403,
-                r#"{"message":"Only the Total Log browser extension may use this bridge."}"#,
-            );
-            return;
-        }
+        let extension_marked = request
+            .headers()
+            .iter()
+            .find(|header| header.field.equiv("X-TotalLog-Extension"))
+            .is_some_and(|header| header.value.as_str() == "1");
 
         if request.method() == &Method::Options {
-            respond_json(request, 204, "");
+            if origin_allowed {
+                respond_json(request, 204, "");
+            } else {
+                respond_json(
+                    request,
+                    403,
+                    r#"{"message":"Only the Total Log browser extension may use this bridge."}"#,
+                );
+            }
             return;
         }
 
@@ -88,16 +92,27 @@ impl BrowserBridge {
                 configured,
             })
             .expect("health response serializes");
-            report_extension(
-                app,
-                "connected",
-                if configured {
-                    "Browser extension connected to the desktop app."
-                } else {
-                    "Browser extension connected. Pair the desktop app to forward its data."
-                },
-            );
+            if origin_allowed || extension_marked {
+                report_extension(
+                    app,
+                    "connected",
+                    if configured {
+                        "Browser extension connected to the desktop app."
+                    } else {
+                        "Browser extension connected. Pair the desktop app to forward its data."
+                    },
+                );
+            }
             respond_json(request, 200, &body);
+            return;
+        }
+
+        if !origin_allowed && !extension_marked {
+            respond_json(
+                request,
+                403,
+                r#"{"message":"Only the Total Log browser extension may use this bridge."}"#,
+            );
             return;
         }
 
@@ -229,8 +244,11 @@ fn respond_json(request: Request, status: u16, body: &str) {
                 .expect("valid header"),
         )
         .with_header(
-            Header::from_bytes("Access-Control-Allow-Headers", "Content-Type")
-                .expect("valid header"),
+            Header::from_bytes(
+                "Access-Control-Allow-Headers",
+                "Content-Type, X-TotalLog-Extension",
+            )
+            .expect("valid header"),
         );
     if status == 204 {
         response = response.with_status_code(StatusCode(204));

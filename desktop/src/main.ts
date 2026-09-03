@@ -13,12 +13,10 @@ type ActivitySnapshot = {
   supported: boolean;
 };
 
-type KindleProgress = {
+type KindleBook = {
   title: string;
   author: string | null;
   asin: string | null;
-  percentage_read: number | null;
-  location: string | null;
 };
 
 type KindleStatusReport = { status: string; message: string | null };
@@ -48,7 +46,6 @@ const serverHealthLabel = document.querySelector<HTMLElement>('#server-health-la
 const extensionHealth = document.querySelector<HTMLElement>('#extension-health')!;
 const extensionHealthLabel = document.querySelector<HTMLElement>('#extension-health-label')!;
 const extensionHealthDetail = document.querySelector<HTMLElement>('#extension-health-detail')!;
-const kindleUrl = document.querySelector<HTMLInputElement>('#kindle-url')!;
 const kindleStatus = document.querySelector<HTMLElement>('#kindle-status')!;
 const clientId = localStorage.getItem('totalLogDesktop.clientId') || crypto.randomUUID().replaceAll('-', '');
 const HISTORY_KEY = 'totalLogDesktop.activityHistory';
@@ -343,44 +340,24 @@ async function configureBrowserBridge() {
   }
 }
 
-function normalizedKindleUrl(): URL {
-  const url = new URL(kindleUrl.value.trim());
-  if (url.protocol !== 'https:' || !/^read\.amazon\./i.test(url.hostname)) {
-    throw new Error('Use a Kindle Cloud Reader URL beginning with https://read.amazon.');
-  }
-  return url;
-}
-
-function kindleProgressLabel(progress: KindleProgress): string {
-  if (progress.percentage_read !== null) return `${progress.percentage_read}% read`;
-  return progress.location || 'position found';
-}
-
-async function uploadKindleProgress(progress: KindleProgress) {
+async function uploadKindleBook(book: KindleBook) {
   if (kindleResponseTimer !== null) window.clearTimeout(kindleResponseTimer);
   kindleResponseTimer = null;
   if (kindleUploadRunning) return;
   if (localStorage.getItem('totalLogDesktop.syncEnabled') !== 'true') {
-    kindleStatus.textContent = 'Kindle is signed in. Pair the desktop app before sending reading progress.';
-    return;
-  }
-  const fingerprint = JSON.stringify([progress.asin || '', progress.title, progress.percentage_read ?? '', progress.location || '']);
-  if (fingerprint === localStorage.getItem('totalLogDesktop.kindleLastFingerprint')) {
-    kindleStatus.textContent = `${progress.title} · ${kindleProgressLabel(progress)} · no change`;
+    kindleStatus.textContent = 'Pair the desktop app before logging a Kindle book.';
     return;
   }
   kindleUploadRunning = true;
-  kindleStatus.textContent = `Sending ${progress.title}…`;
+  kindleStatus.textContent = `Logging ${book.title}…`;
   try {
-    await invoke('send_kindle_progress', {payload: {
+    await invoke('send_kindle_book', {payload: {
       app_url: normalizedBaseUrl().toString(), pairing_key: pairingKey.value, client_id: clientId,
-      progress, observed_at: new Date().toISOString(),
+      book, observed_at: new Date().toISOString(),
     }});
-    localStorage.setItem('totalLogDesktop.kindleLastFingerprint', fingerprint);
-    localStorage.setItem('totalLogDesktop.kindleLastTitle', progress.title);
-    localStorage.setItem('totalLogDesktop.kindleLastProgress', kindleProgressLabel(progress));
+    localStorage.setItem('totalLogDesktop.kindleLastTitle', book.title);
     localStorage.setItem('totalLogDesktop.kindleLastSyncAt', new Date().toISOString());
-    kindleStatus.textContent = `${progress.title} · ${kindleProgressLabel(progress)} · synced ${new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`;
+    kindleStatus.textContent = `${book.title} · logged ${new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`;
   } catch (error) {
     kindleStatus.textContent = error instanceof Error ? error.message : String(error);
   } finally {
@@ -389,15 +366,14 @@ async function uploadKindleProgress(progress: KindleProgress) {
 }
 
 async function syncKindle() {
-  if (localStorage.getItem('totalLogDesktop.kindleEnabled') !== 'true') return;
   try {
-    kindleStatus.textContent = 'Checking your most recently read Kindle book…';
-    await invoke('sync_kindle', {kindleUrl: normalizedKindleUrl().toString()});
+    kindleStatus.textContent = 'Opening your Kindle library for a manual book log…';
+    await invoke('sync_kindle');
     if (kindleResponseTimer !== null) window.clearTimeout(kindleResponseTimer);
     kindleResponseTimer = window.setTimeout(() => {
       kindleResponseTimer = null;
-      kindleStatus.textContent = 'Kindle did not answer. Open the Kindle window, confirm you are signed in, then try Sync now.';
-    }, 20_000);
+      kindleStatus.textContent = 'The manual Kindle capture did not answer. Confirm the library is signed in and shows at least one book, then try again.';
+    }, 25_000);
   } catch (error) {
     kindleStatus.textContent = error instanceof Error ? error.message : String(error);
   }
@@ -418,7 +394,6 @@ appUrl.value = savedAppUrl;
 const savedUrlMode = localStorage.getItem('totalLogDesktop.urlMode');
 applyUrlMode(['hosted', 'localhost', 'custom'].includes(savedUrlMode || '') ? savedUrlMode as UrlMode : inferUrlMode(savedAppUrl));
 pairingKey.value = localStorage.getItem('totalLogDesktop.pairingKey') || randomKey();
-kindleUrl.value = localStorage.getItem('totalLogDesktop.kindleUrl') || kindleUrl.value;
 localStorage.setItem('totalLogDesktop.clientId', clientId);
 saveSettings();
 const savedConnectionHealth = localStorage.getItem('totalLogDesktop.connectionHealth');
@@ -427,10 +402,9 @@ setConnectionHealth(localStorage.getItem('totalLogDesktop.syncEnabled') === 'tru
   : 'disconnected');
 
 const previousKindleTitle = localStorage.getItem('totalLogDesktop.kindleLastTitle');
-const previousKindleProgress = localStorage.getItem('totalLogDesktop.kindleLastProgress');
 const previousKindleSync = localStorage.getItem('totalLogDesktop.kindleLastSyncAt');
 if (previousKindleTitle && previousKindleSync) {
-  kindleStatus.textContent = `${previousKindleTitle}${previousKindleProgress ? ` · ${previousKindleProgress}` : ''} · last synced ${new Date(previousKindleSync).toLocaleString()}`;
+  kindleStatus.textContent = `${previousKindleTitle} · last logged ${new Date(previousKindleSync).toLocaleString()}`;
 }
 
 document.querySelector('#reveal-key')?.addEventListener('click', event => {
@@ -482,36 +456,22 @@ document.querySelectorAll<HTMLInputElement>('input[name="url-mode"]').forEach(ra
 
 document.querySelector('#kindle-connect')?.addEventListener('click', async () => {
   try {
-    const url = normalizedKindleUrl();
-    localStorage.setItem('totalLogDesktop.kindleEnabled', 'true');
-    localStorage.setItem('totalLogDesktop.kindleUrl', url.toString());
     kindleStatus.textContent = 'Sign in to Amazon in the Kindle window. Total Log never receives your password or cookies.';
-    await invoke('open_kindle', {kindleUrl: url.toString()});
+    await invoke('open_kindle');
   } catch (error) {
     kindleStatus.textContent = error instanceof Error ? error.message : String(error);
   }
 });
 
 document.querySelector('#kindle-sync')?.addEventListener('click', async () => {
-  localStorage.setItem('totalLogDesktop.kindleEnabled', 'true');
-  localStorage.setItem('totalLogDesktop.kindleUrl', kindleUrl.value);
-  localStorage.removeItem('totalLogDesktop.kindleLastFingerprint');
   await syncKindle();
-});
-
-kindleUrl.addEventListener('change', () => {
-  try {
-    localStorage.setItem('totalLogDesktop.kindleUrl', normalizedKindleUrl().toString());
-  } catch (error) {
-    kindleStatus.textContent = error instanceof Error ? error.message : String(error);
-  }
 });
 
 async function bootstrap() {
   await configureBrowserBridge();
   await Promise.all([
     listen<ActivitySnapshot>('activity-update', event => render(event.payload)),
-    listen<KindleProgress>('kindle-progress', event => uploadKindleProgress(event.payload)),
+    listen<KindleBook>('kindle-book', event => uploadKindleBook(event.payload)),
     listen<BrowserExtensionReport>('browser-extension-status', event => renderExtensionHealth(event.payload)),
     listen<KindleStatusReport>('kindle-status', event => {
       if (event.payload.status !== 'syncing') {
@@ -519,8 +479,7 @@ async function bootstrap() {
         kindleResponseTimer = null;
       }
       const labels: Record<string, string> = {
-        syncing: 'Checking your most recently read Kindle book…',
-        ready: 'Kindle is connected, but no recent book was found.',
+        syncing: 'Waiting for the first book in your Kindle library…',
         expired: 'Kindle sign-in expired. Open Kindle and sign in again.',
       };
       kindleStatus.textContent = event.payload.message || labels[event.payload.status] || event.payload.status;
@@ -528,12 +487,8 @@ async function bootstrap() {
   ]);
   render(await invoke<ActivitySnapshot>('current_activity'));
   if (localStorage.getItem('totalLogDesktop.syncEnabled') === 'true') await checkServerConnection();
-  if (localStorage.getItem('totalLogDesktop.kindleEnabled') === 'true') {
-    window.setTimeout(syncKindle, 5000);
-  }
 }
 
-window.setInterval(syncKindle, 60 * 60 * 1000);
 window.setInterval(() => checkServerConnection(), 60 * 1000);
 window.setInterval(() => {
   renderActivityList();

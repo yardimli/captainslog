@@ -1,7 +1,12 @@
 [[permission]]
-identifier = "allow-kindle-progress-observed"
-description = "Allows the restricted Kindle Cloud Reader window to report book progress to the desktop host."
-commands.allow = ["kindle_progress_observed"]
+identifier = "allow-kindle-book-observed"
+description = "Allows the restricted Kindle Cloud Reader window to report a manually selected library title."
+commands.allow = ["kindle_book_observed"]
+
+[[permission]]
+identifier = "allow-kindle-manual-sync-ready"
+description = "Allows the restricted Kindle library window to consume a one-time manual sync request."
+commands.allow = ["kindle_manual_sync_ready"]
 
 [[permission]]
 identifier = "allow-kindle-status-observed"

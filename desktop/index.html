@@ -72,14 +72,13 @@
         <div class="kindle-copy">
           <p class="eyebrow">Reading sensor</p>
           <h2 id="kindle-heading">Kindle Cloud Reader</h2>
-          <p class="muted">Sign in to Amazon in Total Log's dedicated Kindle window. Its WebView2 session stays on this PC; Total Log receives only the book, author, progress, and observation time.</p>
+          <p class="muted">This is fully manual. Sync now opens your Kindle library, reads the title and author from its first book, and logs that book. No reading position or percentage is collected.</p>
         </div>
         <div class="kindle-controls">
-          <label for="kindle-url">Kindle Cloud Reader URL</label>
-          <input id="kindle-url" type="url" value="https://read.amazon.com/kindle-library" spellcheck="false" />
+          <p class="field-help muted">The Kindle window always remains visible during this manual operation so you can confirm which first library item is being read.</p>
           <div class="actions">
             <button id="kindle-connect" type="button">Open Kindle / sign in</button>
-            <button id="kindle-sync" type="button" class="secondary">Sync now</button>
+            <button id="kindle-sync" type="button" class="secondary">Sync now · log first book</button>
           </div>
           <p id="kindle-status" class="status muted" aria-live="polite">Not connected. Open Kindle and sign in to begin.</p>
         </div>

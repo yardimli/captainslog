@@ -44,7 +44,10 @@ async function setConnectionStatus(status, error = null) {
 
 async function checkDesktopApp() {
   try {
-    const response = await fetch(new URL('health', DESKTOP_BRIDGE_URL), {cache: 'no-store'});
+    const response = await fetch(new URL('health', DESKTOP_BRIDGE_URL), {
+      cache: 'no-store',
+      headers: {'X-TotalLog-Extension': '1'},
+    });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
       throw new Error(body.message || `Desktop bridge returned ${response.status}.`);
@@ -84,7 +87,7 @@ async function sendActiveBrowsing() {
     if (browsingUrl.origin === new URL(DESKTOP_BRIDGE_URL).origin) return;
     const response = await fetch(new URL('v1/browser/activity', DESKTOP_BRIDGE_URL), {
       method: 'POST',
-      headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
+      headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-TotalLog-Extension': '1'},
       body: JSON.stringify({url: `${browsingUrl.protocol}//${browsingUrl.hostname}`, observed_at: new Date().toISOString(), client_id: config.clientId})
     });
     const body = await response.json().catch(() => ({}));
@@ -183,7 +186,7 @@ async function syncMobileHistory(fullScan = false) {
       await debugLog('info', 'mobile-api-request', {batch: index + 1, batches: batches.length, visits: batch.length});
       const response = await fetch(new URL('v1/browser/mobile-history', DESKTOP_BRIDGE_URL), {
         method: 'POST',
-        headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
+        headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-TotalLog-Extension': '1'},
         body: JSON.stringify({visits: batch})
       });
       const body = await response.json().catch(() => ({}));

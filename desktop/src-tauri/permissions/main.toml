@@ -19,9 +19,9 @@ description = "Allows the local main window to upload an aggregated desktop acti
 commands.allow = ["send_activity_batch"]
 
 [[permission]]
-identifier = "allow-send-kindle-progress"
-description = "Allows the local main window to upload Kindle progress reported by the restricted Kindle window."
-commands.allow = ["send_kindle_progress"]
+identifier = "allow-send-kindle-book"
+description = "Allows the local main window to upload a manually captured Kindle library title."
+commands.allow = ["send_kindle_book"]
 
 [[permission]]
 identifier = "allow-open-kindle"

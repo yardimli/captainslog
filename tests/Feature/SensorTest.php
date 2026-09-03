@@ -567,7 +567,7 @@ class SensorTest extends TestCase
         $this->assertArrayNotHasKey('content_scripts', $manifest);
         $this->assertContains('history', $manifest['permissions']);
         $this->assertFileDoesNotExist(public_path('totallog-chrome-extension/kindle-tracker.js'));
-        $this->assertSame('2.0.0', $manifest['version']);
+        $this->assertSame('2.0.1', $manifest['version']);
         $this->assertSame(['http://127.0.0.1:32145/*'], $manifest['host_permissions']);
         $options = file_get_contents(public_path('totallog-chrome-extension/options.html'));
         $this->assertStringContainsString('Sync past data', $options);
@@ -579,17 +579,21 @@ class SensorTest extends TestCase
         $desktopUi = file_get_contents(base_path('desktop/index.html'));
         $desktopPermissions = file_get_contents(base_path('desktop/src-tauri/permissions/main.toml'));
         $desktopKindle = file_get_contents(base_path('desktop/src-tauri/src/kindle.js'));
-        $this->assertStringContainsString('send_kindle_progress', $desktopRust);
-        $this->assertStringContainsString('kindle_progress_observed', $desktopRust);
-        $this->assertStringContainsString('api/sensors/kindle/progress', $desktopRust);
+        $this->assertStringContainsString('send_kindle_book', $desktopRust);
+        $this->assertStringContainsString('kindle_manual_sync_ready', $desktopRust);
+        $this->assertStringContainsString('kindle_book_observed', $desktopRust);
+        $this->assertStringContainsString('api/sensors/kindle/book', $desktopRust);
         $this->assertStringContainsString('browser-extension-status', $desktopBridge);
         $this->assertStringContainsString('Received and forwarded', $desktopBridge);
         $this->assertStringContainsString('id="extension-health"', $desktopUi);
         $this->assertStringContainsString('<dialog id="connection-panel"', $desktopUi);
+        $this->assertStringContainsString('Sync now · log first book', $desktopUi);
         $this->assertStringContainsString('allow-configure-browser-bridge', $desktopPermissions);
         $this->assertStringContainsString('allow-check-server-connection', $desktopPermissions);
-        $this->assertStringContainsString('/kindle-library/search', $desktopKindle);
-        $this->assertStringContainsString("credentials: 'include'", $desktopKindle);
+        $this->assertStringContainsString('document.querySelector(\'li[role="listitem"]\')', $desktopKindle);
+        $this->assertStringContainsString('[id^="title-"]', $desktopKindle);
+        $this->assertStringNotContainsString('percentage', $desktopKindle);
+        $this->assertStringNotContainsString('setInterval', $desktopKindle);
     }
 
     public function test_mobile_browser_sensor_groups_synced_visits_by_hour_and_counts_domains(): void
@@ -659,7 +663,7 @@ class SensorTest extends TestCase
         $this->assertNotNull($sensor->fresh()->last_checked_at);
     }
 
-    public function test_kindle_sensor_records_progress_history_in_one_daily_book_entry(): void
+    public function test_manual_kindle_sync_logs_the_first_library_book_without_a_reading_position(): void
     {
         Carbon::setTestNow('2026-08-18 20:00:00');
         $user = User::factory()->create();
@@ -672,24 +676,24 @@ class SensorTest extends TestCase
             'enabled' => true,
         ]);
 
-        $send = fn (float $percentage) => $this->withHeader('X-TotalLog-Key', $key)->postJson(route('api.sensors.kindle.progress'), [
+        $send = fn () => $this->withHeader('X-TotalLog-Key', $key)->postJson(route('api.sensors.kindle.book'), [
             'title' => '<b>The Left Hand of Darkness</b>',
             'author' => 'Ursula K. Le Guin',
             'asin' => 'B000FC1HBY',
-            'percentage_read' => $percentage,
             'observed_at' => now()->toIso8601String(),
             'client_id' => 'desktop-kindle-test',
         ]);
 
-        $send(37)->assertCreated()->assertJsonPath('percentage_read', 37);
+        $send()->assertCreated()->assertJsonPath('title', 'The Left Hand of Darkness');
         Carbon::setTestNow('2026-08-18 20:05:00');
-        $send(39)->assertCreated()->assertJsonPath('log_date', '2026-08-18');
+        $send()->assertCreated()->assertJsonPath('log_date', '2026-08-18');
 
         $this->assertDatabaseCount('kindle_reading_progress', 2);
         $this->assertDatabaseCount('daily_logs', 1);
         $this->assertDatabaseCount('log_blocks', 1);
-        $this->assertDatabaseHas('log_blocks', ['type' => 'sensor_kindle', 'content' => 'The Left Hand of Darkness · 39% read']);
-        $this->assertSame('39.00', KindleReadingProgress::latest('observed_at')->firstOrFail()->percentage_read);
+        $this->assertDatabaseHas('log_blocks', ['type' => 'sensor_kindle', 'content' => 'The Left Hand of Darkness']);
+        $this->assertNull(KindleReadingProgress::latest('observed_at')->firstOrFail()->percentage_read);
+        $this->assertNull(KindleReadingProgress::latest('observed_at')->firstOrFail()->location);
         $this->actingAs($user)->get('/logs/2026-08-18')->assertOk()->assertSee('Kindle')->assertSee('The Left Hand of Darkness');
         Carbon::setTestNow();
     }
@@ -705,9 +709,8 @@ class SensorTest extends TestCase
             'enabled' => true,
         ]);
 
-        $this->withHeader('X-TotalLog-Key', $key)->postJson(route('api.sensors.kindle.progress'), [
+        $this->withHeader('X-TotalLog-Key', $key)->postJson(route('api.sensors.kindle.book'), [
             'title' => 'Browser should not own Kindle',
-            'percentage_read' => 10,
             'client_id' => 'browser-extension',
         ])->assertUnauthorized();
     }

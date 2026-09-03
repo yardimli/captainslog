@@ -3,7 +3,11 @@ mod browser_bridge;
 
 use browser_bridge::{BridgeConfig, BrowserBridge};
 use serde::{Deserialize, Serialize};
-use std::{thread, time::Duration};
+use std::{
+    sync::atomic::{AtomicBool, Ordering},
+    thread,
+    time::Duration,
+};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -119,13 +123,14 @@ struct UploadResult {
 }
 
 #[derive(Clone, Deserialize, Serialize)]
-struct KindleProgress {
+struct KindleBook {
     title: String,
     author: Option<String>,
     asin: Option<String>,
-    percentage_read: Option<f64>,
-    location: Option<String>,
 }
+
+#[derive(Default)]
+struct KindleSyncState(AtomicBool);
 
 #[derive(Clone, Deserialize, Serialize)]
 struct KindleStatusReport {
@@ -138,7 +143,7 @@ struct KindleUpload {
     app_url: String,
     pairing_key: String,
     client_id: String,
-    progress: KindleProgress,
+    book: KindleBook,
     observed_at: String,
 }
 
@@ -212,21 +217,19 @@ async fn send_activity_batch(payload: ActivityBatchUpload) -> Result<UploadResul
 }
 
 #[tauri::command]
-async fn send_kindle_progress(payload: KindleUpload) -> Result<UploadResult, String> {
+async fn send_kindle_book(payload: KindleUpload) -> Result<UploadResult, String> {
     let base = total_log_url(&payload.app_url)?;
     let endpoint = base
-        .join("api/sensors/kindle/progress")
+        .join("api/sensors/kindle/book")
         .map_err(|error| error.to_string())?;
     let response = reqwest::Client::new()
         .post(endpoint)
         .header("Accept", "application/json")
         .header("X-TotalLog-Key", payload.pairing_key)
         .json(&serde_json::json!({
-            "title": payload.progress.title,
-            "author": payload.progress.author,
-            "asin": payload.progress.asin,
-            "percentage_read": payload.progress.percentage_read,
-            "location": payload.progress.location,
+            "title": payload.book.title,
+            "author": payload.book.author,
+            "asin": payload.book.asin,
             "client_id": payload.client_id,
             "observed_at": payload.observed_at,
         }))
@@ -249,8 +252,8 @@ async fn send_kindle_progress(payload: KindleUpload) -> Result<UploadResult, Str
 }
 
 #[tauri::command]
-async fn open_kindle(app: tauri::AppHandle, kindle_url: String) -> Result<(), String> {
-    let url = kindle_library_url(&kindle_url)?;
+async fn open_kindle(app: tauri::AppHandle) -> Result<(), String> {
+    let url = kindle_library_url(DEFAULT_KINDLE_URL)?;
     if let Some(window) = app.get_webview_window("kindle") {
         window.navigate(url).map_err(|error| error.to_string())?;
         window.unminimize().map_err(|error| error.to_string())?;
@@ -263,33 +266,40 @@ async fn open_kindle(app: tauri::AppHandle, kindle_url: String) -> Result<(), St
 }
 
 #[tauri::command]
-async fn sync_kindle(app: tauri::AppHandle, kindle_url: String) -> Result<(), String> {
-    let url = kindle_library_url(&kindle_url)?;
+async fn sync_kindle(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, KindleSyncState>,
+) -> Result<(), String> {
+    let url = kindle_library_url(DEFAULT_KINDLE_URL)?;
+    state.0.store(true, Ordering::SeqCst);
     if let Some(window) = app.get_webview_window("kindle") {
-        let current = window.url().map_err(|error| error.to_string())?;
-        if current.host_str().is_some_and(is_read_amazon_host)
-            && current.path().contains("kindle-library")
-        {
-            window
-                .eval("window.__totalLogKindleSync?.()")
-                .map_err(|error| error.to_string())?;
-            return Ok(());
-        }
+        window.unminimize().map_err(|error| error.to_string())?;
+        window.show().map_err(|error| error.to_string())?;
+        window.set_focus().map_err(|error| error.to_string())?;
         window.navigate(url).map_err(|error| error.to_string())?;
         return Ok(());
     }
-    create_kindle_window(&app, url, false)?;
+    create_kindle_window(&app, url, true)?;
     Ok(())
 }
 
 #[tauri::command]
-fn kindle_progress_observed(
+fn kindle_manual_sync_ready(
+    state: tauri::State<'_, KindleSyncState>,
+    webview: WebviewWindow,
+) -> Result<bool, String> {
+    validate_kindle_sender(&webview)?;
+    Ok(state.0.swap(false, Ordering::SeqCst))
+}
+
+#[tauri::command]
+fn kindle_book_observed(
     app: tauri::AppHandle,
     webview: WebviewWindow,
-    progress: KindleProgress,
+    book: KindleBook,
 ) -> Result<(), String> {
     validate_kindle_sender(&webview)?;
-    app.emit_to("main", "kindle-progress", progress)
+    app.emit_to("main", "kindle-book", book)
         .map_err(|error| error.to_string())
 }
 
@@ -309,6 +319,7 @@ pub fn run() {
     let setup_bridge = browser_bridge.clone();
     tauri::Builder::default()
         .manage(browser_bridge)
+        .manage(KindleSyncState::default())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             current_activity,
@@ -316,10 +327,11 @@ pub fn run() {
             check_server_connection,
             send_activity,
             send_activity_batch,
-            send_kindle_progress,
+            send_kindle_book,
             open_kindle,
             sync_kindle,
-            kindle_progress_observed,
+            kindle_manual_sync_ready,
+            kindle_book_observed,
             kindle_status_observed,
         ])
         .setup(move |app| {

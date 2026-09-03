@@ -27,18 +27,6 @@ class KindleReadingRecorder
         return DB::transaction(function () use ($sensor, $data, $observed, $title, $asin, $bookKey) {
             $log = DailyLog::where('user_id', $sensor->user_id)->whereDate('log_date', $observed)->first()
                 ?? DailyLog::create(['user_id' => $sensor->user_id, 'log_date' => $observed->copy()->startOfDay()]);
-            $latest = KindleReadingProgress::where('user_id', $sensor->user_id)
-                ->where('book_key', $bookKey)
-                ->latest('observed_at')
-                ->lockForUpdate()
-                ->first();
-
-            if ($latest && $latest->observed_at->equalTo($observed)
-                && (string) $latest->percentage_read === $this->percentage($data['percentage_read'] ?? null)
-                && $latest->location === ($data['location'] ?? null)) {
-                return $latest;
-            }
-
             $block = KindleReadingProgress::where('daily_log_id', $log->id)
                 ->where('book_key', $bookKey)
                 ->with('logBlock')
@@ -62,32 +50,21 @@ class KindleReadingRecorder
                 'asin' => $asin,
                 'title' => $title,
                 'author' => filled($data['author'] ?? null) ? trim(strip_tags($data['author'])) : null,
-                'percentage_read' => $data['percentage_read'] ?? null,
-                'location' => filled($data['location'] ?? null) ? trim(strip_tags($data['location'])) : null,
+                'percentage_read' => null,
+                'location' => null,
                 'client_id' => $data['client_id'],
                 'observed_at' => $observed,
             ]);
 
-            $readings = $block->kindleReadingProgress()->orderBy('observed_at')->get();
-            $current = $readings->last();
-            $firstPercentage = $readings->pluck('percentage_read')->filter(fn ($value) => $value !== null)->first();
-            $currentPercentage = $current?->percentage_read;
-            $content = $title;
-            if ($currentPercentage !== null) {
-                $content .= ' · '.rtrim(rtrim(number_format((float) $currentPercentage, 2), '0'), '.').'% read';
-            } elseif (filled($current?->location)) {
-                $content .= ' · '.$current->location;
-            }
+            $manualLogCount = $block->kindleReadingProgress()->count();
             $block->update([
-                'content' => $content,
+                'content' => $title,
                 'occurred_at' => $observed,
                 'metadata' => array_merge($block->metadata ?? [], [
                     'title' => $title,
-                    'author' => $current?->author,
+                    'author' => $progress->author,
                     'asin' => $asin,
-                    'percentage_read' => $currentPercentage,
-                    'started_at_percentage' => $firstPercentage,
-                    'reading_count' => $readings->count(),
+                    'manual_log_count' => $manualLogCount,
                 ]),
             ]);
             $sensor->update(['last_checked_at' => now(), 'last_error' => null]);
@@ -96,8 +73,4 @@ class KindleReadingRecorder
         });
     }
 
-    private function percentage(mixed $value): string
-    {
-        return $value === null || $value === '' ? '' : number_format((float) $value, 2, '.', '');
-    }
 }
