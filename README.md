@@ -67,13 +67,12 @@ Total Log combines a calendar, block-based daily journal, standalone Notes libra
 Each user supplies their own OpenRouter API key from **Settings**. The key is encrypted in the database, is never returned to client-side JavaScript, and is used only by the Laravel backend.
 
 - Chat with an OpenRouter model and append both sides of the conversation to the selected daily log.
-- Generate images and attach the results to the current day.
-- Fetch available chat and image-generation models.
-- Remember fetched model catalogs and each user's selected chat and image models in local storage.
+- Fetch available compatible chat models.
+- Remember fetched model catalogs and each user's selected chat model in local storage.
 - Record each API operation, model, status, request ID, token usage, reported cost, duration, and error details.
 - Review all OpenRouter API calls, token counts, costs, and linked log days on the dedicated API usage page.
 
-The integration follows OpenRouter's APIs for [chat completions](https://openrouter.ai/docs/api/api-reference/chat/create-a-chat-completion), [image generation](https://openrouter.ai/docs/api/api-reference/images/generate-an-image), [image models](https://openrouter.ai/docs/api/api-reference/images/list-image-generation-models), and the [model catalog](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties).
+The integration follows OpenRouter's APIs for [chat completions](https://openrouter.ai/docs/api/api-reference/chat/create-a-chat-completion) and the [model catalog](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties).
 
 ### Automatic sensors
 
@@ -113,8 +112,7 @@ The landing page runs the real journal code without requiring registration.
 | Views | Blade templates and semantic HTML |
 | Frontend | Tailwind CSS, vanilla JavaScript, Fetch/AJAX |
 | Database | MariaDB/MySQL migrations and Eloquent ORM |
-| Generated images | Private Laravel storage with ownership-checked delivery |
-| AI | OpenRouter chat, image generation, model discovery, and speech-to-text APIs |
+| AI | OpenRouter chat and model discovery APIs |
 | Build | Vite and npm |
 | Tests | PHPUnit with Laravel feature tests |
 

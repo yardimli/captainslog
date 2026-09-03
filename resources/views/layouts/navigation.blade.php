@@ -73,10 +73,8 @@
             @endif
             <div class="navigation-divider my-1 border-t border-slate-200 dark:border-slate-800"></div>
             @if(request()->routeIs('logs.show'))
-                <button type="button" class="nav-link text-left font-semibold text-emerald-600 dark:text-emerald-400" data-panel-open="image">Generate image</button>
                 <button type="button" class="nav-link text-left font-semibold text-indigo-600 dark:text-indigo-400" data-panel-open="chat">Chat with log</button>
             @else
-                <a class="nav-link font-semibold text-emerald-600 dark:text-emerald-400" href="{{ route('logs.show', $activeLogDate) }}?panel=image">Generate image</a>
                 <a class="nav-link font-semibold text-indigo-600 dark:text-indigo-400" href="{{ route('logs.show', $activeLogDate) }}?panel=chat">Chat with log</a>
             @endif
         </div>

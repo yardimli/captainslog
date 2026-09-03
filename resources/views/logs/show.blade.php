@@ -90,11 +90,4 @@
         </section>
     </div>
 
-    <div id="image-generator-overlay" class="fixed inset-0 hidden place-items-end p-3 sm:place-items-center" style="z-index:80" data-overlay="image" role="dialog" aria-modal="true" aria-labelledby="image-panel-title">
-        <button type="button" class="absolute inset-0 bg-slate-950/55 opacity-0 transition-opacity" data-overlay-backdrop data-overlay-close="image" aria-label="Close image generator"></button>
-        <section class="relative w-full max-w-xl translate-y-5 rounded-3xl bg-white p-5 opacity-0 shadow-2xl transition-all dark:bg-slate-900 sm:p-7" data-overlay-panel>
-            <div id="image-generator-heading" class="flex items-center"><div id="image-generator-heading-copy"><p class="text-xs font-bold uppercase tracking-wider text-emerald-600">Visual log</p><h2 id="image-panel-title" class="text-2xl font-black">Generate an image</h2></div><button type="button" class="btn-secondary ml-auto" data-overlay-close="image">Close</button></div>
-            <form data-ajax method="POST" action="{{ route('openrouter.images', $log) }}" class="mt-5 space-y-3"><label class="label">Model</label><select class="input text-sm" name="model" data-model-select="image" data-models-url="{{ route('openrouter.models') }}" required><option>Loading image models...</option></select><textarea class="input" name="prompt" rows="6" placeholder="Describe the image..." required></textarea><button class="btn w-full gap-2" type="submit" data-busy-label="Generating image"><svg class="hidden h-4 w-4 animate-spin" data-button-spinner viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" stroke-width="4"></circle><path class="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v4a5 5 0 0 1 5 5h4Z"></path></svg><span data-button-label>Generate &amp; attach</span></button></form>
-        </section>
-    </div>
 @endsection

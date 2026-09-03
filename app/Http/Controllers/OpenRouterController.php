@@ -20,11 +20,8 @@ class OpenRouterController extends Controller
 
     public function models(Request $request)
     {
-        $images = $request->boolean('images');
-        $models = collect($this->openRouter->models($request->user(), $images));
-        if (! $images) {
-            $models = $models->filter(fn ($model) => in_array('response_format', $model['supported_parameters'] ?? [], true));
-        }
+        $models = collect($this->openRouter->models($request->user()))
+            ->filter(fn ($model) => in_array('response_format', $model['supported_parameters'] ?? [], true));
 
         return response()->json(['data' => $models->values()->all()]);
     }
@@ -103,24 +100,6 @@ class OpenRouterController extends Controller
 
             return response()->json(['message' => 'Actions completed.', 'kind' => 'confirmed', 'results' => $results, 'reload' => true]);
         });
-    }
-
-    public function image(Request $request, DailyLog $dailyLog)
-    {
-        abort_unless($dailyLog->user_id === $request->user()->id, 403);
-        $data = $request->validate(['prompt' => 'required|string|max:5000', 'model' => 'required|string|max:200']);
-        $block = $dailyLog->blocks()->create(['type' => 'generated_image', 'content' => $data['prompt'], 'metadata' => ['model' => $data['model']], 'position' => ($dailyLog->blocks()->max('position') ?? 0) + 1]);
-        $result = $this->openRouter->image($request->user(), $dailyLog, $block, $data['model'], $data['prompt']);
-        $encoded = data_get($result, 'data.0.b64_json');
-        if (! $encoded) {
-            abort(502, 'OpenRouter did not return image data.');
-        }
-        $path = "users/{$request->user()->id}/{$dailyLog->log_date->format('Y/m/d')}/generated-".Str::uuid().'.png';
-        $encoded = str_contains($encoded, ',') ? Str::after($encoded, ',') : $encoded;
-        Storage::disk('local')->put($path, base64_decode($encoded));
-        Attachment::create(['user_id' => $request->user()->id, 'daily_log_id' => $dailyLog->id, 'log_block_id' => $block->id, 'type' => 'image', 'disk' => 'local', 'path' => $path, 'original_name' => 'generated.png', 'mime_type' => 'image/png', 'size' => Storage::disk('local')->size($path), 'metadata' => ['generated' => true, 'prompt' => $data['prompt']]]);
-
-        return response()->json(['message' => 'Image generated and added.', 'reload' => true], 201);
     }
 
     private function monthContext(Request $request): string

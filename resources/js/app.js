@@ -315,7 +315,6 @@ function updateDayControls(state) {
     if (composer) { composer.action = state.log.create_block_url; composer.dataset.createAction = state.log.create_block_url; }
     const headingDate = document.querySelector('#log-composer-heading-copy > p'); if (headingDate) headingDate.textContent = state.title;
     const chat = document.querySelector('[data-smart-chat-form]'); if (chat) chat.action = state.log.chat_url;
-    const image = document.querySelector('[data-overlay="image"] form'); if (image) image.action = state.log.image_url;
     updateDayNavigation(state);
 }
 
@@ -1693,7 +1692,7 @@ function requestModelList(url) {
 async function loadModels(select) {
     if (select.dataset.modelsInitialized === 'true') return;
     select.dataset.modelsInitialized = 'true';
-    const kind = select.dataset.modelSelect, modelKind = kind === 'chat-default' ? 'chat' : kind, key = `totallog.models.${modelKind}`, choiceKey = `totallog.model.${modelKind}`, accountChoice = select.dataset.selected || '';
+    const kind = select.dataset.modelSelect, key = 'totallog.models.chat', choiceKey = 'totallog.model.chat', accountChoice = select.dataset.selected || '';
     const render = models => {
         const choice = kind === 'chat-default' ? accountChoice : (localStorage.getItem(choiceKey) || accountChoice);
         const options = models.map(model => { const option = cloneTemplate('select-option-template'); option.textContent = model.name || model.id; option.value = model.id; return option; });
@@ -1703,8 +1702,7 @@ async function loadModels(select) {
         select.dispatchEvent(new CustomEvent('modelsloaded', {bubbles: true}));
     };
     const cached = JSON.parse(localStorage.getItem(key) || '[]'); if (cached.length) render(cached);
-    const url = `${select.dataset.modelsUrl}?images=${modelKind === 'image' ? 1 : 0}`;
-    const outcome = await requestModelList(url);
+    const outcome = await requestModelList(select.dataset.modelsUrl);
     if (outcome.models) {
         localStorage.setItem(key, JSON.stringify(outcome.models));
         render(outcome.models);
@@ -1716,7 +1714,7 @@ async function loadModels(select) {
 document.querySelectorAll('[data-model-select]').forEach(loadModels);
 
 const requestedPanel = new URLSearchParams(location.search).get('panel');
-if (['chat', 'image'].includes(requestedPanel) && document.querySelector(`[data-overlay="${requestedPanel}"]`)) {
+if (requestedPanel === 'chat' && document.querySelector('[data-overlay="chat"]')) {
     openOverlay(requestedPanel);
 }
 

@@ -31,7 +31,7 @@ class DayStateTest extends TestCase
             ->assertJsonStructure([
                 'date', 'url', 'title', 'fetched_at',
                 'navigation' => ['previous_url', 'today_url', 'next_url', 'calendar_url'],
-                'log' => ['id', 'create_block_url', 'chat_url', 'image_url'],
+                'log' => ['id', 'create_block_url', 'chat_url'],
                 'tasks', 'timeline',
             ]);
 

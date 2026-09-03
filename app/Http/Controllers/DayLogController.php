@@ -172,7 +172,6 @@ class DayLogController extends Controller
                 'id' => $log->id,
                 'create_block_url' => route('blocks.store', $log),
                 'chat_url' => route('openrouter.chat', $log),
-                'image_url' => route('openrouter.images', $log),
             ],
             'tasks' => $taskData->all(),
             'timeline' => $timeline->map(function (array $item) use ($request, $log, $counts, $slotCounts) {

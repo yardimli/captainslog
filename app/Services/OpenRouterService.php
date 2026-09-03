@@ -14,10 +14,10 @@ class OpenRouterService
 {
     private const BASE_URL = 'https://openrouter.ai/api/v1';
 
-    public function models(User $user, bool $images = false): array
+    public function models(User $user): array
     {
-        return $this->request($user, $images ? 'image_models' : 'models', null, null, null,
-            fn ($http) => $http->get(self::BASE_URL.($images ? '/images/models' : '/models'))
+        return $this->request($user, 'models', null, null, null,
+            fn ($http) => $http->get(self::BASE_URL.'/models')
         )['data'] ?? [];
     }
 
@@ -40,16 +40,6 @@ class OpenRouterService
                 'messages' => $messages,
                 'max_completion_tokens' => 2000,
             ], $options))
-        );
-    }
-
-    public function image(User $user, DailyLog $log, LogBlock $block, string $model, string $prompt): array
-    {
-        return $this->request($user, 'image', $log, $block, $model,
-            fn ($http) => $http->timeout(180)->post(self::BASE_URL.'/images', [
-                'model' => $model,
-                'prompt' => $prompt,
-            ])
         );
     }
 

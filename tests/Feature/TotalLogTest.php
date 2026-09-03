@@ -56,18 +56,18 @@ class TotalLogTest extends TestCase
             ->assertDontSee('href="'.route('calendar', '2026-08-15').'?view=week"', false);
     }
 
-    public function test_daily_log_exposes_composer_and_ai_actions_through_responsive_navigation(): void
+    public function test_daily_log_exposes_composer_and_chat_through_responsive_navigation(): void
     {
         $user = User::factory()->create();
 
         $this->actingAs($user)->get(route('logs.show', today()->toDateString()))->assertOk()
             ->assertSee('data-mobile-nav-toggle', false)
             ->assertSee('data-panel-open="chat"', false)
-            ->assertSee('data-panel-open="image"', false)
             ->assertSee('data-composer-open', false)
             ->assertSee('data-overlay="composer"', false)
             ->assertSee('data-overlay="chat"', false)
-            ->assertSee('data-overlay="image"', false);
+            ->assertDontSee('data-panel-open="image"', false)
+            ->assertDontSee('data-overlay="image"', false);
     }
 
     public function test_authenticated_navigation_uses_one_hamburger_on_all_screen_sizes(): void
@@ -81,15 +81,15 @@ class TotalLogTest extends TestCase
             ->assertSee('Sensors')
             ->assertSee('API usage')
             ->assertSee('Account settings')
-            ->assertSee('Generate image')
             ->assertSee('Chat with log')
+            ->assertDontSee('Generate image')
             ->assertSee('aria-label="Toggle theme"', false)
             ->assertSee('aria-label="Sign out"', false)
             ->assertDontSee('md:hidden', false);
 
         $this->get(route('calendar'))->assertOk()
             ->assertSee(route('logs.show', today()->toDateString()).'?panel=chat')
-            ->assertSee(route('logs.show', today()->toDateString()).'?panel=image');
+            ->assertDontSee(route('logs.show', today()->toDateString()).'?panel=image');
     }
 
     public function test_account_display_and_chat_preferences_are_saved_and_applied(): void
@@ -140,7 +140,7 @@ class TotalLogTest extends TestCase
             ->assertSee('id="openrouter-api-key-warning"', false)
             ->assertSee('Enter your OpenRouter API key again');
 
-        $this->getJson(route('openrouter.models', ['images' => 1]))
+        $this->getJson(route('openrouter.models'))
             ->assertUnprocessable()
             ->assertJsonPath('errors.api_key.0', 'Your saved OpenRouter API key can no longer be decrypted. Replace it in Settings.');
 
@@ -693,12 +693,13 @@ class TotalLogTest extends TestCase
         $this->assertFalse(Route::has('attachments.destroy'));
         $this->assertFalse(Route::has('long-texts.store'));
         $this->assertFalse(Route::has('openrouter.transcribe'));
-        $this->assertTrue(Route::has('openrouter.images'));
+        $this->assertFalse(Route::has('openrouter.images'));
         $this->assertTrue(Route::has('attachments.show'));
     }
 
     public function test_openrouter_chat_reply_and_cost_are_added_to_the_day(): void
     {
+        Carbon::setTestNow('2026-08-16 13:20:00');
         Http::fake(function ($request) {
             $schema = data_get($request->data(), 'response_format.json_schema.name');
             if ($schema === 'total_log_intent') {
@@ -720,40 +721,8 @@ class TotalLogTest extends TestCase
         $this->assertDatabaseHas('log_blocks', ['daily_log_id' => $log->id, 'type' => 'chat_assistant', 'emoji' => '🤖']);
         $this->assertDatabaseHas('api_calls', ['daily_log_id' => $log->id, 'operation' => 'chat', 'total_tokens' => 17]);
         $this->assertSame('0.00120000', ApiCall::where('operation', 'chat')->first()->cost);
-        Http::assertSent(fn ($request) => data_get($request->data(), 'response_format') === null && str_contains(json_encode($request->data('messages')), 'Month context signal'));
-    }
-
-    public function test_openrouter_image_generation_sends_the_selected_model_and_prompt(): void
-    {
-        Storage::fake('local');
-        Http::fake([
-            'https://openrouter.ai/api/v1/images' => Http::response([
-                'id' => 'image-123',
-                'model' => 'bytedance-seed/seedream-5-0-lite',
-                'data' => [['b64_json' => base64_encode('fake-png-data')]],
-                'usage' => ['cost' => 0.0042],
-            ], 200),
-        ]);
-        $user = User::factory()->create(['openrouter_api_key' => 'sk-test']);
-        $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
-
-        $this->actingAs($user)->postJson(route('openrouter.images', $log), [
-            'model' => 'bytedance-seed/seedream-5-0-lite',
-            'prompt' => 'a coffee mug with a lid',
-        ])->assertCreated()->assertJsonPath('message', 'Image generated and added.');
-
-        Http::assertSent(fn ($request) => $request->url() === 'https://openrouter.ai/api/v1/images'
-            && $request['model'] === 'bytedance-seed/seedream-5-0-lite'
-            && $request['prompt'] === 'a coffee mug with a lid');
-        $attachment = Attachment::where('daily_log_id', $log->id)->where('type', 'image')->firstOrFail();
-        Storage::disk('local')->assertExists($attachment->path);
-        $this->assertDatabaseHas('log_blocks', ['id' => $attachment->log_block_id, 'type' => 'generated_image', 'emoji' => '🎨']);
-        $this->assertDatabaseHas('api_calls', [
-            'daily_log_id' => $log->id,
-            'operation' => 'image',
-            'model' => 'bytedance-seed/seedream-5-0-lite',
-            'error' => null,
-        ]);
+        Http::assertSent(fn ($request) => ! isset($request['response_format']) && str_contains(json_encode($request['messages']), 'Month context signal'));
+        Carbon::setTestNow();
     }
 
     public function test_smart_chat_previews_actions_and_only_executes_them_after_confirmation(): void
@@ -831,7 +800,7 @@ class TotalLogTest extends TestCase
             ->assertDontSee('data-composer-media-form', false)
             ->assertSee('data-day-view-fragment', false)
             ->assertSee('data-busy-label="Waiting for response"', false)
-            ->assertSee('data-busy-label="Generating image"', false)
+            ->assertDontSee('data-busy-label="Generating image"', false)
             ->assertSee('data-button-spinner', false);
 
         $this->withHeader('X-Day-View', 'main')->get(route('logs.show', '2026-08-15'))->assertOk()
