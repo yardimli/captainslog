@@ -18,11 +18,11 @@ class BrowserSensorApiController extends Controller
         $key = (string) $request->header('X-TotalLog-Key');
         abort_unless(preg_match('/^[A-Za-z0-9_-]{32,128}$/', $key), 401, 'Browser sensor key required.');
         $sensor = Sensor::with('user')
-            ->where('type', Sensor::BROWSER)
+            ->whereIn('type', [Sensor::BROWSER, Sensor::DESKTOP])
             ->where('enabled', true)
             ->where('pairing_key_hash', hash('sha256', $key))
             ->first();
-        abort_unless($sensor, 401, 'Browser sensor is not paired.');
+        abort_unless($sensor, 401, 'Desktop or browser sensor is not paired.');
 
         $activity = $recorder->record($sensor, $data['url'], $data['client_id'], $data['observed_at'] ?? null);
 

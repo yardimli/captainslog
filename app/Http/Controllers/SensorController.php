@@ -27,23 +27,7 @@ class SensorController extends Controller
     public function pairBrowser(Request $request, string $key)
     {
         abort_unless(preg_match('/^[A-Za-z0-9_-]{32,128}$/', $key), 404);
-        $hash = hash('sha256', $key);
-        DB::transaction(function () use ($request, $hash) {
-            Sensor::where('type', Sensor::BROWSER)->where('pairing_key_hash', $hash)
-                ->where('user_id', '!=', $request->user()->id)
-                ->update(['pairing_key_hash' => null, 'enabled' => false]);
-            $request->user()->sensors()->updateOrCreate(
-                ['type' => Sensor::BROWSER],
-                [
-                    'username' => 'Chrome extension',
-                    'token' => null,
-                    'pairing_key_hash' => $hash,
-                    'enabled' => true,
-                    'last_checked_at' => null,
-                    'last_error' => null,
-                ]
-            );
-        });
+        $this->pairClientSensor($request, Sensor::BROWSER, 'Chrome extension', hash('sha256', $key));
 
         return redirect()->route('sensors.index')->with('status', 'Chrome browsing sensor paired and enabled.');
     }
@@ -58,23 +42,7 @@ class SensorController extends Controller
     public function pairDesktop(Request $request, string $key)
     {
         abort_unless(preg_match('/^[A-Za-z0-9_-]{32,128}$/', $key), 404);
-        $hash = hash('sha256', $key);
-        DB::transaction(function () use ($request, $hash) {
-            Sensor::where('type', Sensor::DESKTOP)->where('pairing_key_hash', $hash)
-                ->where('user_id', '!=', $request->user()->id)
-                ->update(['pairing_key_hash' => null, 'enabled' => false]);
-            $request->user()->sensors()->updateOrCreate(
-                ['type' => Sensor::DESKTOP],
-                [
-                    'username' => 'Windows desktop app',
-                    'token' => null,
-                    'pairing_key_hash' => $hash,
-                    'enabled' => true,
-                    'last_checked_at' => null,
-                    'last_error' => null,
-                ]
-            );
-        });
+        $this->pairClientSensor($request, Sensor::DESKTOP, 'Windows desktop app', hash('sha256', $key));
 
         return redirect()->route('sensors.index')->with('status', 'Desktop activity sensor paired and enabled.');
     }
@@ -84,6 +52,45 @@ class SensorController extends Controller
         $request->user()->sensors()->where('type', Sensor::DESKTOP)->firstOrFail()->delete();
 
         return back()->with('status', 'Desktop sensor unlinked. Existing desktop activity logs were preserved.');
+    }
+
+    private function pairClientSensor(Request $request, string $type, string $username, string $hash): void
+    {
+        DB::transaction(function () use ($request, $type, $username, $hash) {
+            $target = $request->user()->sensors()
+                ->where('type', $type)
+                ->lockForUpdate()
+                ->first();
+
+            // A pairing key identifies one client installation, so move it from
+            // any previous browser or desktop sensor before assigning it here.
+            Sensor::where('pairing_key_hash', $hash)
+                ->lockForUpdate()
+                ->get()
+                ->each(function (Sensor $sensor) use ($target) {
+                    if (! $target || $sensor->id !== $target->id) {
+                        $sensor->update([
+                            'pairing_key_hash' => null,
+                            'enabled' => false,
+                        ]);
+                    }
+                });
+
+            $values = [
+                'username' => $username,
+                'token' => null,
+                'pairing_key_hash' => $hash,
+                'enabled' => true,
+                'last_checked_at' => null,
+                'last_error' => null,
+            ];
+
+            if ($target) {
+                $target->update($values);
+            } else {
+                $request->user()->sensors()->create(['type' => $type] + $values);
+            }
+        });
     }
 
     public function linkGithub(Request $request)

@@ -227,7 +227,7 @@ class SensorTest extends TestCase
         $this->assertDatabaseMissing('sensors', ['pairing_key_hash' => $key]);
         $this->get(route('sensors.index'))->assertOk()
             ->assertSee('Chrome browsing')
-            ->assertSee('Extension paired')
+            ->assertSee('Legacy direct extension pairing')
             ->assertSee('public/totallog-chrome-extension')
             ->assertSee('data-confirm-browser-unlink', false);
 
@@ -253,6 +253,33 @@ class SensorTest extends TestCase
 
         $this->delete(route('sensors.desktop.unlink'))->assertRedirect()->assertSessionHas('status');
         $this->assertDatabaseMissing('sensors', ['id' => $sensor->id]);
+    }
+
+    public function test_pairing_key_can_move_from_browser_to_desktop_without_a_unique_constraint_error(): void
+    {
+        $user = User::factory()->create();
+        $key = str_repeat('shared-client-key-', 4);
+        $hash = hash('sha256', $key);
+        $browser = Sensor::create([
+            'user_id' => $user->id,
+            'type' => Sensor::BROWSER,
+            'username' => 'Chrome extension',
+            'pairing_key_hash' => $hash,
+            'enabled' => true,
+        ]);
+
+        $this->actingAs($user)->get(route('sensors.desktop.pair', $key))
+            ->assertRedirect(route('sensors.index'))
+            ->assertSessionHas('status', 'Desktop activity sensor paired and enabled.');
+
+        $this->assertNull($browser->fresh()->pairing_key_hash);
+        $this->assertFalse($browser->fresh()->enabled);
+        $this->assertDatabaseHas('sensors', [
+            'user_id' => $user->id,
+            'type' => Sensor::DESKTOP,
+            'pairing_key_hash' => $hash,
+            'enabled' => true,
+        ]);
     }
 
     public function test_desktop_sensor_groups_foreground_apps_by_hour_without_storing_window_titles_or_paths(): void
@@ -339,6 +366,37 @@ class SensorTest extends TestCase
         $this->actingAs($user)->get('/logs/2026-09-03')->assertOk()
             ->assertSee('Desktop activity · 2 apps · 4 min')
             ->assertSee('Code')->assertSee('Firefox');
+        Carbon::setTestNow();
+    }
+
+    public function test_desktop_pairing_key_accepts_browser_extension_data_forwarded_by_the_local_bridge(): void
+    {
+        Carbon::setTestNow('2026-09-03 10:05:00');
+        $user = User::factory()->create();
+        $key = str_repeat('r', 64);
+        Sensor::create([
+            'user_id' => $user->id,
+            'type' => Sensor::DESKTOP,
+            'username' => 'Windows desktop app',
+            'pairing_key_hash' => hash('sha256', $key),
+            'enabled' => true,
+        ]);
+
+        $this->withHeader('X-TotalLog-Key', $key)->postJson(route('api.sensors.browser.activity'), [
+            'url' => 'https://docs.github.com/private/path?secret=yes',
+            'observed_at' => now()->toIso8601String(),
+            'client_id' => 'desktop-bridge-extension',
+        ])->assertCreated()->assertJsonPath('domain', 'docs.github.com');
+
+        $this->withHeader('X-TotalLog-Key', $key)->postJson(route('api.sensors.browser.mobile-history'), [
+            'visits' => [],
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('browsing_activities', [
+            'user_id' => $user->id,
+            'domain' => 'docs.github.com',
+            'client_id' => 'desktop-bridge-extension',
+        ]);
         Carbon::setTestNow();
     }
 
@@ -488,13 +546,15 @@ class SensorTest extends TestCase
         }
         $this->assertFileExists(public_path('totallog-chrome-extension/options.html'));
         $worker = file_get_contents(public_path('totallog-chrome-extension/service-worker.js'));
-        $this->assertStringContainsString('http://127.0.0.1:8016/', $worker);
-        $this->assertStringContainsString('api/sensors/browser/activity', $worker);
-        $this->assertStringContainsString('api/sensors/browser/mobile-history', $worker);
+        $this->assertStringContainsString('http://127.0.0.1:32145/', $worker);
+        $this->assertStringContainsString('v1/browser/activity', $worker);
+        $this->assertStringContainsString('v1/browser/mobile-history', $worker);
         $this->assertStringContainsString('visit.isLocal === false', $worker);
         $this->assertStringContainsString("message?.type === 'mobile-history-sync-past'", $worker);
         $this->assertStringContainsString('syncMobileHistory(true)', $worker);
-        $this->assertStringContainsString('sensors/browser/pair/', $worker);
+        $this->assertStringContainsString("chrome.action.setBadgeText({text: connected ? '' : '!'})", $worker);
+        $this->assertStringNotContainsString('sensors/browser/pair/', $worker);
+        $this->assertStringNotContainsString('X-TotalLog-Key', $worker);
         $this->assertStringContainsString('browsingUrl.hostname', $worker);
         $this->assertStringContainsString('lastLogDate: body.log_date || null', $worker);
         $this->assertStringNotContainsString('kindle', strtolower($worker));
@@ -502,17 +562,23 @@ class SensorTest extends TestCase
         $this->assertArrayNotHasKey('content_scripts', $manifest);
         $this->assertContains('history', $manifest['permissions']);
         $this->assertFileDoesNotExist(public_path('totallog-chrome-extension/kindle-tracker.js'));
-        $this->assertSame('1.5.0', $manifest['version']);
+        $this->assertSame('2.0.0', $manifest['version']);
+        $this->assertSame(['http://127.0.0.1:32145/*'], $manifest['host_permissions']);
         $options = file_get_contents(public_path('totallog-chrome-extension/options.html'));
         $this->assertStringContainsString('Sync past data', $options);
         $this->assertStringContainsString('Chrome history debug', $options);
         $this->assertStringContainsString('data-options-tab="debug"', $options);
         $this->assertStringContainsString('history-scan-complete', $worker);
         $desktopRust = file_get_contents(base_path('desktop/src-tauri/src/lib.rs'));
+        $desktopBridge = file_get_contents(base_path('desktop/src-tauri/src/browser_bridge.rs'));
+        $desktopUi = file_get_contents(base_path('desktop/index.html'));
         $desktopKindle = file_get_contents(base_path('desktop/src-tauri/src/kindle.js'));
         $this->assertStringContainsString('send_kindle_progress', $desktopRust);
         $this->assertStringContainsString('kindle_progress_observed', $desktopRust);
         $this->assertStringContainsString('api/sensors/kindle/progress', $desktopRust);
+        $this->assertStringContainsString('browser-extension-status', $desktopBridge);
+        $this->assertStringContainsString('Received and forwarded', $desktopBridge);
+        $this->assertStringContainsString('id="extension-health"', $desktopUi);
         $this->assertStringContainsString('/kindle-library/search', $desktopKindle);
         $this->assertStringContainsString("credentials: 'include'", $desktopKindle);
     }

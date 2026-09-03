@@ -83,20 +83,20 @@
                     <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M8 21c2-3 2-15 0-18M16 21c-2-3-2-15 0-18"/></svg>
                 </span>
                 <div id="browser-sensor-heading-copy" class="min-w-0 flex-1"><h2 class="text-lg font-bold">Chrome browsing</h2><p class="mt-1 text-sm text-slate-500">Track active desktop sites by duration and import synced mobile visits as hourly domain counts.</p></div>
-                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $browserSensor?->enabled ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200' : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300' }}">{{ $browserSensor?->enabled ? 'Paired' : 'Not paired' }}</span>
+                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $desktopSensor?->enabled ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200' : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300' }}">{{ $desktopSensor?->enabled ? 'Desktop bridge ready' : 'Desktop required' }}</span>
             </div>
             <div id="browser-sensor-installation" class="mt-5 space-y-4 border-t border-slate-200 pt-5 dark:border-slate-800">
                 <div id="browser-extension-instructions" class="rounded-2xl bg-slate-50 p-4 text-sm dark:bg-slate-900">
                     <p class="font-bold">Install the included Chrome extension</p>
-                    <ol class="mt-2 list-decimal space-y-1 pl-5 text-slate-500"><li>Open <strong>chrome://extensions</strong> and enable Developer mode.</li><li>Choose <strong>Load unpacked</strong>.</li><li>Select <code class="rounded bg-slate-200 px-1 dark:bg-slate-800">public/totallog-chrome-extension</code>.</li><li>Open the extension settings and press <strong>Connect to Total Log</strong>.</li></ol>
-                    <p class="mt-3 text-xs text-slate-500">The extension starts with <code>http://127.0.0.1:8016/</code>. You can change the app URL in its settings.</p>
+                    <ol class="mt-2 list-decimal space-y-1 pl-5 text-slate-500"><li>Pair and leave <strong>Total Log Desktop</strong> running.</li><li>Open <strong>chrome://extensions</strong> and enable Developer mode.</li><li>Choose <strong>Load unpacked</strong> and select <code class="rounded bg-slate-200 px-1 dark:bg-slate-800">public/totallog-chrome-extension</code>.</li><li>Open the extension settings and press <strong>Check desktop app</strong>.</li></ol>
+                    <p class="mt-3 text-xs text-slate-500">The extension connects only to the desktop app on <code>127.0.0.1</code>. It never stores your Total Log server URL or pairing key.</p>
                 </div>
                 <div id="mobile-browser-sensor-info" class="rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950 dark:border-violet-900 dark:bg-violet-950 dark:text-violet-100"><p class="font-bold">Mobile browsing</p><p class="mt-1 text-xs leading-relaxed opacity-80">Enable <strong>History and tabs</strong> sync in Chrome on the iPhone and this desktop. Synced non-local visits are grouped into hourly log blocks and counted once per page visit. If several remote devices use the account, Chrome combines them.</p></div>
                 @if($browserSensor)
-                    <div id="browser-sensor-status" class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950"><p class="font-bold text-emerald-800 dark:text-emerald-200">Extension paired</p>@if($browserSensor->last_checked_at)<p class="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Last browsing update {{ auth()->user()->formatTime($browserSensor->last_checked_at) }} on {{ $browserSensor->last_checked_at->format('M j, Y') }}</p>@else<p class="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Waiting for the first browsing update.</p>@endif</div>
+                    <div id="browser-sensor-status" class="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950"><p class="font-bold text-amber-800 dark:text-amber-200">Legacy direct extension pairing</p><p class="mt-1 text-xs text-amber-700 dark:text-amber-300">The current extension uses the desktop key instead. You can safely remove this older pairing.</p></div>
                     <form method="POST" action="{{ route('sensors.browser.unlink') }}" data-confirm-browser-unlink>@csrf @method('DELETE')<button class="btn-secondary w-full border-rose-300 text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:hover:bg-rose-950">Unlink Chrome extension</button></form>
                 @else
-                    <p class="text-center text-xs text-slate-500">Pairing begins from the extension. Its random key is stored here only as a secure hash.</p>
+                    <p class="text-center text-xs text-slate-500">No second pairing key is needed. Browser data uses the paired desktop sensor.</p>
                 @endif
             </div>
         </section>
