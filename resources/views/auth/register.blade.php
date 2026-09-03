@@ -1,6 +1,6 @@
 @extends('layouts.guest')
 @section('eyebrow', 'Begin your journey')
-@section('title', "Start your captain's log")
+@section('title', 'Start your total record')
 @section('subtitle', 'Create your private workspace for daily notes, events, media, and conversations.')
 @section('content')
     <form method="POST" action="{{ route('register') }}" class="space-y-5">

@@ -7,7 +7,7 @@
         <a href="{{ route('calendar') }}" class="flex min-w-0 items-center gap-2 font-bold">
             @include('partials.logo', ['class' => 'h-9 w-9 shrink-0'])
             <span class="min-w-0 leading-tight">
-                <span class="block">Captain's Log</span>
+                <span class="block">Total Record</span>
                 @if(request()->routeIs('logs.show') && isset($day))
                     <time class="block whitespace-nowrap text-[11px] font-medium text-slate-500 dark:text-slate-400 sm:text-xs" datetime="{{ $day->toDateString() }}" data-navigation-date>{{ $day->format('l, F j, Y') }}</time>
                 @elseif(request()->routeIs('calendar') && isset($start, $end))

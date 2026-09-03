@@ -10,7 +10,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ config('app.name', "Captain's Log") }}</title>
+        <title>{{ config('app.name', 'Total Record') }}</title>
         <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
         <script>(()=>{const themes=['light','paper','blue','red','dark'],saved=localStorage.getItem('captainslog.theme'),theme=themes.includes(saved)?saved:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.dataset.theme=theme;document.documentElement.classList.toggle('dark',theme==='dark'||theme==='red')})()</script>
 

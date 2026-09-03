@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/yardimli/captainslog/main/docs/images/captains-log-logo.png" alt="Captain's Log logo" width="190">
+  <img src="https://raw.githubusercontent.com/yardimli/captainslog/main/docs/images/captains-log-logo.png" alt="Total Record logo" width="190">
 </p>
 
-<h1 align="center">Captain's Log</h1>
+<h1 align="center">Total Record</h1>
 
 <p align="center">
   A private, media-rich daily journal for recording ordinary missions, recurring events, and AI-assisted reflections.
@@ -15,9 +15,9 @@
   <img alt="MariaDB" src="https://img.shields.io/badge/MariaDB-ready-003545?logo=mariadb&logoColor=white">
 </p>
 
-Captain's Log combines a calendar, block-based daily journal, standalone Notes library, repeatable event tracking, and OpenRouter tools in a responsive Laravel application. Every calendar, log, and note URL is refreshable, while everyday interactions stay quick.
+Total Record combines a calendar, block-based daily journal, standalone Notes library, repeatable event tracking, and OpenRouter tools in a responsive Laravel application. Every calendar, log, and note URL is refreshable, while everyday interactions stay quick.
 
-![Captain's Log landing page and guest simulation](https://raw.githubusercontent.com/yardimli/captainslog/main/docs/images/landing-demo.png)
+![Total Record landing page and guest simulation](https://raw.githubusercontent.com/yardimli/captainslog/main/docs/images/landing-demo.png)
 
 ## Features
 
@@ -83,7 +83,7 @@ The integration follows OpenRouter's APIs for [chat completions](https://openrou
 - Install the included Manifest V3 Chrome extension from `public/captainslog-chrome-extension` to track active browsing hostnames, including subdomains.
 - Browsing activity is grouped into one log entry per hour, with full-hostname totals available from the entry's side panel.
 - The extension sends a one-minute heartbeat while Chrome is active; three minutes without activity closes the session.
-- Pairing uses a random extension key opened against the configured Captain's Log URL. Laravel stores only its SHA-256 hash.
+- Pairing uses a random extension key opened against the configured Total Record URL. Laravel stores only its SHA-256 hash.
 - The extension defaults to `http://127.0.0.1:8016/`, and its options page supports a different app URL.
 - Only the active site's origin is transmitted; page paths, query strings, and page titles never leave the extension.
 
@@ -205,7 +205,7 @@ npm run build
 4. Open a daily log and fetch the available models.
 5. Choose chat and image models; the browser remembers those choices locally.
 
-OpenRouter usage is billed by OpenRouter according to the selected model. Captain's Log stores the usage and cost metadata returned by the API so it can be reviewed by day.
+OpenRouter usage is billed by OpenRouter according to the selected model. Total Record stores the usage and cost metadata returned by the API so it can be reviewed by day.
 
 ## Verification
 

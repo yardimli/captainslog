@@ -161,7 +161,7 @@ class GuestDemoService
     {
         return [
             7 => [
-                ['emoji' => '🚀', 'content' => "Captain's log: launched the USS Inner Peace at 06:00. Taught twelve cadets downward-facing targ while my beagle Worf stole a foam block."],
+                ['emoji' => '🚀', 'content' => 'Total record: launched the USS Inner Peace at 06:00. Taught twelve cadets downward-facing targ while my beagle Worf stole a foam block.'],
                 ['emoji' => '😌', 'content' => "Anger-management session went well until a client described breathing exercises as 'suggestions.' I counted to ten in Klingon and called it professional development."],
                 ['type' => 'chat_assistant', 'content' => 'Computer: Meal plan recommends vegetables that have not been replicated in the shape of a starship.'],
             ],
@@ -191,12 +191,12 @@ class GuestDemoService
                 ['content' => 'Warp-core flow class: 42 minutes. My leggings survived, morale is high, and the snack drawer remains under observation.'],
             ],
             1 => [
-                ['content' => "Captain's log: resisted a doughnut at staff briefing. It used advanced cloaking technology and reappeared beside my coffee."],
+                ['content' => 'Total record: resisted a doughnut at staff briefing. It used advanced cloaking technology and reappeared beside my coffee.'],
                 ['content' => 'Therapy note: reframed “I will launch him out an airlock” as “I need space.” Concise, accurate, billing-friendly.'],
                 ['type' => 'chat_assistant', 'content' => 'Computer: Three pets accounted for. Two dogs medicated. One cat continues to reject the chain of command.'],
             ],
             0 => [
-                ['emoji' => '🧘', 'content' => "Captain's log, present day: began with sun salutations while Worf treated my spine as a docking platform."],
+                ['emoji' => '🧘', 'content' => 'Total record, present day: began with sun salutations while Worf treated my spine as a docking platform.'],
                 ['emoji' => '📅', 'content' => "Today's mission: teach yoga at 10:00, counsel anger without developing any, walk Worf and T'Paw, negotiate with Spot, and lose weight at impulse speed."],
                 ['type' => 'chat_assistant', 'content' => 'Computer: Course plotted for a calmer day. Tea is hot, dog medication is scheduled, and emergency biscuits remain within treaty limits.'],
             ],

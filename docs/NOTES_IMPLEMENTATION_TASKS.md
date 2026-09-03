@@ -1,6 +1,6 @@
 # Notes Section Implementation Tasks
 
-This checklist tracks the work required to finish the Captain's Log Notes section.
+This checklist tracks the work required to finish the Total Record Notes section.
 
 ## Scope
 

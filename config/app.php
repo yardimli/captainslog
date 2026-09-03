@@ -15,7 +15,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', "Captain's Log"),
+    'name' => env('APP_NAME', 'Total Record'),
 
     /*
     |--------------------------------------------------------------------------

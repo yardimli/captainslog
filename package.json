@@ -1,4 +1,5 @@
 {
+    "name": "total-record",
     "private": true,
     "scripts": {
         "dev": "vite",

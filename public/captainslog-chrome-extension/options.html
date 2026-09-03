@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Captain's Log Browsing Sensor</title>
+  <title>Total Record Browsing Sensor</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="options.css">
 </head>
 <body>
   <main id="extension-settings">
     <header id="extension-settings-heading">
-      <div id="extension-logo"><img src="favicon.svg" alt="Captain's Log"></div>
-      <div id="extension-title-copy"><p>Captain's Log</p><h1>Browsing sensor</h1></div>
+      <div id="extension-logo"><img src="favicon.svg" alt="Total Record"></div>
+      <div id="extension-title-copy"><p>Total Record</p><h1>Browsing sensor</h1></div>
     </header>
     <nav id="options-tabs" aria-label="Extension sections">
       <button type="button" data-options-tab="settings" aria-selected="true">Settings</button>
@@ -19,12 +19,12 @@
     </nav>
     <div id="settings-tab-panel" data-options-tab-panel="settings">
     <section id="connection-settings-card">
-      <label for="app-url">Captain's Log URL</label>
+      <label for="app-url">Total Record URL</label>
       <input id="app-url" type="url" value="http://127.0.0.1:8016/" spellcheck="false">
       <p class="help">The extension sends one active-site heartbeat per minute. Page paths and titles are not stored by the app.</p>
       <div id="extension-actions">
         <button id="save-url" type="button" class="secondary">Save URL</button>
-        <button id="connect" type="button">Connect to Captain's Log</button>
+        <button id="connect" type="button">Connect to Total Record</button>
       </div>
     </section>
     <section id="connection-status-card" aria-live="polite">
@@ -49,7 +49,7 @@
       <div id="kindle-settings-fields" hidden>
         <label for="kindle-url">Kindle Cloud Reader URL</label>
         <input id="kindle-url" type="url" value="https://read.amazon.com/kindle-library" spellcheck="false">
-        <p class="help">Sign in to Kindle Cloud Reader in Chrome, then open a book. The extension reads the progress shown by Kindle and sends only the book, progress, and time to Captain's Log. Amazon cookie values never leave Chrome.</p>
+        <p class="help">Sign in to Kindle Cloud Reader in Chrome, then open a book. The extension reads the progress shown by Kindle and sends only the book, progress, and time to Total Record. Amazon cookie values never leave Chrome.</p>
         <div id="kindle-actions">
           <button id="kindle-sync" type="button">Sync in background</button>
           <button id="kindle-connect" type="button">Open / resync Kindle</button>
@@ -64,7 +64,7 @@
     </div>
     <section id="debug-tab-panel" data-options-tab-panel="debug" hidden>
       <div id="debug-heading"><div><p class="eyebrow">Diagnostics</p><h2>Chrome history debug</h2></div><span id="debug-history-state">Not scanned</span></div>
-      <p class="help">This stays inside the extension. It shows full URLs only for diagnosis; Captain's Log still receives domains only.</p>
+      <p class="help">This stays inside the extension. It shows full URLs only for diagnosis; Total Record still receives domains only.</p>
       <div id="debug-actions">
         <button id="debug-refresh-history" type="button">Read Chrome history</button>
         <button id="debug-refresh-messages" type="button" class="secondary">Refresh messages</button>

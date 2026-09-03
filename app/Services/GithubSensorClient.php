@@ -71,7 +71,7 @@ class GithubSensorClient
             ->withToken($token)
             ->accept('application/vnd.github+json')
             ->withHeaders(['X-GitHub-Api-Version' => '2022-11-28'])
-            ->withUserAgent(config('app.name', "Captain's Log"))
+            ->withUserAgent(config('app.name', 'Total Record'))
             ->timeout(15);
     }
 

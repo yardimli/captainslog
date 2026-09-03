@@ -10,14 +10,14 @@ let debugWriteQueue = Promise.resolve();
 function debugLog(level, event, details = {}) {
   const entry = {at: new Date().toISOString(), level, event, details};
   const detailText = JSON.stringify(details);
-  console[level === 'error' ? 'warn' : 'log'](`[Captain's Log] ${event}${detailText === '{}' ? '' : ` ${detailText}`}`);
+  console[level === 'error' ? 'warn' : 'log'](`[Total Record] ${event}${detailText === '{}' ? '' : ` ${detailText}`}`);
   debugWriteQueue = debugWriteQueue.then(async () => {
     const stored = await chrome.storage.local.get(['debugMessages']);
     const messages = Array.isArray(stored.debugMessages) ? stored.debugMessages : [];
     messages.push(entry);
     await chrome.storage.local.set({debugMessages: messages.slice(-DEBUG_MESSAGE_LIMIT)});
   }).catch(error => {
-    console.warn(`[Captain's Log] Could not store debug message: ${error.message || String(error)}`);
+    console.warn(`[Total Record] Could not store debug message: ${error.message || String(error)}`);
   });
   return debugWriteQueue;
 }
@@ -72,7 +72,7 @@ async function sendActiveBrowsing() {
       body: JSON.stringify({url: `${browsingUrl.protocol}//${browsingUrl.hostname}`, observed_at: new Date().toISOString(), client_id: config.clientId})
     });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.message || `Captain's Log returned ${response.status}.`);
+    if (!response.ok) throw new Error(body.message || `Total Record returned ${response.status}.`);
     await chrome.storage.local.set({connectionStatus: 'connected', lastSentAt: new Date().toISOString(), lastDomain: body.domain || browsingUrl.hostname, lastLogDate: body.log_date || null, lastError: null});
   } catch (error) {
     await chrome.storage.local.set({connectionStatus: 'error', lastError: error.message || String(error)});
@@ -333,7 +333,7 @@ async function sendKindleProgress(progress) {
       body: JSON.stringify({...progress, observed_at: new Date().toISOString(), client_id: config.clientId})
     });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.message || `Captain's Log returned ${response.status}.`);
+    if (!response.ok) throw new Error(body.message || `Total Record returned ${response.status}.`);
     await setKindleStatus('connected', {
       kindleLastSyncAt: new Date().toISOString(),
       kindleLastTitle: body.title || progress.title,

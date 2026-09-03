@@ -29,7 +29,7 @@ class GuestDemoTest extends TestCase
 
         $response = $this->get('/')->assertOk()
             ->assertSee('Live guest simulation')
-            ->assertSee("Captain's log, present day")
+            ->assertSee('Total record, present day')
             ->assertSee('images/demo-yoga-observation-deck.png', false)
             ->assertSee('images/demo-pet-medication.png', false)
             ->assertSee('data-emoji-picker', false)
