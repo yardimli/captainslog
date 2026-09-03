@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\BrowsingActivity;
 use App\Models\DailyLog;
+use App\Models\DesktopActivity;
 use App\Models\GoogleCalendarEvent;
 use App\Models\KindleReadingProgress;
 use App\Models\MobileBrowsingVisit;
@@ -234,6 +235,84 @@ class SensorTest extends TestCase
         $this->assertDatabaseMissing('sensors', ['id' => $sensor->id]);
     }
 
+    public function test_desktop_app_pairs_separately_from_the_browser_extension(): void
+    {
+        $user = User::factory()->create();
+        $key = str_repeat('d', 64);
+
+        $this->actingAs($user)->get(route('sensors.desktop.pair', $key))
+            ->assertRedirect(route('sensors.index'))
+            ->assertSessionHas('status', 'Desktop activity sensor paired and enabled.');
+
+        $sensor = Sensor::where('user_id', $user->id)->where('type', Sensor::DESKTOP)->firstOrFail();
+        $this->assertTrue($sensor->enabled);
+        $this->assertSame(hash('sha256', $key), $sensor->pairing_key_hash);
+        $this->get(route('sensors.index'))->assertOk()
+            ->assertSee('Windows desktop and Kindle')
+            ->assertSee('Desktop app paired');
+
+        $this->delete(route('sensors.desktop.unlink'))->assertRedirect()->assertSessionHas('status');
+        $this->assertDatabaseMissing('sensors', ['id' => $sensor->id]);
+    }
+
+    public function test_desktop_sensor_groups_foreground_apps_by_hour_without_storing_window_titles_or_paths(): void
+    {
+        Carbon::setTestNow('2026-09-03 10:00:00');
+        $user = User::factory()->create();
+        $key = str_repeat('a', 64);
+        Sensor::create([
+            'user_id' => $user->id,
+            'type' => Sensor::DESKTOP,
+            'username' => 'Windows desktop app',
+            'pairing_key_hash' => hash('sha256', $key),
+            'enabled' => true,
+        ]);
+
+        $send = function (string $application, string $processName) use ($key) {
+            return $this->withHeader('X-TotalLog-Key', $key)->postJson(route('api.sensors.desktop.activity'), [
+                'application' => $application,
+                'process_name' => $processName,
+                'observed_at' => now()->toIso8601String(),
+                'client_id' => 'desktop-test-client',
+            ]);
+        };
+
+        $send('Code', 'Code.exe')->assertCreated()->assertJsonPath('application', 'Code');
+        Carbon::setTestNow('2026-09-03 10:01:00');
+        $send('Code', 'Code.exe')->assertCreated();
+        Carbon::setTestNow('2026-09-03 10:02:00');
+        $send('Kindle', 'Kindle.exe')->assertCreated();
+        Carbon::setTestNow('2026-09-03 10:03:00');
+        $send('Kindle', 'Kindle.exe')->assertCreated();
+
+        $this->assertDatabaseCount('desktop_activities', 2);
+        $this->assertDatabaseCount('log_blocks', 1);
+        $this->assertSame(180, DesktopActivity::sum('duration_seconds'));
+        $this->assertDatabaseHas('desktop_activities', ['application' => 'Code', 'process_name' => 'code.exe']);
+        $this->assertDatabaseMissing('desktop_activities', ['process_name' => 'C:\\Private\\Code.exe']);
+
+        $this->actingAs($user)->get('/logs/2026-09-03')->assertOk()
+            ->assertSee('Desktop activity · 2 apps · 3 min')
+            ->assertSee('data-browsing-mode="applications"', false)
+            ->assertSee('Code')
+            ->assertSee('Kindle');
+        Carbon::setTestNow();
+    }
+
+    public function test_desktop_sensor_api_rejects_unknown_keys_and_executable_paths(): void
+    {
+        $payload = ['application' => 'Code', 'process_name' => 'Code.exe', 'client_id' => 'desktop-client'];
+        $this->withHeader('X-TotalLog-Key', str_repeat('x', 64))
+            ->postJson(route('api.sensors.desktop.activity'), $payload)->assertUnauthorized();
+
+        $user = User::factory()->create();
+        $key = str_repeat('z', 64);
+        Sensor::create(['user_id' => $user->id, 'type' => Sensor::DESKTOP, 'pairing_key_hash' => hash('sha256', $key), 'enabled' => true]);
+        $this->withHeader('X-TotalLog-Key', $key)
+            ->postJson(route('api.sensors.desktop.activity'), [...$payload, 'process_name' => 'C:\\Private\\Code.exe'])
+            ->assertUnprocessable()->assertJsonValidationErrors('process_name');
+    }
+
     public function test_browser_sensor_groups_domains_into_hourly_log_blocks_and_closes_after_inactivity(): void
     {
         Carbon::setTestNow('2026-08-17 10:00:00');
@@ -389,20 +468,24 @@ class SensorTest extends TestCase
         $this->assertStringContainsString('sensors/browser/pair/', $worker);
         $this->assertStringContainsString('browsingUrl.hostname', $worker);
         $this->assertStringContainsString('lastLogDate: body.log_date || null', $worker);
-        $this->assertStringContainsString('api/sensors/kindle/progress', $worker);
-        $this->assertStringContainsString('/kindle-library/search', $worker);
-        $this->assertStringContainsString("credentials: 'include'", $worker);
-        $this->assertStringContainsString('active: false', $worker);
-        $this->assertContains('cookies', $manifest['optional_permissions']);
+        $this->assertStringNotContainsString('kindle', strtolower($worker));
+        $this->assertArrayNotHasKey('optional_permissions', $manifest);
+        $this->assertArrayNotHasKey('content_scripts', $manifest);
         $this->assertContains('history', $manifest['permissions']);
-        $this->assertContains('kindle-tracker.js', $manifest['content_scripts'][0]['js']);
-        $this->assertFileExists(public_path('totallog-chrome-extension/kindle-tracker.js'));
-        $this->assertSame('1.4.1', $manifest['version']);
+        $this->assertFileDoesNotExist(public_path('totallog-chrome-extension/kindle-tracker.js'));
+        $this->assertSame('1.5.0', $manifest['version']);
         $options = file_get_contents(public_path('totallog-chrome-extension/options.html'));
         $this->assertStringContainsString('Sync past data', $options);
         $this->assertStringContainsString('Chrome history debug', $options);
         $this->assertStringContainsString('data-options-tab="debug"', $options);
         $this->assertStringContainsString('history-scan-complete', $worker);
+        $desktopRust = file_get_contents(base_path('desktop/src-tauri/src/lib.rs'));
+        $desktopKindle = file_get_contents(base_path('desktop/src-tauri/src/kindle.js'));
+        $this->assertStringContainsString('send_kindle_progress', $desktopRust);
+        $this->assertStringContainsString('kindle_progress_observed', $desktopRust);
+        $this->assertStringContainsString('api/sensors/kindle/progress', $desktopRust);
+        $this->assertStringContainsString('/kindle-library/search', $desktopKindle);
+        $this->assertStringContainsString("credentials: 'include'", $desktopKindle);
     }
 
     public function test_mobile_browser_sensor_groups_synced_visits_by_hour_and_counts_domains(): void
@@ -479,8 +562,8 @@ class SensorTest extends TestCase
         $key = str_repeat('k', 64);
         Sensor::create([
             'user_id' => $user->id,
-            'type' => Sensor::BROWSER,
-            'username' => 'Chrome extension',
+            'type' => Sensor::DESKTOP,
+            'username' => 'Windows desktop app',
             'pairing_key_hash' => hash('sha256', $key),
             'enabled' => true,
         ]);
@@ -491,7 +574,7 @@ class SensorTest extends TestCase
             'asin' => 'B000FC1HBY',
             'percentage_read' => $percentage,
             'observed_at' => now()->toIso8601String(),
-            'client_id' => 'chrome-kindle-test',
+            'client_id' => 'desktop-kindle-test',
         ]);
 
         $send(37)->assertCreated()->assertJsonPath('percentage_read', 37);
@@ -505,6 +588,24 @@ class SensorTest extends TestCase
         $this->assertSame('39.00', KindleReadingProgress::latest('observed_at')->firstOrFail()->percentage_read);
         $this->actingAs($user)->get('/logs/2026-08-18')->assertOk()->assertSee('Kindle')->assertSee('The Left Hand of Darkness');
         Carbon::setTestNow();
+    }
+
+    public function test_kindle_endpoint_rejects_a_browser_extension_key(): void
+    {
+        $key = str_repeat('b', 64);
+        Sensor::create([
+            'user_id' => User::factory()->create()->id,
+            'type' => Sensor::BROWSER,
+            'username' => 'Chrome extension',
+            'pairing_key_hash' => hash('sha256', $key),
+            'enabled' => true,
+        ]);
+
+        $this->withHeader('X-TotalLog-Key', $key)->postJson(route('api.sensors.kindle.progress'), [
+            'title' => 'Browser should not own Kindle',
+            'percentage_read' => 10,
+            'client_id' => 'browser-extension',
+        ])->assertUnauthorized();
     }
 
     public function test_google_calendar_oauth_links_account_and_syncs_current_month_events(): void

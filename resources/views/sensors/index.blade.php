@@ -60,6 +60,23 @@
             @endif
         </section>
 
+        <section id="desktop-sensor-card" class="panel">
+            <div id="desktop-sensor-heading" class="flex items-start gap-3">
+                <span class="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-cyan-700 text-2xl text-white" aria-hidden="true">🖥️</span>
+                <div id="desktop-sensor-heading-copy" class="min-w-0 flex-1"><h2 class="text-lg font-bold">Windows desktop and Kindle</h2><p class="mt-1 text-sm text-slate-500">Track foreground applications, active time, and Kindle Cloud Reader progress without uploading window titles, executable paths, Amazon passwords, or cookies.</p></div>
+                <span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $desktopSensor?->enabled ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200' : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-300' }}">{{ $desktopSensor?->enabled ? 'Paired' : 'Not paired' }}</span>
+            </div>
+            <div id="desktop-sensor-controls" class="mt-5 space-y-4 border-t border-slate-200 pt-5 dark:border-slate-800">
+                <div id="desktop-sensor-instructions" class="rounded-2xl bg-slate-50 p-4 text-sm dark:bg-slate-900"><p class="font-bold">Use Total Log Desktop</p><p class="mt-2 text-slate-500">Open the desktop app, confirm this site URL, and choose <strong>Pair in browser</strong>. Then use <strong>Open Kindle / sign in</strong> to keep the Amazon session in the desktop app. Active applications are grouped into one timeline entry per hour; Kindle sends only book and progress details.</p></div>
+                @if($desktopSensor)
+                    <div id="desktop-sensor-status" class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950"><p class="font-bold text-emerald-800 dark:text-emerald-200">Desktop app paired</p>@if($desktopSensor->last_checked_at)<p class="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Last activity update {{ auth()->user()->formatTime($desktopSensor->last_checked_at) }} on {{ $desktopSensor->last_checked_at->format('M j, Y') }}</p>@else<p class="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Waiting for the first desktop heartbeat.</p>@endif</div>
+                    <form method="POST" action="{{ route('sensors.desktop.unlink') }}" data-confirm-sensor-unlink>@csrf @method('DELETE')<button class="btn-secondary w-full border-rose-300 text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:hover:bg-rose-950">Unlink desktop app</button></form>
+                @else
+                    <p class="text-center text-xs text-slate-500">Pairing begins from the desktop app. The random key is stored here only as a secure hash.</p>
+                @endif
+            </div>
+        </section>
+
         <section id="browser-sensor-card" class="panel">
             <div id="browser-sensor-heading" class="flex items-start gap-3">
                 <span class="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-indigo-600 text-white" aria-hidden="true">

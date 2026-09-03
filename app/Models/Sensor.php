@@ -12,6 +12,8 @@ class Sensor extends Model
 
     public const BROWSER = 'browser';
 
+    public const DESKTOP = 'desktop';
+
     public const GOOGLE_CALENDAR = 'google_calendar';
 
     protected $fillable = ['user_id', 'type', 'username', 'token', 'pairing_key_hash', 'enabled', 'settings', 'last_checked_at', 'last_error'];

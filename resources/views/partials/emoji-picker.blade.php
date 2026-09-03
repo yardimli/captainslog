@@ -3,7 +3,7 @@
     $pickerValue = $value ?? '📝';
 @endphp
 
-<div id="{{ $pickerId }}-field" class="relative {{ $containerClass ?? '' }}" data-emoji-picker data-emoji-url="{{ route('emojis.index') }}">
+<div id="{{ $pickerId }}-field" class="relative {{ $containerClass ?? '' }}" data-emoji-picker data-emoji-url="{{ route('emojis.index', [], false) }}">
 {{--    <label class="label" for="{{ $pickerId }}-input">{{ $pickerLabel }}</label>--}}
     <input id="{{ $pickerId }}-input" type="hidden" name="{{ $name ?? 'emoji' }}" value="{{ $pickerValue }}" data-emoji-input>
     <button type="button" class="input flex items-center gap-3 text-left" data-emoji-toggle aria-expanded="false" aria-controls="{{ $pickerId }}-menu">

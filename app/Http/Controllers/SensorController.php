@@ -18,6 +18,7 @@ class SensorController extends Controller
         return view('sensors.index', [
             'githubSensor' => $request->user()->sensors()->where('type', Sensor::GITHUB)->first(),
             'browserSensor' => $request->user()->sensors()->where('type', Sensor::BROWSER)->first(),
+            'desktopSensor' => $request->user()->sensors()->where('type', Sensor::DESKTOP)->first(),
             'googleCalendarSensor' => $request->user()->sensors()->where('type', Sensor::GOOGLE_CALENDAR)->first(),
             'googleCalendarConfigured' => filled(config('services.google_calendar.client_id')) && filled(config('services.google_calendar.client_secret')),
         ]);
@@ -52,6 +53,37 @@ class SensorController extends Controller
         $request->user()->sensors()->where('type', Sensor::BROWSER)->firstOrFail()->delete();
 
         return back()->with('status', 'Chrome browsing sensor unlinked. Existing browsing logs were preserved.');
+    }
+
+    public function pairDesktop(Request $request, string $key)
+    {
+        abort_unless(preg_match('/^[A-Za-z0-9_-]{32,128}$/', $key), 404);
+        $hash = hash('sha256', $key);
+        DB::transaction(function () use ($request, $hash) {
+            Sensor::where('type', Sensor::DESKTOP)->where('pairing_key_hash', $hash)
+                ->where('user_id', '!=', $request->user()->id)
+                ->update(['pairing_key_hash' => null, 'enabled' => false]);
+            $request->user()->sensors()->updateOrCreate(
+                ['type' => Sensor::DESKTOP],
+                [
+                    'username' => 'Windows desktop app',
+                    'token' => null,
+                    'pairing_key_hash' => $hash,
+                    'enabled' => true,
+                    'last_checked_at' => null,
+                    'last_error' => null,
+                ]
+            );
+        });
+
+        return redirect()->route('sensors.index')->with('status', 'Desktop activity sensor paired and enabled.');
+    }
+
+    public function unlinkDesktop(Request $request)
+    {
+        $request->user()->sensors()->where('type', Sensor::DESKTOP)->firstOrFail()->delete();
+
+        return back()->with('status', 'Desktop sensor unlinked. Existing desktop activity logs were preserved.');
     }
 
     public function linkGithub(Request $request)

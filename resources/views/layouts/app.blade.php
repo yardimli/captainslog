@@ -44,7 +44,7 @@
             </section>
         </div>
         <div id="page-loading-overlay" class="fixed inset-0 hidden place-items-center bg-slate-950/60 p-4 backdrop-blur-sm" style="z-index:190" data-page-loading-overlay role="status" aria-live="polite" aria-label="Loading page">
-            <div class="flex flex-col items-center gap-4 rounded-2xl bg-white px-8 py-6 text-center shadow-2xl dark:bg-slate-900">
+            <div id="page-loading-card" class="flex flex-col items-center gap-4 rounded-2xl bg-white px-8 py-6 text-center shadow-2xl dark:bg-slate-900">
                 <svg class="h-12 w-12 animate-spin text-indigo-600 dark:text-indigo-400" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle class="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" stroke-width="4"></circle><path class="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v4a5 5 0 0 1 5 5h4Z"></path></svg>
                 <p class="text-sm font-bold">Loading log…</p>
             </div>

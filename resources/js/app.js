@@ -240,6 +240,8 @@ function renderTimelineItem(item) {
     row.dataset.recordedTime = item.time; row.dataset.timelineTime = item.time;
     if (block.type === 'sensor_browser') {
         row.dataset.timelineBrowsing = ''; row.dataset.browsingMode = 'duration'; row.dataset.browsingStart = formatClock(item.time); row.dataset.browsingDomains = JSON.stringify(block.browsing_domains || []); row.dataset.browsingTotal = String((block.browsing_domains || []).reduce((total, domain) => total + Number(domain.seconds || 0), 0));
+    } else if (block.type === 'sensor_desktop') {
+        row.dataset.timelineBrowsing = ''; row.dataset.browsingMode = 'applications'; row.dataset.browsingStart = formatClock(item.time); row.dataset.browsingDomains = JSON.stringify(block.desktop_applications || []); row.dataset.browsingTotal = String((block.desktop_applications || []).reduce((total, application) => total + Number(application.seconds || 0), 0));
     } else if (block.type === 'sensor_mobile_browser') {
         row.dataset.timelineBrowsing = ''; row.dataset.browsingMode = 'visits'; row.dataset.browsingStart = formatClock(item.time); row.dataset.browsingDomains = JSON.stringify(block.mobile_browsing_domains || []); row.dataset.browsingTotal = String((block.mobile_browsing_domains || []).reduce((total, domain) => total + Number(domain.visits || 0), 0));
     } else if (block.type === 'sensor_github' && (block.github_events || []).length) {
@@ -253,11 +255,11 @@ function renderTimelineItem(item) {
     row.append(element('time', 'w-20 shrink-0 pt-4 text-center font-mono text-xs font-bold text-slate-500', formatClock(item.time)));
     const wrapper = element('div', 'timeline-entry-card min-w-0 flex-1');
     const article = element('article', `panel group ${block.is_hidden ? 'ring-2 ring-amber-400' : ''} ${block.optimistic ? 'ring-2 ring-indigo-300' : ''}`); article.id = `block-${block.id}`;
-    const sensorBrowsing = ['sensor_browser', 'sensor_mobile_browser'].includes(block.type);
+    const sensorBrowsing = ['sensor_browser', 'sensor_desktop', 'sensor_mobile_browser'].includes(block.type);
     const description = element('div', block.event || sensorBrowsing ? 'flex flex-wrap items-center gap-2 leading-relaxed' : 'block-text-description whitespace-pre-wrap leading-relaxed'); description.dataset.blockDescription = '';
     const emoji = element('span', block.event || sensorBrowsing ? 'text-xl' : 'mr-2 inline-block align-middle text-xl', block.emoji || '📝'); emoji.dataset.blockEmoji = ''; emoji.setAttribute('aria-hidden', 'true');
-    const labelText = block.type === 'sensor_mobile_browser' ? 'Mobile browsing' : (block.type === 'sensor_browser' ? 'Browsing' : block.type.replaceAll('_', ' '));
-    const labelColor = block.type === 'sensor_mobile_browser' ? 'bg-violet-100 text-violet-800' : (block.type === 'sensor_browser' ? 'bg-sky-100 text-sky-800' : (block.event ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'));
+    const labelText = block.type === 'sensor_mobile_browser' ? 'Mobile browsing' : (block.type === 'sensor_desktop' ? 'Desktop' : (block.type === 'sensor_browser' ? 'Browsing' : block.type.replaceAll('_', ' ')));
+    const labelColor = block.type === 'sensor_mobile_browser' ? 'bg-violet-100 text-violet-800' : (block.type === 'sensor_desktop' ? 'bg-cyan-100 text-cyan-900' : (block.type === 'sensor_browser' ? 'bg-sky-100 text-sky-800' : (block.event ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600')));
     const label = element('span', `mr-2 inline-flex align-middle rounded-lg px-2 py-1 text-xs font-bold uppercase ${labelColor}`, labelText); label.dataset.blockTypeLabel = '';
     description.append(emoji, label);
     if (block.is_hidden) description.append(element('span', 'mr-2 inline-flex align-middle rounded-lg bg-amber-100 px-2 py-1 text-xs font-bold uppercase text-amber-800', 'Hidden'));
@@ -1088,12 +1090,15 @@ function openBrowsingDetails(item) {
     const root = document.querySelector('[data-overlay="browsing"]');
     if (!root) return;
     const visitsMode = item.dataset.browsingMode === 'visits';
+    const applicationsMode = item.dataset.browsingMode === 'applications';
     const total = Number(item.dataset.browsingTotal || 0);
-    root.querySelector('[data-browsing-detail-source]').textContent = visitsMode ? 'Synced Chrome history' : 'Chrome sensor';
-    root.querySelector('[data-browsing-detail-title]').textContent = visitsMode ? 'Mobile browsing' : 'Browsing';
+    root.querySelector('[data-browsing-detail-source]').textContent = applicationsMode ? 'Desktop sensor' : (visitsMode ? 'Synced Chrome history' : 'Chrome sensor');
+    root.querySelector('[data-browsing-detail-title]').textContent = applicationsMode ? 'Applications' : (visitsMode ? 'Mobile browsing' : 'Browsing');
     root.querySelector('[data-browsing-detail-start]').textContent = `${visitsMode ? 'First visit' : 'Started'} ${item.dataset.browsingStart}`;
     root.querySelector('[data-browsing-detail-total]').textContent = visitsMode ? `${total} ${total === 1 ? 'visit' : 'visits'}` : browsingDuration(total);
-    root.querySelector('[data-browsing-detail-privacy]').textContent = visitsMode
+    root.querySelector('[data-browsing-detail-privacy]').textContent = applicationsMode
+        ? 'Only application names, process names, and time totals are stored. Window titles and executable paths stay on your computer.'
+        : visitsMode
         ? 'Only domains, visit timestamps, and counts are stored. Individual page paths, titles, and query strings are not added to your log.'
         : 'Only site domains and time totals are stored. Individual page paths, titles, and query strings are not added to your log.';
     const rows = JSON.parse(item.dataset.browsingDomains || '[]').map(domain => {

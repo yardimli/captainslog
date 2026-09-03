@@ -12,8 +12,8 @@ section { margin-top: 16px; border: 1px solid #cbd5e1; border-radius: 22px; back
 label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 800; }
 input { width: 100%; border: 1px solid #94a3b8; border-radius: 13px; background: #fff; color: #0f172a; padding: 12px 14px; font: inherit; }
 select { border: 1px solid #94a3b8; border-radius: 11px; background: #fff; color: #0f172a; padding: 9px 11px; font: inherit; }
-.help, #status-detail, #mobile-history-detail, #kindle-status-detail { color: #64748b; font-size: 13px; line-height: 1.55; }
-#extension-actions, #mobile-history-actions, #kindle-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.help, #status-detail, #mobile-history-detail { color: #64748b; font-size: 13px; line-height: 1.55; }
+#extension-actions, #mobile-history-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
 button { border: 0; border-radius: 13px; background: #4f46e5; color: #fff; cursor: pointer; padding: 11px 15px; font: inherit; font-weight: 800; }
 button.secondary { border: 1px solid #cbd5e1; background: #fff; color: #334155; }
 button.danger { color: #be123c; }
@@ -52,33 +52,12 @@ button.danger { color: #be123c; }
 #debug-message-heading { justify-content: space-between; margin-top: 24px; }
 #debug-message-heading span { color: #64748b; font-size: 11px; }
 #debug-message-list { max-height: 460px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 14px; background: #020617; color: #dbeafe; padding: 14px; font: 11px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; }
-#kindle-settings-heading, #kindle-status-heading { display: flex; align-items: center; gap: 10px; }
-#kindle-settings-copy { flex: 1; }
-#kindle-settings-copy p, #kindle-settings-copy h2 { margin: 0; }
 .eyebrow { color: #d97706; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
-#kindle-settings-copy h2 { margin-top: 3px; font-size: 20px; }
-#kindle-settings-fields { margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 20px; }
-#kindle-status { margin-top: 18px; border-radius: 16px; background: #f8fafc; padding: 14px; }
-#kindle-status-detail { margin-bottom: 0; }
-#kindle-status-dot { width: 10px; height: 10px; border-radius: 999px; background: #94a3b8; }
-#kindle-status-dot[data-state="connected"], #kindle-status-dot[data-state="ready"] { background: #10b981; box-shadow: 0 0 0 5px #10b98122; }
-#kindle-status-dot[data-state="waiting"] { background: #f59e0b; box-shadow: 0 0 0 5px #f59e0b22; }
-#kindle-status-dot[data-state="syncing"] { background: #4f46e5; box-shadow: 0 0 0 5px #4f46e522; }
-#kindle-status-dot[data-state="expired"], #kindle-status-dot[data-state="error"], #kindle-status-dot[data-state="permission-required"] { background: #ef4444; box-shadow: 0 0 0 5px #ef444422; }
-.switch { display: inline-flex; align-items: center; gap: 8px; margin: 0; cursor: pointer; }
-.switch input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-.switch span { position: relative; width: 44px; height: 25px; border-radius: 999px; background: #cbd5e1; transition: .2s; }
-.switch span::after { content: ''; position: absolute; left: 3px; top: 3px; width: 19px; height: 19px; border-radius: 50%; background: #fff; box-shadow: 0 2px 5px #0f172a33; transition: .2s; }
-.switch input:checked + span { background: #4f46e5; }
-.switch input:checked + span::after { transform: translateX(19px); }
-.switch b { font-size: 12px; }
 @media (prefers-color-scheme: dark) {
   body { background: #020617; color: #e2e8f0; }
   section { border-color: #334155; background: #0f172a; box-shadow: none; }
   input, select { border-color: #475569; background: #020617; color: #e2e8f0; }
   button.secondary { border-color: #475569; background: #1e293b; color: #e2e8f0; }
-  .help, #status-detail, #mobile-history-detail, #kindle-status-detail { color: #94a3b8; }
-  #kindle-settings-fields { border-color: #334155; }
-  #kindle-status { background: #020617; }
+  .help, #status-detail, #mobile-history-detail { color: #94a3b8; }
   #debug-history-state, #debug-history-summary, .debug-history-row { border-color: #334155; background: #020617; color: #cbd5e1; }
 }

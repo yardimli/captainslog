@@ -94,6 +94,8 @@ Route::middleware('auth')->group(function () {
     Route::delete('/sensors/github', [SensorController::class, 'unlinkGithub'])->name('sensors.github.unlink');
     Route::get('/sensors/browser/pair/{key}', [SensorController::class, 'pairBrowser'])->name('sensors.browser.pair');
     Route::delete('/sensors/browser', [SensorController::class, 'unlinkBrowser'])->name('sensors.browser.unlink');
+    Route::get('/sensors/desktop/pair/{key}', [SensorController::class, 'pairDesktop'])->name('sensors.desktop.pair');
+    Route::delete('/sensors/desktop', [SensorController::class, 'unlinkDesktop'])->name('sensors.desktop.unlink');
     Route::get('/sensors/google-calendar/connect', [GoogleCalendarSensorController::class, 'connect'])->name('sensors.google-calendar.connect');
     Route::get('/sensors/google-calendar/callback', [GoogleCalendarSensorController::class, 'callback'])->name('sensors.google-calendar.callback');
     Route::patch('/sensors/google-calendar', [GoogleCalendarSensorController::class, 'toggle'])->name('sensors.google-calendar.toggle');

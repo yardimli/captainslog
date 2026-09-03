@@ -4,6 +4,10 @@
 /php_errors.log
 /node_modules
 /public/build
+/desktop/dist
+/desktop/node_modules
+/desktop/src-tauri/target
+/desktop/src-tauri/gen
 /public/hot
 /public/storage
 /storage/*.key

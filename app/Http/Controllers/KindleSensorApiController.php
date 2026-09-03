@@ -22,13 +22,13 @@ class KindleSensorApiController extends Controller
         abort_if(! array_key_exists('percentage_read', $data) && blank($data['location'] ?? null), 422, 'A Kindle percentage or location is required.');
 
         $key = (string) $request->header('X-TotalLog-Key');
-        abort_unless(preg_match('/^[A-Za-z0-9_-]{32,128}$/', $key), 401, 'Browser sensor key required.');
+        abort_unless(preg_match('/^[A-Za-z0-9_-]{32,128}$/', $key), 401, 'Desktop sensor key required.');
         $sensor = Sensor::with('user')
-            ->where('type', Sensor::BROWSER)
+            ->where('type', Sensor::DESKTOP)
             ->where('enabled', true)
             ->where('pairing_key_hash', hash('sha256', $key))
             ->first();
-        abort_unless($sensor, 401, 'Chrome extension is not paired.');
+        abort_unless($sensor, 401, 'Desktop app is not paired.');
 
         $progress = $recorder->record($sensor, $data);
 

@@ -6,13 +6,14 @@ use App\Models\DailyLog;
 use App\Models\TaskDefinition;
 use App\Services\GithubSensorSync;
 use App\Services\BrowsingActivityRecorder;
+use App\Services\DesktopActivityRecorder;
 use App\Services\GoogleCalendarSync;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class DayLogController extends Controller
 {
-    public function __construct(private GithubSensorSync $githubSensor, private BrowsingActivityRecorder $browsingRecorder, private GoogleCalendarSync $googleCalendar) {}
+    public function __construct(private GithubSensorSync $githubSensor, private BrowsingActivityRecorder $browsingRecorder, private DesktopActivityRecorder $desktopRecorder, private GoogleCalendarSync $googleCalendar) {}
 
     public function show(Request $request, string $date)
     {
@@ -28,8 +29,9 @@ class DayLogController extends Controller
         }
         $this->githubSensor->sync($request->user(), $log, $day);
         $this->browsingRecorder->finalizeStale($request->user());
+        $this->desktopRecorder->finalizeStale($request->user());
         $showHidden = $request->boolean('show_hidden');
-        $log->load(['blocks.attachments', 'blocks.taskEvent', 'blocks.browsingActivities', 'blocks.mobileBrowsingVisits']);
+        $log->load(['blocks.attachments', 'blocks.taskEvent', 'blocks.browsingActivities', 'blocks.desktopActivities', 'blocks.mobileBrowsingVisits']);
         $tasks = TaskDefinition::where('user_id', $request->user()->id)
             ->where('is_active', true)
             ->orderBy('name')
@@ -212,11 +214,15 @@ class DayLogController extends Controller
     private function blockState(Request $request, $block): array
     {
         $isBrowsing = $block->type === 'sensor_browser';
+        $isDesktop = $block->type === 'sensor_desktop';
         $isMobileBrowsing = $block->type === 'sensor_mobile_browser';
         $isGithub = $block->type === 'sensor_github' && data_get($block->metadata, 'empty') !== true && filled(data_get($block->metadata, 'commits'));
         $isGoogleCalendar = $block->type === 'sensor_google_calendar';
         $browsingDomains = $isBrowsing
             ? $block->browsingActivities->groupBy('domain')->map(fn ($activities, $domain) => ['domain' => $domain, 'seconds' => (int) $activities->sum('duration_seconds')])->sortByDesc('seconds')->values()->all()
+            : [];
+        $desktopApplications = $isDesktop
+            ? $block->desktopActivities->groupBy('application')->map(fn ($activities, $application) => ['domain' => $application, 'seconds' => (int) $activities->sum('duration_seconds')])->sortByDesc('seconds')->values()->all()
             : [];
         $mobileBrowsingDomains = $isMobileBrowsing
             ? $block->mobileBrowsingVisits->groupBy('domain')->map(fn ($visits, $domain) => ['domain' => $domain, 'visits' => $visits->count()])->sortByDesc('visits')->values()->all()
@@ -265,6 +271,7 @@ class DayLogController extends Controller
                 'name' => $attachment->original_name,
             ])->values()->all(),
             'browsing_domains' => $browsingDomains,
+            'desktop_applications' => $desktopApplications,
             'mobile_browsing_domains' => $mobileBrowsingDomains,
             'github_events' => $githubEvents,
             'calendar_event' => $calendarEvent,

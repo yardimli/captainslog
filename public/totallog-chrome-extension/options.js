@@ -5,12 +5,6 @@ const statusLabel = document.getElementById('status-label');
 const statusDetail = document.getElementById('status-detail');
 const mobileHistoryDot = document.getElementById('mobile-history-dot');
 const mobileHistoryDetail = document.getElementById('mobile-history-detail');
-const kindleEnabled = document.getElementById('kindle-enabled');
-const kindleFields = document.getElementById('kindle-settings-fields');
-const kindleUrl = document.getElementById('kindle-url');
-const kindleStatusDot = document.getElementById('kindle-status-dot');
-const kindleStatusLabel = document.getElementById('kindle-status-label');
-const kindleStatusDetail = document.getElementById('kindle-status-detail');
 const debugHistoryState = document.getElementById('debug-history-state');
 const debugHistorySummary = document.getElementById('debug-history-summary');
 const debugHistoryList = document.getElementById('debug-history-list');
@@ -131,7 +125,7 @@ async function renderDebugMessages() {
 }
 
 async function render() {
-  const data = await chrome.storage.local.get(['appUrl', 'connectionStatus', 'lastSentAt', 'lastDomain', 'lastLogDate', 'lastError', 'lastMobileHistorySyncAt', 'lastMobileHistoryImportCount', 'lastMobileHistoryRejectedCount', 'mobileHistoryLastError', 'kindleEnabled', 'kindleUrl', 'kindleStatus', 'kindleLastSyncAt', 'kindleLastTitle', 'kindleLastProgress', 'kindleLastError']);
+  const data = await chrome.storage.local.get(['appUrl', 'connectionStatus', 'lastSentAt', 'lastDomain', 'lastLogDate', 'lastError', 'lastMobileHistorySyncAt', 'lastMobileHistoryImportCount', 'lastMobileHistoryRejectedCount', 'mobileHistoryLastError']);
   appUrl.value = data.appUrl || DEFAULT_APP_URL;
   const state = data.connectionStatus || 'unpaired';
   statusDot.dataset.state = state;
@@ -158,31 +152,6 @@ async function render() {
     mobileHistoryDetail.textContent = `Last scan ${formatTime(data.lastMobileHistorySyncAt)} · ${count} new ${count === 1 ? 'visit' : 'visits'}${rejected ? ` · ${rejected} skipped` : ''}`;
   } else {
     mobileHistoryDetail.textContent = 'Waiting for the first synchronized history scan.';
-  }
-  kindleEnabled.checked = data.kindleEnabled === true;
-  kindleFields.hidden = !kindleEnabled.checked;
-  kindleUrl.value = data.kindleUrl || 'https://read.amazon.com/kindle-library';
-  const kindleState = data.kindleStatus || 'unconnected';
-  kindleStatusDot.dataset.state = kindleState;
-  if (kindleState === 'connected') {
-    kindleStatusLabel.textContent = 'Kindle is syncing';
-    const progress = data.kindleLastProgress === null || data.kindleLastProgress === undefined ? '' : ` · ${data.kindleLastProgress}${typeof data.kindleLastProgress === 'number' ? '%' : ''}`;
-    kindleStatusDetail.textContent = `${data.kindleLastTitle || 'Last book'}${progress} · ${formatTime(data.kindleLastSyncAt)}`;
-  } else if (kindleState === 'ready') {
-    kindleStatusLabel.textContent = 'Kindle session found';
-    kindleStatusDetail.textContent = 'Open a book in Kindle Cloud Reader to send its current reading progress.';
-  } else if (kindleState === 'syncing') {
-    kindleStatusLabel.textContent = 'Syncing Kindle';
-    kindleStatusDetail.textContent = 'Checking the recent library and loading its first book without changing your active tab.';
-  } else if (kindleState === 'waiting') {
-    kindleStatusLabel.textContent = 'Waiting for Kindle';
-    kindleStatusDetail.textContent = 'Sign in if asked, then open a book. Progress is detected from the reader page.';
-  } else if (['expired', 'error', 'permission-required'].includes(kindleState)) {
-    kindleStatusLabel.textContent = 'Resync required';
-    kindleStatusDetail.textContent = data.kindleLastError || 'The Kindle session is no longer available.';
-  } else {
-    kindleStatusLabel.textContent = 'Not connected';
-    kindleStatusDetail.textContent = 'Open Kindle, sign in, and begin reading to create the first update.';
   }
 }
 
@@ -272,48 +241,6 @@ document.getElementById('debug-copy-report').addEventListener('click', async () 
 debugHistoryFilter.addEventListener('change', () => { debugHistoryPage = 0; renderDebugHistory(); });
 document.getElementById('debug-history-previous').addEventListener('click', () => { debugHistoryPage--; renderDebugHistory(); });
 document.getElementById('debug-history-next').addEventListener('click', () => { debugHistoryPage++; renderDebugHistory(); });
-
-kindleEnabled.addEventListener('change', async () => {
-  if (kindleEnabled.checked) {
-    const granted = await chrome.permissions.request({permissions: ['cookies']});
-    if (!granted) {
-      kindleEnabled.checked = false;
-      await chrome.storage.local.set({kindleEnabled: false, kindleStatus: 'permission-required', kindleLastError: 'Cookie access was not approved.'});
-      await render();
-      return;
-    }
-    await chrome.storage.local.set({kindleEnabled: true, kindleUrl: kindleUrl.value || 'https://read.amazon.com/kindle-library', kindleStatus: 'waiting', kindleLastError: null});
-    await chrome.runtime.sendMessage({type: 'kindle-sync-now'});
-  } else {
-    await chrome.storage.local.set({kindleEnabled: false, kindleStatus: 'disabled', kindleLastError: null});
-  }
-  await render();
-});
-
-document.getElementById('kindle-connect').addEventListener('click', async () => {
-  try {
-    const url = new URL(kindleUrl.value);
-    if (url.protocol !== 'https:' || !/^read\.amazon\./i.test(url.hostname)) throw new Error('Use a Kindle Cloud Reader URL beginning with https://read.amazon.');
-    await chrome.storage.local.set({kindleUrl: url.toString(), kindleLastFingerprint: null});
-    await chrome.runtime.sendMessage({type: 'kindle-connect'});
-    await render();
-  } catch (error) {
-    kindleStatusLabel.textContent = 'Invalid Kindle URL';
-    kindleStatusDetail.textContent = error.message;
-  }
-});
-
-document.getElementById('kindle-sync').addEventListener('click', async () => {
-  await chrome.storage.local.set({kindleUrl: kindleUrl.value, kindleLastFingerprint: null});
-  await chrome.runtime.sendMessage({type: 'kindle-sync-now'});
-  window.setTimeout(render, 200);
-});
-
-document.getElementById('kindle-check').addEventListener('click', async () => {
-  await chrome.storage.local.set({kindleUrl: kindleUrl.value});
-  await chrome.runtime.sendMessage({type: 'kindle-check'});
-  window.setTimeout(render, 200);
-});
 
 chrome.storage.onChanged.addListener(changes => {
   render();

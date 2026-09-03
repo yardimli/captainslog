@@ -76,6 +76,7 @@ The integration follows OpenRouter's APIs for [chat completions](https://openrou
 
 ### Automatic sensors
 
+- Pair the Tauri Windows tray app to track foreground application time in hourly desktop-activity entries; window titles and full executable paths remain local.
 - Link GitHub to add commit project names at their commit times. Commits for the same project and hour share one timeline entry, with every individual commit available in its side panel.
 - Connect a Google account with read-only Calendar OAuth to mirror the primary calendar into the current month. Recurring instances are expanded, and renamed, moved, or removed Google events update their matching log entries.
 - Google Calendar refresh tokens are encrypted. The current month refreshes hourly and is also checked, with a fifteen-minute throttle, when its calendar or daily logs are opened.
@@ -115,6 +116,10 @@ The landing page runs the real journal code without requiring registration.
 | AI | OpenRouter chat and model discovery APIs |
 | Build | Vite and npm |
 | Tests | PHPUnit with Laravel feature tests |
+
+### Windows desktop sensor
+
+The initial Tauri 2 + Rust tray application lives in [`desktop`](desktop). It detects the foreground Windows application, window title, and idle time while reusing the existing sensor pairing flow. See [`desktop/README.md`](desktop/README.md) for prerequisites and build commands.
 
 ## Local installation
 

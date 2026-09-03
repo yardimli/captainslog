@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <title>Total Log Desktop</title>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="masthead">
+        <div class="brand-mark" aria-hidden="true">TL</div>
+        <div>
+          <p class="eyebrow">Desktop sensor</p>
+          <h1>Total Log</h1>
+        </div>
+        <span id="platform-badge" class="badge">Starting…</span>
+      </header>
+
+      <section class="hero panel" aria-labelledby="now-heading">
+        <div>
+          <p class="eyebrow" id="now-heading">Active now</p>
+          <h2 id="application-name">Waiting for Windows…</h2>
+          <p id="window-title" class="muted">The current foreground application will appear here.</p>
+        </div>
+        <div class="metric">
+          <span id="idle-time">0s</span>
+          <small>idle time</small>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="panel">
+          <p class="eyebrow">Connection</p>
+          <h2>Pair with your server</h2>
+          <label for="app-url">Total Log URL</label>
+          <input id="app-url" type="url" value="http://127.0.0.1:8016/" spellcheck="false" />
+          <label for="pairing-key">Pairing key</label>
+          <div class="input-row">
+            <input id="pairing-key" type="password" autocomplete="off" spellcheck="false" />
+            <button id="reveal-key" type="button" class="quiet">Show</button>
+          </div>
+          <div class="actions">
+            <button id="pair-button" type="button">Pair in browser</button>
+            <button id="new-key-button" type="button" class="secondary">New key</button>
+          </div>
+          <p id="connection-status" class="status muted">Settings are kept only on this PC.</p>
+        </article>
+
+        <article class="panel">
+          <p class="eyebrow">Recent activity</p>
+          <h2>Foreground applications</h2>
+          <ol id="activity-list" class="activity-list">
+            <li class="empty">No samples yet.</li>
+          </ol>
+        </article>
+      </section>
+
+      <section class="panel kindle-panel" aria-labelledby="kindle-heading">
+        <div class="kindle-copy">
+          <p class="eyebrow">Reading sensor</p>
+          <h2 id="kindle-heading">Kindle Cloud Reader</h2>
+          <p class="muted">Sign in to Amazon in Total Log's dedicated Kindle window. Its WebView2 session stays on this PC; Total Log receives only the book, author, progress, and observation time.</p>
+        </div>
+        <div class="kindle-controls">
+          <label for="kindle-url">Kindle Cloud Reader URL</label>
+          <input id="kindle-url" type="url" value="https://read.amazon.com/kindle-library" spellcheck="false" />
+          <div class="actions">
+            <button id="kindle-connect" type="button">Open Kindle / sign in</button>
+            <button id="kindle-sync" type="button" class="secondary">Sync now</button>
+          </div>
+          <p id="kindle-status" class="status muted" aria-live="polite">Not connected. Open Kindle and sign in to begin.</p>
+        </div>
+      </section>
+
+      <aside class="note">
+        Closing this window keeps the desktop and Kindle sensors in the system tray. The optional browser extension is only needed for exact tab domains and synchronized mobile Chrome history.
+      </aside>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

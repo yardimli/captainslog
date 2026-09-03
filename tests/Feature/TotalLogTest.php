@@ -254,7 +254,7 @@ class TotalLogTest extends TestCase
         $this->actingAs($user)->get(route('tasks.index'))->assertOk()
             ->assertSee('data-emoji-picker', false)
             ->assertSee('data-emoji-search', false)
-            ->assertSee('data-emoji-url="'.route('emojis.index').'"', false)
+            ->assertSee('data-emoji-url="'.route('emojis.index', [], false).'"', false)
             ->assertSee('data-emoji-category-template', false)
             ->assertSee('data-emoji-option-template', false)
             ->assertSee('data-emoji-loading-spinner', false)
