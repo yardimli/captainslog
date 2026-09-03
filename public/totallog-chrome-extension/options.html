@@ -19,17 +19,15 @@
     </nav>
     <div id="settings-tab-panel" data-options-tab-panel="settings">
     <section id="connection-settings-card">
-      <label for="app-url">Total Log URL</label>
-      <input id="app-url" type="url" value="http://127.0.0.1:8016/" spellcheck="false">
-      <p class="help">The extension sends one active-site heartbeat per minute. Page paths and titles are not stored by the app.</p>
+      <strong>Desktop connection</strong>
+      <p class="help">This extension sends browsing data only to Total Log Desktop on this computer. The desktop app holds your server URL and pairing key, then forwards the data to your account.</p>
       <div id="extension-actions">
-        <button id="save-url" type="button" class="secondary">Save URL</button>
-        <button id="connect" type="button">Connect to Total Log</button>
+        <button id="check-desktop" type="button">Check desktop app</button>
       </div>
     </section>
     <section id="connection-status-card" aria-live="polite">
       <div id="connection-status-heading"><span id="status-dot"></span><strong id="status-label">Not connected</strong></div>
-      <p id="status-detail">Save the app URL, then connect this extension to your signed-in account.</p>
+      <p id="status-detail">Checking whether Total Log Desktop is running…</p>
       <button id="send-now" type="button" class="secondary">Send current site now</button>
     </section>
     <section id="mobile-history-card" aria-live="polite">

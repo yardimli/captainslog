@@ -1,7 +1,9 @@
 mod activity;
+mod browser_bridge;
 
-use std::{thread, time::Duration};
+use browser_bridge::{BridgeConfig, BrowserBridge};
 use serde::{Deserialize, Serialize};
+use std::{thread, time::Duration};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -10,14 +12,78 @@ use tauri::{
 
 const DEFAULT_KINDLE_URL: &str = "https://read.amazon.com/kindle-library";
 const AMAZON_DOMAINS: [&str; 13] = [
-    "amazon.com", "amazon.ca", "amazon.co.uk", "amazon.com.au", "amazon.de",
-    "amazon.fr", "amazon.es", "amazon.it", "amazon.co.jp", "amazon.in",
-    "amazon.com.br", "amazon.com.mx", "amazon.nl",
+    "amazon.com",
+    "amazon.ca",
+    "amazon.co.uk",
+    "amazon.com.au",
+    "amazon.de",
+    "amazon.fr",
+    "amazon.es",
+    "amazon.it",
+    "amazon.co.jp",
+    "amazon.in",
+    "amazon.com.br",
+    "amazon.com.mx",
+    "amazon.nl",
 ];
 
 #[tauri::command]
 fn current_activity() -> activity::ActivitySnapshot {
     activity::capture()
+}
+
+#[derive(Deserialize)]
+struct BrowserBridgeConfig {
+    app_url: String,
+    pairing_key: String,
+}
+
+#[tauri::command]
+fn configure_browser_bridge(
+    bridge: tauri::State<'_, BrowserBridge>,
+    payload: BrowserBridgeConfig,
+) -> Result<(), String> {
+    total_log_url(&payload.app_url)?;
+    if !(32..=128).contains(&payload.pairing_key.len())
+        || !payload
+            .pairing_key
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '-'))
+    {
+        return Err("The desktop pairing key is not valid.".into());
+    }
+    bridge.configure(BridgeConfig {
+        app_url: payload.app_url,
+        pairing_key: payload.pairing_key,
+    });
+    Ok(())
+}
+
+#[tauri::command]
+async fn check_server_connection(payload: BrowserBridgeConfig) -> Result<UploadResult, String> {
+    let base = total_log_url(&payload.app_url)?;
+    let endpoint = base
+        .join("api/sensors/desktop/check")
+        .map_err(|error| error.to_string())?;
+    let response = reqwest::Client::new()
+        .get(endpoint)
+        .header("Accept", "application/json")
+        .header("X-TotalLog-Key", payload.pairing_key)
+        .send()
+        .await
+        .map_err(|error| format!("Could not reach Total Log: {error}"))?;
+    let status = response.status();
+    if !status.is_success() {
+        return Err(if status.as_u16() == 401 {
+            "Desktop sensor is not paired yet. Finish pairing in your browser.".into()
+        } else {
+            format!("Total Log connection check returned {}.", status.as_u16())
+        });
+    }
+
+    Ok(UploadResult {
+        status: status.as_u16(),
+    })
 }
 
 #[derive(Deserialize)]
@@ -79,8 +145,11 @@ struct KindleUpload {
 #[tauri::command]
 async fn send_activity(payload: ActivityUpload) -> Result<UploadResult, String> {
     let base = total_log_url(&payload.app_url)?;
-    let endpoint = base.join("api/sensors/desktop/activity").map_err(|error| error.to_string())?;
-    let response = reqwest::Client::new().post(endpoint)
+    let endpoint = base
+        .join("api/sensors/desktop/activity")
+        .map_err(|error| error.to_string())?;
+    let response = reqwest::Client::new()
+        .post(endpoint)
         .header("Accept", "application/json")
         .header("X-TotalLog-Key", payload.pairing_key)
         .json(&serde_json::json!({
@@ -89,7 +158,9 @@ async fn send_activity(payload: ActivityUpload) -> Result<UploadResult, String> 
             "client_id": payload.client_id,
             "observed_at": payload.observed_at,
         }))
-        .send().await.map_err(|error| format!("Could not reach Total Log: {error}"))?;
+        .send()
+        .await
+        .map_err(|error| format!("Could not reach Total Log: {error}"))?;
     let status = response.status();
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
@@ -100,7 +171,9 @@ async fn send_activity(payload: ActivityUpload) -> Result<UploadResult, String> 
         });
     }
 
-    Ok(UploadResult { status: status.as_u16() })
+    Ok(UploadResult {
+        status: status.as_u16(),
+    })
 }
 
 #[tauri::command]
@@ -109,15 +182,20 @@ async fn send_activity_batch(payload: ActivityBatchUpload) -> Result<UploadResul
         return Err("There is no desktop activity to upload yet.".into());
     }
     let base = total_log_url(&payload.app_url)?;
-    let endpoint = base.join("api/sensors/desktop/activity").map_err(|error| error.to_string())?;
-    let response = reqwest::Client::new().post(endpoint)
+    let endpoint = base
+        .join("api/sensors/desktop/activity")
+        .map_err(|error| error.to_string())?;
+    let response = reqwest::Client::new()
+        .post(endpoint)
         .header("Accept", "application/json")
         .header("X-TotalLog-Key", payload.pairing_key)
         .json(&serde_json::json!({
             "client_id": payload.client_id,
             "activities": payload.activities,
         }))
-        .send().await.map_err(|error| format!("Could not reach Total Log: {error}"))?;
+        .send()
+        .await
+        .map_err(|error| format!("Could not reach Total Log: {error}"))?;
     let status = response.status();
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
@@ -128,14 +206,19 @@ async fn send_activity_batch(payload: ActivityBatchUpload) -> Result<UploadResul
         });
     }
 
-    Ok(UploadResult { status: status.as_u16() })
+    Ok(UploadResult {
+        status: status.as_u16(),
+    })
 }
 
 #[tauri::command]
 async fn send_kindle_progress(payload: KindleUpload) -> Result<UploadResult, String> {
     let base = total_log_url(&payload.app_url)?;
-    let endpoint = base.join("api/sensors/kindle/progress").map_err(|error| error.to_string())?;
-    let response = reqwest::Client::new().post(endpoint)
+    let endpoint = base
+        .join("api/sensors/kindle/progress")
+        .map_err(|error| error.to_string())?;
+    let response = reqwest::Client::new()
+        .post(endpoint)
         .header("Accept", "application/json")
         .header("X-TotalLog-Key", payload.pairing_key)
         .json(&serde_json::json!({
@@ -147,7 +230,9 @@ async fn send_kindle_progress(payload: KindleUpload) -> Result<UploadResult, Str
             "client_id": payload.client_id,
             "observed_at": payload.observed_at,
         }))
-        .send().await.map_err(|error| format!("Could not reach Total Log: {error}"))?;
+        .send()
+        .await
+        .map_err(|error| format!("Could not reach Total Log: {error}"))?;
     let status = response.status();
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
@@ -158,7 +243,9 @@ async fn send_kindle_progress(payload: KindleUpload) -> Result<UploadResult, Str
         });
     }
 
-    Ok(UploadResult { status: status.as_u16() })
+    Ok(UploadResult {
+        status: status.as_u16(),
+    })
 }
 
 #[tauri::command]
@@ -179,6 +266,15 @@ async fn open_kindle(app: tauri::AppHandle, kindle_url: String) -> Result<(), St
 async fn sync_kindle(app: tauri::AppHandle, kindle_url: String) -> Result<(), String> {
     let url = kindle_library_url(&kindle_url)?;
     if let Some(window) = app.get_webview_window("kindle") {
+        let current = window.url().map_err(|error| error.to_string())?;
+        if current.host_str().is_some_and(is_read_amazon_host)
+            && current.path().contains("kindle-library")
+        {
+            window
+                .eval("window.__totalLogKindleSync?.()")
+                .map_err(|error| error.to_string())?;
+            return Ok(());
+        }
         window.navigate(url).map_err(|error| error.to_string())?;
         return Ok(());
     }
@@ -193,7 +289,8 @@ fn kindle_progress_observed(
     progress: KindleProgress,
 ) -> Result<(), String> {
     validate_kindle_sender(&webview)?;
-    app.emit_to("main", "kindle-progress", progress).map_err(|error| error.to_string())
+    app.emit_to("main", "kindle-progress", progress)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -203,14 +300,20 @@ fn kindle_status_observed(
     report: KindleStatusReport,
 ) -> Result<(), String> {
     validate_kindle_sender(&webview)?;
-    app.emit_to("main", "kindle-status", report).map_err(|error| error.to_string())
+    app.emit_to("main", "kindle-status", report)
+        .map_err(|error| error.to_string())
 }
 
 pub fn run() {
+    let browser_bridge = BrowserBridge::default();
+    let setup_bridge = browser_bridge.clone();
     tauri::Builder::default()
+        .manage(browser_bridge)
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             current_activity,
+            configure_browser_bridge,
+            check_server_connection,
             send_activity,
             send_activity_batch,
             send_kindle_progress,
@@ -219,13 +322,18 @@ pub fn run() {
             kindle_progress_observed,
             kindle_status_observed,
         ])
-        .setup(|app| {
+        .setup(move |app| {
+            setup_bridge.start(app.handle().clone());
             let show = MenuItem::with_id(app, "show", "Open Total Log", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &quit])?;
 
             TrayIconBuilder::new()
-                .icon(app.default_window_icon().cloned().expect("application icon"))
+                .icon(
+                    app.default_window_icon()
+                        .cloned()
+                        .expect("application icon"),
+                )
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id().as_ref() {
@@ -281,8 +389,12 @@ fn total_log_url(value: &str) -> Result<url::Url, String> {
 }
 
 fn kindle_library_url(value: &str) -> Result<url::Url, String> {
-    let url = url::Url::parse(if value.trim().is_empty() { DEFAULT_KINDLE_URL } else { value })
-        .map_err(|error| error.to_string())?;
+    let url = url::Url::parse(if value.trim().is_empty() {
+        DEFAULT_KINDLE_URL
+    } else {
+        value
+    })
+    .map_err(|error| error.to_string())?;
     let host = url.host_str().unwrap_or_default();
     if url.scheme() != "https" || !is_read_amazon_host(host) {
         return Err("Use a Kindle Cloud Reader URL beginning with https://read.amazon.".into());
@@ -290,7 +402,11 @@ fn kindle_library_url(value: &str) -> Result<url::Url, String> {
     Ok(url)
 }
 
-fn create_kindle_window(app: &tauri::AppHandle, url: url::Url, visible: bool) -> Result<(), String> {
+fn create_kindle_window(
+    app: &tauri::AppHandle,
+    url: url::Url,
+    visible: bool,
+) -> Result<(), String> {
     let navigation_app = app.clone();
     WebviewWindowBuilder::new(app, "kindle", WebviewUrl::External(url))
         .title("Kindle Cloud Reader · Total Log")
@@ -302,10 +418,16 @@ fn create_kindle_window(app: &tauri::AppHandle, url: url::Url, visible: bool) ->
         .on_navigation(move |url| {
             let allowed = url.scheme() == "https" && url.host_str().is_some_and(is_amazon_host);
             if allowed && url.path().contains("/ap/signin") {
-                let _ = navigation_app.emit_to("main", "kindle-status", KindleStatusReport {
-                    status: "expired".into(),
-                    message: Some("Sign in to Amazon in the Kindle window, then choose Sync now.".into()),
-                });
+                let _ = navigation_app.emit_to(
+                    "main",
+                    "kindle-status",
+                    KindleStatusReport {
+                        status: "expired".into(),
+                        message: Some(
+                            "Sign in to Amazon in the Kindle window, then choose Sync now.".into(),
+                        ),
+                    },
+                );
             }
             allowed
         })
@@ -316,8 +438,13 @@ fn create_kindle_window(app: &tauri::AppHandle, url: url::Url, visible: bool) ->
 
 fn validate_kindle_sender(webview: &WebviewWindow) -> Result<(), String> {
     let url = webview.url().map_err(|error| error.to_string())?;
-    if webview.label() != "kindle" || url.scheme() != "https" || !url.host_str().is_some_and(is_read_amazon_host) {
-        return Err("Kindle reports are only accepted from the dedicated Cloud Reader window.".into());
+    if webview.label() != "kindle"
+        || url.scheme() != "https"
+        || !url.host_str().is_some_and(is_read_amazon_host)
+    {
+        return Err(
+            "Kindle reports are only accepted from the dedicated Cloud Reader window.".into(),
+        );
     }
     Ok(())
 }
@@ -328,5 +455,7 @@ fn is_read_amazon_host(host: &str) -> bool {
 
 fn is_amazon_host(host: &str) -> bool {
     let host = host.to_ascii_lowercase();
-    AMAZON_DOMAINS.iter().any(|domain| host == *domain || host.ends_with(&format!(".{domain}")))
+    AMAZON_DOMAINS
+        .iter()
+        .any(|domain| host == *domain || host.ends_with(&format!(".{domain}")))
 }

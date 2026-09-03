@@ -1,4 +1,4 @@
-const DEFAULT_APP_URL = 'http://127.0.0.1:8016/';
+const DESKTOP_BRIDGE_URL = 'http://127.0.0.1:32145/';
 const HEARTBEAT_ALARM = 'totallog-browsing-heartbeat';
 const MOBILE_HISTORY_ALARM = 'totallog-mobile-history';
 const DEBUG_MESSAGE_LIMIT = 1000;
@@ -19,24 +19,51 @@ function debugLog(level, event, details = {}) {
   return debugWriteQueue;
 }
 
-const randomKey = () => `${crypto.randomUUID().replaceAll('-', '')}${crypto.randomUUID().replaceAll('-', '')}`;
-const normalizeAppUrl = value => {
-  const url = new URL(value || DEFAULT_APP_URL);
-  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Use an http:// or https:// app URL.');
-  url.hash = '';
-  url.search = '';
-  if (!url.pathname.endsWith('/')) url.pathname += '/';
-  return url.toString();
-};
 async function settings() {
-  const keys = ['appUrl', 'pairingKey', 'clientId', 'connectionStatus', 'lastSentAt', 'lastDomain', 'lastLogDate', 'lastError', 'lastMobileHistorySyncAt', 'lastMobileHistoryImportCount', 'lastMobileHistoryRejectedCount', 'mobileHistoryLastError'];
+  const keys = ['clientId', 'connectionStatus', 'lastSentAt', 'lastDomain', 'lastLogDate', 'lastError', 'lastDesktopCheckAt', 'lastMobileHistorySyncAt', 'lastMobileHistoryImportCount', 'lastMobileHistoryRejectedCount', 'mobileHistoryLastError'];
   const saved = await chrome.storage.local.get(keys);
   const updates = {};
-  if (!saved.appUrl) updates.appUrl = DEFAULT_APP_URL;
-  if (!saved.pairingKey) updates.pairingKey = randomKey();
   if (!saved.clientId) updates.clientId = crypto.randomUUID().replaceAll('-', '');
   if (Object.keys(updates).length) await chrome.storage.local.set(updates);
   return {...saved, ...updates};
+}
+
+async function setConnectionStatus(status, error = null) {
+  const connected = status === 'connected';
+  await chrome.storage.local.set({
+    connectionStatus: status,
+    lastError: error,
+    lastDesktopCheckAt: new Date().toISOString(),
+  });
+  await chrome.action.setBadgeBackgroundColor({color: connected ? '#10b981' : '#ef4444'});
+  await chrome.action.setBadgeText({text: connected ? '' : '!'});
+  await chrome.action.setTitle({title: connected
+    ? 'Total Log · Desktop app connected'
+    : `Total Log · ${error || 'Desktop app is not running'}`});
+}
+
+async function checkDesktopApp() {
+  try {
+    const response = await fetch(new URL('health', DESKTOP_BRIDGE_URL), {cache: 'no-store'});
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body.message || `Desktop bridge returned ${response.status}.`);
+    }
+    if (body.service !== 'total-log-desktop' || body.protocol !== 1) {
+      throw new Error('A service is listening locally, but it is not a compatible Total Log Desktop bridge.');
+    }
+    if (!body.configured) throw new Error('Desktop app is running but is not paired with Total Log.');
+    await setConnectionStatus('connected');
+    return true;
+  } catch (error) {
+    const rawMessage = error.message || String(error);
+    const unreachable = error instanceof TypeError || /failed to fetch|networkerror|could not connect/i.test(rawMessage);
+    const message = unreachable
+      ? 'Desktop app is not running. Open Total Log Desktop to resume browser tracking.'
+      : rawMessage;
+    await setConnectionStatus('desktop-missing', message);
+    return false;
+  }
 }
 
 async function activeWebTab() {
@@ -50,21 +77,22 @@ async function activeWebTab() {
 async function sendActiveBrowsing() {
   try {
     const config = await settings();
-    const appUrl = normalizeAppUrl(config.appUrl);
+    if (!await checkDesktopApp()) return;
     const tab = await activeWebTab();
     if (!tab) return;
     const browsingUrl = new URL(tab.url);
-    if (browsingUrl.origin === new URL(appUrl).origin) return;
-    const response = await fetch(new URL('api/sensors/browser/activity', appUrl), {
+    if (browsingUrl.origin === new URL(DESKTOP_BRIDGE_URL).origin) return;
+    const response = await fetch(new URL('v1/browser/activity', DESKTOP_BRIDGE_URL), {
       method: 'POST',
-      headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-TotalLog-Key': config.pairingKey},
+      headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
       body: JSON.stringify({url: `${browsingUrl.protocol}//${browsingUrl.hostname}`, observed_at: new Date().toISOString(), client_id: config.clientId})
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.message || `Total Log returned ${response.status}.`);
-    await chrome.storage.local.set({connectionStatus: 'connected', lastSentAt: new Date().toISOString(), lastDomain: body.domain || browsingUrl.hostname, lastLogDate: body.log_date || null, lastError: null});
+    await chrome.storage.local.set({lastSentAt: new Date().toISOString(), lastDomain: body.domain || browsingUrl.hostname, lastLogDate: body.log_date || null});
+    await setConnectionStatus('connected');
   } catch (error) {
-    await chrome.storage.local.set({connectionStatus: 'error', lastError: error.message || String(error)});
+    await setConnectionStatus('error', error.message || String(error));
   }
 }
 
@@ -138,8 +166,7 @@ async function syncMobileHistory(fullScan = false) {
   await debugLog('info', 'mobile-sync-started', {fullScan});
   try {
     const config = await settings();
-    if (!config.pairingKey) throw new Error('Connect the extension to Total Log before syncing mobile history.');
-    const appUrl = normalizeAppUrl(config.appUrl);
+    if (!await checkDesktopApp()) throw new Error('Desktop app is not running. Open Total Log Desktop before syncing mobile history.');
     const endTime = Date.now();
     const initialStart = endTime - (90 * 24 * 60 * 60 * 1000);
     const startTime = fullScan
@@ -147,16 +174,16 @@ async function syncMobileHistory(fullScan = false) {
       : (config.lastMobileHistorySyncAt
         ? Math.max(initialStart, Date.parse(config.lastMobileHistorySyncAt) - (24 * 60 * 60 * 1000))
         : initialStart);
-    await debugLog('info', 'mobile-sync-window', {fullScan, start: new Date(startTime).toISOString(), end: new Date(endTime).toISOString(), appOrigin: new URL(appUrl).origin});
-    const visits = await remoteHistoryVisits(startTime, endTime, new URL(appUrl).origin);
+    await debugLog('info', 'mobile-sync-window', {fullScan, start: new Date(startTime).toISOString(), end: new Date(endTime).toISOString()});
+    const visits = await remoteHistoryVisits(startTime, endTime, new URL(DESKTOP_BRIDGE_URL).origin);
     let imported = 0;
     let rejected = 0;
     const batches = visits.length ? Array.from({length: Math.ceil(visits.length / 500)}, (_value, index) => visits.slice(index * 500, (index + 1) * 500)) : [[]];
     for (const [index, batch] of batches.entries()) {
       await debugLog('info', 'mobile-api-request', {batch: index + 1, batches: batches.length, visits: batch.length});
-      const response = await fetch(new URL('api/sensors/browser/mobile-history', appUrl), {
+      const response = await fetch(new URL('v1/browser/mobile-history', DESKTOP_BRIDGE_URL), {
         method: 'POST',
-        headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-TotalLog-Key': config.pairingKey},
+        headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
         body: JSON.stringify({visits: batch})
       });
       const body = await response.json().catch(() => ({}));
@@ -171,7 +198,8 @@ async function syncMobileHistory(fullScan = false) {
       lastMobileHistoryRejectedCount: rejected,
       mobileHistoryLastError: null,
       connectionStatus: 'connected',
-      lastError: null
+      lastError: null,
+      lastDesktopCheckAt: new Date().toISOString()
     });
     await debugLog('info', 'mobile-sync-complete', {fullScan, visitsFound: visits.length, imported, rejected});
   } catch (error) {
@@ -180,14 +208,6 @@ async function syncMobileHistory(fullScan = false) {
   } finally {
     await chrome.storage.session.remove(['mobileHistorySyncRunning']);
   }
-}
-
-async function connectToApp() {
-  const config = await settings();
-  const pairingKey = randomKey();
-  await chrome.storage.local.set({pairingKey, connectionStatus: 'pairing', lastError: null, lastMobileHistorySyncAt: null, mobileHistoryLastError: null});
-  const pairingUrl = new URL(`sensors/browser/pair/${encodeURIComponent(pairingKey)}`, normalizeAppUrl(config.appUrl));
-  await chrome.tabs.create({url: pairingUrl.toString()});
 }
 
 async function installAlarms() {
@@ -222,9 +242,9 @@ chrome.idle.onStateChanged.addListener(state => {
 });
 chrome.action.onClicked.addListener(() => chrome.runtime.openOptionsPage());
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  debugLog('info', 'runtime-message', {type: message?.type || null, sender: sender?.url || sender?.id || 'unknown'});
+  debugLog('info', 'runtime-message', {type: message?.type || null, sender: _sender?.url || _sender?.id || 'unknown'});
   let operation;
-  if (message?.type === 'connect') operation = connectToApp();
+  if (message?.type === 'check-desktop') operation = checkDesktopApp();
   else if (message?.type === 'send-now') operation = sendActiveBrowsing();
   else if (message?.type === 'mobile-history-sync-now') operation = syncMobileHistory();
   else if (message?.type === 'mobile-history-sync-past') operation = syncMobileHistory(true);
@@ -233,4 +253,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true;
 });
 
-settings().then(installAlarms);
+settings().then(async () => {
+  await installAlarms();
+  await checkDesktopApp();
+});

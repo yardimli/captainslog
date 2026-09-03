@@ -24,5 +24,6 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 Route::post('/sensors/browser/activity', BrowserSensorApiController::class)->name('api.sensors.browser.activity');
 Route::post('/sensors/desktop/activity', DesktopSensorApiController::class)->name('api.sensors.desktop.activity');
+Route::get('/sensors/desktop/check', [DesktopSensorApiController::class, 'check'])->name('api.sensors.desktop.check');
 Route::post('/sensors/browser/mobile-history', MobileBrowserSensorApiController::class)->name('api.sensors.browser.mobile-history');
 Route::post('/sensors/kindle/progress', KindleSensorApiController::class)->name('api.sensors.kindle.progress');

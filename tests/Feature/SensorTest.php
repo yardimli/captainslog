@@ -247,6 +247,11 @@ class SensorTest extends TestCase
         $sensor = Sensor::where('user_id', $user->id)->where('type', Sensor::DESKTOP)->firstOrFail();
         $this->assertTrue($sensor->enabled);
         $this->assertSame(hash('sha256', $key), $sensor->pairing_key_hash);
+        $this->withHeader('X-TotalLog-Key', $key)
+            ->getJson(route('api.sensors.desktop.check'))
+            ->assertOk()
+            ->assertJsonPath('connected', true);
+        $this->assertNotNull($sensor->fresh()->last_checked_at);
         $this->get(route('sensors.index'))->assertOk()
             ->assertSee('Windows desktop and Kindle')
             ->assertSee('Desktop app paired');
@@ -572,6 +577,7 @@ class SensorTest extends TestCase
         $desktopRust = file_get_contents(base_path('desktop/src-tauri/src/lib.rs'));
         $desktopBridge = file_get_contents(base_path('desktop/src-tauri/src/browser_bridge.rs'));
         $desktopUi = file_get_contents(base_path('desktop/index.html'));
+        $desktopPermissions = file_get_contents(base_path('desktop/src-tauri/permissions/main.toml'));
         $desktopKindle = file_get_contents(base_path('desktop/src-tauri/src/kindle.js'));
         $this->assertStringContainsString('send_kindle_progress', $desktopRust);
         $this->assertStringContainsString('kindle_progress_observed', $desktopRust);
@@ -579,6 +585,9 @@ class SensorTest extends TestCase
         $this->assertStringContainsString('browser-extension-status', $desktopBridge);
         $this->assertStringContainsString('Received and forwarded', $desktopBridge);
         $this->assertStringContainsString('id="extension-health"', $desktopUi);
+        $this->assertStringContainsString('<dialog id="connection-panel"', $desktopUi);
+        $this->assertStringContainsString('allow-configure-browser-bridge', $desktopPermissions);
+        $this->assertStringContainsString('allow-check-server-connection', $desktopPermissions);
         $this->assertStringContainsString('/kindle-library/search', $desktopKindle);
         $this->assertStringContainsString("credentials: 'include'", $desktopKindle);
     }

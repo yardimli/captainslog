@@ -22,6 +22,11 @@ h2 { margin-bottom: 16px; font-size: 20px; }
 .connection-dot { width: 8px; height: 8px; border-radius: 50%; background: #e6ad42; box-shadow: 0 0 0 4px rgba(230,173,66,.12); }
 .connection-health[data-state="working"] .connection-dot { background: #55d6ad; box-shadow: 0 0 0 4px rgba(85,214,173,.12); }
 .connection-health[data-state="error"] .connection-dot, .connection-health[data-state="disconnected"] .connection-dot { background: #fa7885; box-shadow: 0 0 0 4px rgba(250,120,133,.12); }
+.integration-health { display: flex; align-items: center; gap: 10px; margin: -10px 0 18px; border: 1px solid rgba(158,197,255,.14); border-radius: 14px; background: rgba(15,29,52,.62); padding: 10px 13px; }
+.integration-health strong { color: #b9c8df; font-size: 12px; }
+.integration-health p { margin: 2px 0 0; color: #8294b2; font-size: 11px; }
+.integration-health[data-state="connected"] .connection-dot, .integration-health[data-state="receiving"] .connection-dot { background: #55d6ad; box-shadow: 0 0 0 4px rgba(85,214,173,.12); }
+.integration-health[data-state="error"] .connection-dot, .integration-health[data-state="missing"] .connection-dot { background: #fa7885; box-shadow: 0 0 0 4px rgba(250,120,133,.12); }
 .panel { border: 1px solid rgba(158,197,255,.18); border-radius: 20px; background: rgba(15,29,52,.82); box-shadow: 0 20px 60px rgba(0,0,0,.22); }
 .hero { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 150px; padding: 28px; }
 .hero h2 { margin-bottom: 5px; font-size: clamp(24px, 5vw, 38px); }
@@ -30,6 +35,8 @@ h2 { margin-bottom: 16px; font-size: 20px; }
 .metric span { display: block; color: #9ec5ff; font-size: 28px; font-weight: 900; }
 .metric small { color: #7f91ae; }
 .connection-panel, .activity-panel { margin-top: 18px; padding: 24px; }
+.connection-panel { width: min(620px, calc(100% - 32px)); max-height: calc(100vh - 48px); overflow: auto; color: #e7eefc; }
+.connection-panel::backdrop { background: rgba(2,8,20,.78); backdrop-filter: blur(4px); }
 .panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .panel-heading h2 { margin-bottom: 0; }
 label { display: block; margin: 13px 0 6px; color: #aebbd1; font-size: 12px; font-weight: 700; }

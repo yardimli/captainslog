@@ -21,6 +21,11 @@
         </div>
       </header>
 
+      <section id="extension-health" class="integration-health" data-state="waiting" aria-live="polite">
+        <span class="connection-dot" aria-hidden="true"></span>
+        <div><strong id="extension-health-label">Checking browser extension</strong><p id="extension-health-detail">Waiting for the extension to contact this desktop app…</p></div>
+      </section>
+
       <section class="hero panel" aria-labelledby="now-heading">
         <div>
           <p class="eyebrow" id="now-heading">Active now</p>
@@ -33,7 +38,7 @@
         </div>
       </section>
 
-      <section id="connection-panel" class="panel connection-panel" hidden>
+      <dialog id="connection-panel" class="panel connection-panel">
           <div class="panel-heading"><div><p class="eyebrow">Connection</p><h2>Pair with your server</h2></div><button id="connection-close" type="button" class="quiet compact">Close</button></div>
           <fieldset class="url-presets">
             <legend>Total Log server</legend>
@@ -53,7 +58,7 @@
             <button id="new-key-button" type="button" class="secondary">New key</button>
           </div>
           <p id="connection-status" class="status muted">Settings are kept only on this PC.</p>
-      </section>
+      </dialog>
 
       <section class="panel activity-panel">
           <p class="eyebrow">Recent activity</p>

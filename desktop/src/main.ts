@@ -22,6 +22,7 @@ type KindleProgress = {
 };
 
 type KindleStatusReport = { status: string; message: string | null };
+type BrowserExtensionReport = { status: 'connected' | 'receiving' | 'error'; message: string; received_at_unix_ms: number };
 type UrlMode = 'hosted' | 'localhost' | 'custom';
 
 type ActivitySlice = {
@@ -40,10 +41,13 @@ const list = document.querySelector<HTMLOListElement>('#activity-list')!;
 const appUrl = document.querySelector<HTMLInputElement>('#app-url')!;
 const pairingKey = document.querySelector<HTMLInputElement>('#pairing-key')!;
 const connectionStatus = document.querySelector<HTMLElement>('#connection-status')!;
-const connectionPanel = document.querySelector<HTMLElement>('#connection-panel')!;
+const connectionPanel = document.querySelector<HTMLDialogElement>('#connection-panel')!;
 const connectionToggle = document.querySelector<HTMLButtonElement>('#connection-toggle')!;
 const serverHealth = document.querySelector<HTMLElement>('#server-health')!;
 const serverHealthLabel = document.querySelector<HTMLElement>('#server-health-label')!;
+const extensionHealth = document.querySelector<HTMLElement>('#extension-health')!;
+const extensionHealthLabel = document.querySelector<HTMLElement>('#extension-health-label')!;
+const extensionHealthDetail = document.querySelector<HTMLElement>('#extension-health-detail')!;
 const kindleUrl = document.querySelector<HTMLInputElement>('#kindle-url')!;
 const kindleStatus = document.querySelector<HTMLElement>('#kindle-status')!;
 const clientId = localStorage.getItem('totalLogDesktop.clientId') || crypto.randomUUID().replaceAll('-', '');
@@ -60,6 +64,10 @@ let activityUploadRunning = false;
 let lastBatchAt = Number(localStorage.getItem(LAST_BATCH_KEY)) || Date.now();
 let kindleUploadRunning = false;
 let kindleResponseTimer: number | null = null;
+let serverCheckRunning = false;
+let pairingCheckTimer: number | null = null;
+let lastExtensionSeenAt = 0;
+const extensionDetectionStartedAt = Date.now();
 
 const randomKey = () => `${crypto.randomUUID().replaceAll('-', '')}${crypto.randomUUID().replaceAll('-', '')}`;
 const seconds = (value: number) => value < 60 ? `${value}s` : `${Math.floor(value / 60)}m ${value % 60}s`;
@@ -73,9 +81,61 @@ function setConnectionHealth(state: 'working' | 'error' | 'waiting' | 'disconnec
 }
 
 function setConnectionPanel(open: boolean) {
-  connectionPanel.hidden = !open;
+  if (open && !connectionPanel.open) connectionPanel.showModal();
+  if (!open && connectionPanel.open) connectionPanel.close();
   connectionToggle.setAttribute('aria-expanded', String(open));
-  if (open) connectionPanel.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+}
+
+async function checkServerConnection(showError = true): Promise<boolean> {
+  if (serverCheckRunning || localStorage.getItem('totalLogDesktop.syncEnabled') !== 'true') return false;
+  serverCheckRunning = true;
+  try {
+    await configureBrowserBridge();
+    await invoke('check_server_connection', {payload: {
+      app_url: normalizedBaseUrl().toString(),
+      pairing_key: pairingKey.value,
+    }});
+    setConnectionHealth('working', `Connection verified ${new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}. Desktop, browser, and Kindle data can be sent.`);
+    return true;
+  } catch (error) {
+    if (showError) setConnectionHealth('error', error instanceof Error ? error.message : String(error));
+    return false;
+  } finally {
+    serverCheckRunning = false;
+  }
+}
+
+function waitForPairing(attempt = 0) {
+  if (pairingCheckTimer !== null) window.clearTimeout(pairingCheckTimer);
+  pairingCheckTimer = window.setTimeout(async () => {
+    pairingCheckTimer = null;
+    if (await checkServerConnection(false)) {
+      setConnectionPanel(false);
+      return;
+    }
+    if (attempt < 39) {
+      waitForPairing(attempt + 1);
+    } else {
+      setConnectionHealth('error', 'Pairing was not verified after two minutes. Confirm the website accepted the pairing, then try again.');
+    }
+  }, attempt === 0 ? 1500 : 3000);
+}
+
+function renderExtensionHealth(report?: BrowserExtensionReport) {
+  if (report) {
+    lastExtensionSeenAt = Number(report.received_at_unix_ms) || Date.now();
+    extensionHealth.dataset.state = report.status;
+    extensionHealthLabel.textContent = report.status === 'receiving' ? 'Receiving browser data'
+      : report.status === 'error' ? 'Browser forwarding needs attention' : 'Browser extension connected';
+    extensionHealthDetail.textContent = `${report.message} Last contact ${new Date(lastExtensionSeenAt).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', second: '2-digit'})}.`;
+    return;
+  }
+  const reference = lastExtensionSeenAt || extensionDetectionStartedAt;
+  if (Date.now() - reference > 90_000) {
+    extensionHealth.dataset.state = 'missing';
+    extensionHealthLabel.textContent = 'Browser extension not detected';
+    extensionHealthDetail.textContent = 'The extension may not be installed, Chrome may be closed, or the extension may be disabled. Open Chrome and use “Check desktop app” in the extension settings.';
+  }
 }
 
 function selectedUrlMode(): UrlMode {
@@ -269,6 +329,18 @@ function normalizedBaseUrl(): URL {
 function saveSettings() {
   localStorage.setItem('totalLogDesktop.appUrl', normalizedBaseUrl().toString());
   localStorage.setItem('totalLogDesktop.pairingKey', pairingKey.value);
+  configureBrowserBridge();
+}
+
+async function configureBrowserBridge() {
+  try {
+    await invoke('configure_browser_bridge', {payload: {
+      app_url: normalizedBaseUrl().toString(),
+      pairing_key: pairingKey.value,
+    }});
+  } catch (error) {
+    console.warn('Could not configure the local browser bridge.', error);
+  }
 }
 
 function normalizedKindleUrl(): URL {
@@ -382,7 +454,8 @@ document.querySelector('#pair-button')?.addEventListener('click', async () => {
     localStorage.setItem('totalLogDesktop.syncEnabled', 'true');
     lastBatchAt = Date.now();
     localStorage.setItem(LAST_BATCH_KEY, String(lastBatchAt));
-    setConnectionHealth('waiting', 'Finish signing in and approve pairing in your browser. The light will turn green after the next five-minute upload.');
+    setConnectionHealth('waiting', 'Finish signing in and approve pairing in your browser. This app will verify it automatically.');
+    waitForPairing();
   } catch (error) {
     setConnectionHealth('error', error instanceof Error ? error.message : String(error));
   }
@@ -400,8 +473,9 @@ appUrl.addEventListener('change', () => {
 });
 pairingKey.addEventListener('change', saveSettings);
 
-connectionToggle.addEventListener('click', () => setConnectionPanel(connectionPanel.hidden));
+connectionToggle.addEventListener('click', () => setConnectionPanel(!connectionPanel.open));
 document.querySelector('#connection-close')?.addEventListener('click', () => setConnectionPanel(false));
+connectionPanel.addEventListener('close', () => connectionToggle.setAttribute('aria-expanded', 'false'));
 document.querySelectorAll<HTMLInputElement>('input[name="url-mode"]').forEach(radio => radio.addEventListener('change', () => {
   if (radio.checked) applyUrlMode(radio.value as UrlMode, true);
 }));
@@ -434,12 +508,16 @@ kindleUrl.addEventListener('change', () => {
 });
 
 async function bootstrap() {
+  await configureBrowserBridge();
   await Promise.all([
     listen<ActivitySnapshot>('activity-update', event => render(event.payload)),
     listen<KindleProgress>('kindle-progress', event => uploadKindleProgress(event.payload)),
+    listen<BrowserExtensionReport>('browser-extension-status', event => renderExtensionHealth(event.payload)),
     listen<KindleStatusReport>('kindle-status', event => {
-      if (kindleResponseTimer !== null) window.clearTimeout(kindleResponseTimer);
-      kindleResponseTimer = null;
+      if (event.payload.status !== 'syncing') {
+        if (kindleResponseTimer !== null) window.clearTimeout(kindleResponseTimer);
+        kindleResponseTimer = null;
+      }
       const labels: Record<string, string> = {
         syncing: 'Checking your most recently read Kindle book…',
         ready: 'Kindle is connected, but no recent book was found.',
@@ -449,14 +527,17 @@ async function bootstrap() {
     }),
   ]);
   render(await invoke<ActivitySnapshot>('current_activity'));
+  if (localStorage.getItem('totalLogDesktop.syncEnabled') === 'true') await checkServerConnection();
   if (localStorage.getItem('totalLogDesktop.kindleEnabled') === 'true') {
     window.setTimeout(syncKindle, 5000);
   }
 }
 
 window.setInterval(syncKindle, 60 * 60 * 1000);
+window.setInterval(() => checkServerConnection(), 60 * 1000);
 window.setInterval(() => {
   renderActivityList();
+  renderExtensionHealth();
   if (Date.now() - lastBatchAt >= FIVE_MINUTES_MS) uploadActivityBatch();
 }, 10_000);
 

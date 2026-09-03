@@ -1,5 +1,3 @@
-const DEFAULT_APP_URL = 'http://127.0.0.1:8016/';
-const appUrl = document.getElementById('app-url');
 const statusDot = document.getElementById('status-dot');
 const statusLabel = document.getElementById('status-label');
 const statusDetail = document.getElementById('status-detail');
@@ -14,15 +12,6 @@ const debugMessageList = document.getElementById('debug-message-list');
 const DEBUG_HISTORY_PAGE_SIZE = 100;
 let debugHistoryEntries = [];
 let debugHistoryPage = 0;
-
-function normalize(value) {
-  const url = new URL(value || DEFAULT_APP_URL);
-  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Use an http:// or https:// URL.');
-  url.hash = '';
-  url.search = '';
-  if (!url.pathname.endsWith('/')) url.pathname += '/';
-  return url.toString();
-}
 
 function formatTime(value) {
   return value ? new Date(value).toLocaleString() : 'No browsing updates sent yet.';
@@ -125,8 +114,7 @@ async function renderDebugMessages() {
 }
 
 async function render() {
-  const data = await chrome.storage.local.get(['appUrl', 'connectionStatus', 'lastSentAt', 'lastDomain', 'lastLogDate', 'lastError', 'lastMobileHistorySyncAt', 'lastMobileHistoryImportCount', 'lastMobileHistoryRejectedCount', 'mobileHistoryLastError']);
-  appUrl.value = data.appUrl || DEFAULT_APP_URL;
+  const data = await chrome.storage.local.get(['connectionStatus', 'lastSentAt', 'lastDomain', 'lastLogDate', 'lastError', 'lastDesktopCheckAt', 'lastMobileHistorySyncAt', 'lastMobileHistoryImportCount', 'lastMobileHistoryRejectedCount', 'mobileHistoryLastError']);
   const state = data.connectionStatus || 'unpaired';
   statusDot.dataset.state = state;
   if (state === 'connected') {
@@ -136,12 +124,12 @@ async function render() {
   } else if (state === 'error') {
     statusLabel.textContent = 'Needs attention';
     statusDetail.textContent = data.lastError || 'Could not reach Total Log.';
-  } else if (state === 'pairing') {
-    statusLabel.textContent = 'Pairing';
-    statusDetail.textContent = 'Finish signing in and approve the pairing in the opened Total Log tab.';
+  } else if (state === 'desktop-missing') {
+    statusLabel.textContent = 'Desktop app is not running';
+    statusDetail.textContent = data.lastError || 'Open Total Log Desktop to resume browser tracking.';
   } else {
     statusLabel.textContent = 'Not connected';
-    statusDetail.textContent = 'Save the app URL, then connect this extension to your signed-in account.';
+    statusDetail.textContent = 'Open Total Log Desktop, pair it with your account, then check the connection.';
   }
   mobileHistoryDot.dataset.state = data.mobileHistoryLastError ? 'error' : (data.lastMobileHistorySyncAt ? 'connected' : 'waiting');
   if (data.mobileHistoryLastError) {
@@ -155,28 +143,10 @@ async function render() {
   }
 }
 
-document.getElementById('save-url').addEventListener('click', async () => {
-  try {
-    const value = normalize(appUrl.value);
-    await chrome.storage.local.set({appUrl: value, connectionStatus: 'unpaired', lastError: null});
-    appUrl.value = value;
-    await render();
-  } catch (error) {
-    statusDot.dataset.state = 'error';
-    statusLabel.textContent = 'Invalid app URL';
-    statusDetail.textContent = error.message;
-  }
-});
-
-document.getElementById('connect').addEventListener('click', async () => {
-  try {
-    const value = normalize(appUrl.value);
-    await chrome.storage.local.set({appUrl: value});
-    await chrome.runtime.sendMessage({type: 'connect'});
-    await render();
-  } catch (error) {
-    statusDetail.textContent = error.message;
-  }
+document.getElementById('check-desktop').addEventListener('click', async () => {
+  statusDetail.textContent = 'Checking Total Log Desktop…';
+  await chrome.runtime.sendMessage({type: 'check-desktop'});
+  await render();
 });
 
 document.getElementById('send-now').addEventListener('click', async () => {

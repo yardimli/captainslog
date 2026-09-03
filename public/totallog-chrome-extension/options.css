@@ -24,6 +24,7 @@ button.danger { color: #be123c; }
 #status-dot[data-state="connected"] { background: #10b981; box-shadow: 0 0 0 5px #10b98122; }
 #status-dot[data-state="pairing"] { background: #f59e0b; box-shadow: 0 0 0 5px #f59e0b22; }
 #status-dot[data-state="error"] { background: #ef4444; box-shadow: 0 0 0 5px #ef444422; }
+#status-dot[data-state="desktop-missing"] { background: #ef4444; box-shadow: 0 0 0 5px #ef444422; }
 #mobile-history-heading { display: flex; align-items: center; gap: 12px; }
 #mobile-history-heading p, #mobile-history-heading h2 { margin: 0; }
 #mobile-history-heading h2 { margin-top: 3px; font-size: 20px; }

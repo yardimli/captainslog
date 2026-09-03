@@ -3,10 +3,12 @@
 1. Open `chrome://extensions` in Chrome.
 2. Enable **Developer mode**.
 3. Select **Load unpacked** and choose this `totallog-chrome-extension` folder.
-4. Open the extension settings. The default Total Log URL is `http://127.0.0.1:8016/`.
-5. Select **Connect to Total Log** and sign in if asked. Opening the pairing URL links the extension's random secret to the signed-in user.
+4. Pair Total Log Desktop with your account and leave it running.
+5. Open the extension settings and select **Check desktop app**.
 
-The extension sends only the active HTTP(S) hostname when the active tab changes and once per minute while Chrome is active. Page paths, titles, query strings, and ports never leave the extension. Total Log stores the complete hostname—including subdomains such as `docs.github.com` or `mail.google.com`—and elapsed time in hourly browsing blocks. A session is considered finished after three minutes without a heartbeat.
+The extension connects only to the local bridge exposed by Total Log Desktop at `http://127.0.0.1:32145/`. It has no server URL or pairing key of its own. If the desktop app is unavailable, Chrome displays a red `!` badge on the extension icon and the settings page reports that the desktop app is not running.
+
+The extension sends only the active HTTP(S) hostname to the desktop app when the active tab changes and once per minute while Chrome is active. The desktop app forwards it using its own server pairing. Page paths, titles, query strings, and ports never leave the extension. Total Log stores the complete hostname—including subdomains such as `docs.github.com` or `mail.google.com`—and elapsed time in hourly browsing blocks. A session is considered finished after three minutes without a heartbeat.
 
 When Chrome **History and tabs** sync is enabled, the extension also scans history synchronized from other devices every five minutes. It sends only the hostname, visit time, and a one-way deduplication hash. Total Log groups these visits into separate **Mobile browsing** blocks by hour and counts visits per domain. Chrome identifies them only as non-local visits, so history from multiple remote devices cannot be separated.
 

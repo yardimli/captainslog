@@ -1,0 +1,34 @@
+[[permission]]
+identifier = "allow-current-activity"
+description = "Allows the local main window to read the current foreground application snapshot."
+commands.allow = ["current_activity"]
+
+[[permission]]
+identifier = "allow-configure-browser-bridge"
+description = "Allows the local main window to configure the loopback browser-extension bridge."
+commands.allow = ["configure_browser_bridge"]
+
+[[permission]]
+identifier = "allow-check-server-connection"
+description = "Allows the local main window to verify its paired Total Log server connection."
+commands.allow = ["check_server_connection"]
+
+[[permission]]
+identifier = "allow-send-activity-batch"
+description = "Allows the local main window to upload an aggregated desktop activity batch."
+commands.allow = ["send_activity_batch"]
+
+[[permission]]
+identifier = "allow-send-kindle-progress"
+description = "Allows the local main window to upload Kindle progress reported by the restricted Kindle window."
+commands.allow = ["send_kindle_progress"]
+
+[[permission]]
+identifier = "allow-open-kindle"
+description = "Allows the local main window to open the restricted Kindle Cloud Reader window."
+commands.allow = ["open_kindle"]
+
+[[permission]]
+identifier = "allow-sync-kindle"
+description = "Allows the local main window to request a Kindle Cloud Reader synchronization."
+commands.allow = ["sync_kindle"]

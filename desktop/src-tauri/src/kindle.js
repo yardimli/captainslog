@@ -64,12 +64,56 @@
     return true;
   }
 
+  const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
+  function visibleBookCover() {
+    return [...document.querySelectorAll('img')]
+      .filter(image => {
+        if (!visible(image)) return false;
+        const rect = image.getBoundingClientRect();
+        return rect.top >= 90 && rect.width >= 80 && rect.height >= 110 && rect.height > rect.width * 1.05;
+      })
+      .sort((left, right) => {
+        const a = left.getBoundingClientRect();
+        const b = right.getBoundingClientRect();
+        return a.top - b.top || a.left - b.left;
+      })[0] || null;
+  }
+
+  function clickableBookTarget(cover) {
+    let element = cover;
+    for (let depth = 0; element && element !== document.body && depth < 7; depth += 1, element = element.parentElement) {
+      const role = element.getAttribute?.('role');
+      if (['A', 'BUTTON'].includes(element.tagName) || ['button', 'link'].includes(role)
+        || element.hasAttribute?.('tabindex') || getComputedStyle(element).cursor === 'pointer') return element;
+    }
+    return cover;
+  }
+
+  async function openRecentVisibleBook() {
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      const cover = visibleBookCover();
+      if (cover) {
+        await reportStatus('syncing', 'Opening the first book in your Recent Kindle library…');
+        clickableBookTarget(cover).click();
+        return true;
+      }
+      await sleep(500);
+    }
+    return false;
+  }
+
   async function syncRecentBook() {
     try {
       await reportStatus('syncing', 'Checking the most recently read Kindle book.');
+      if (await openRecentVisibleBook()) return;
+
       const libraryUrl = new URL('/kindle-library/search', location.origin);
       libraryUrl.search = new URLSearchParams({libraryType: 'BOOKS', paginationToken: '0', sortType: 'recency', querySize: '50'}).toString();
-      const response = await fetch(libraryUrl, {credentials: 'include', headers: {'Accept': 'application/json'}});
+      const controller = new AbortController();
+      const requestTimeout = setTimeout(() => controller.abort(), 10000);
+      const response = await fetch(libraryUrl, {credentials: 'include', headers: {'Accept': 'application/json'}, signal: controller.signal});
+      clearTimeout(requestTimeout);
       const responseText = await response.text();
       if (response.status === 401 || response.status === 403 || response.redirected || /\/ap\/signin/i.test(response.url) || /^\s*</.test(responseText)) {
         await reportStatus('expired', 'Kindle sign-in expired. Open the Kindle window and sign in again.');
@@ -94,7 +138,10 @@
       if (readerUrl.origin !== location.origin) throw new Error('Kindle returned a reader URL on an unexpected domain.');
       location.assign(readerUrl.toString());
     } catch (error) {
-      await reportStatus('error', error?.message || String(error));
+      const message = error?.name === 'AbortError'
+        ? 'Kindle did not answer the library request. Open a book once, then try Sync now again.'
+        : (error?.message || String(error));
+      await reportStatus('error', message);
     }
   }
 

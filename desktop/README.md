@@ -10,7 +10,7 @@ This is the Tauri 2 + Rust desktop sensor for Total Log. It currently provides:
 - per-application totals for the last five minutes, last hour, and today;
 - a dedicated Kindle Cloud Reader window whose Amazon session remains in WebView2;
 - hourly Kindle checks that send only book and reading-progress details;
-- a clear boundary for the optional browser extension, which is only needed for exact browser domains and synchronized mobile Chrome history.
+- a loopback-only bridge for the optional browser extension, which forwards exact browser domains and synchronized mobile Chrome history using the desktop app's pairing key.
 
 ## Windows prerequisites
 

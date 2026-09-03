@@ -46,13 +46,14 @@ mod windows {
         Foundation::CloseHandle,
         System::{
             SystemInformation::GetTickCount,
-            Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION},
+            Threading::{
+                OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+            },
         },
         UI::{
             Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO},
             WindowsAndMessaging::{
-                GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW,
-                GetWindowThreadProcessId,
+                GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId,
             },
         },
     };
@@ -61,7 +62,13 @@ mod windows {
         unsafe {
             let hwnd = GetForegroundWindow();
             if hwnd.is_null() {
-                return ("Desktop".into(), String::new(), String::new(), 0, idle_seconds());
+                return (
+                    "Desktop".into(),
+                    String::new(),
+                    String::new(),
+                    0,
+                    idle_seconds(),
+                );
             }
 
             let title_length = GetWindowTextLengthW(hwnd);
@@ -78,7 +85,13 @@ mod windows {
                 .unwrap_or("Unknown application")
                 .to_owned();
 
-            (application, executable, window_title, process_id, idle_seconds())
+            (
+                application,
+                executable,
+                window_title,
+                process_id,
+                idle_seconds(),
+            )
         }
     }
 
@@ -91,11 +104,18 @@ mod windows {
         let mut length = buffer.len() as u32;
         let succeeded = QueryFullProcessImageNameW(process, 0, buffer.as_mut_ptr(), &mut length);
         CloseHandle(process);
-        if succeeded == 0 { String::new() } else { wide_string(&buffer[..length as usize]) }
+        if succeeded == 0 {
+            String::new()
+        } else {
+            wide_string(&buffer[..length as usize])
+        }
     }
 
     unsafe fn idle_seconds() -> u64 {
-        let mut input = LASTINPUTINFO { cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32, dwTime: 0 };
+        let mut input = LASTINPUTINFO {
+            cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32,
+            dwTime: 0,
+        };
         if GetLastInputInfo(&mut input) == 0 {
             return 0;
         }
