@@ -16,9 +16,9 @@ return new class extends Migration
             $table->string('application');
             $table->string('process_name');
             $table->string('client_id', 64);
-            $table->timestamp('started_at');
-            $table->timestamp('last_seen_at');
-            $table->timestamp('ended_at')->nullable();
+            $table->dateTime('started_at');
+            $table->dateTime('last_seen_at');
+            $table->dateTime('ended_at')->nullable();
             $table->unsignedInteger('duration_seconds')->default(0);
             $table->timestamps();
 
