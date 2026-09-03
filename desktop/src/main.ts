@@ -31,9 +31,6 @@ type ActivitySlice = {
   duration_seconds: number;
 };
 
-const appName = document.querySelector<HTMLElement>('#application-name')!;
-const windowTitle = document.querySelector<HTMLElement>('#window-title')!;
-const idleTime = document.querySelector<HTMLElement>('#idle-time')!;
 const platformBadge = document.querySelector<HTMLElement>('#platform-badge')!;
 const list = document.querySelector<HTMLOListElement>('#activity-list')!;
 const appUrl = document.querySelector<HTMLInputElement>('#app-url')!;
@@ -67,8 +64,6 @@ let lastExtensionSeenAt = 0;
 const extensionDetectionStartedAt = Date.now();
 
 const randomKey = () => `${crypto.randomUUID().replaceAll('-', '')}${crypto.randomUUID().replaceAll('-', '')}`;
-const seconds = (value: number) => value < 60 ? `${value}s` : `${Math.floor(value / 60)}m ${value % 60}s`;
-
 function setConnectionHealth(state: 'working' | 'error' | 'waiting' | 'disconnected', detail?: string) {
   const labels = {working: 'Connection working', error: 'Connection not working', waiting: 'Checking connection', disconnected: 'Not connected'};
   serverHealth.dataset.state = state;
@@ -380,9 +375,6 @@ async function syncKindle() {
 }
 
 function render(snapshot: ActivitySnapshot) {
-  appName.textContent = snapshot.application || 'Unknown application';
-  windowTitle.textContent = snapshot.window_title || snapshot.executable || 'No window title available';
-  idleTime.textContent = seconds(snapshot.idle_seconds);
   platformBadge.textContent = snapshot.supported ? (snapshot.idle_seconds >= 180 ? 'Away' : 'Tracking') : 'Windows only';
   platformBadge.classList.toggle('away', snapshot.idle_seconds >= 180);
 
@@ -498,5 +490,5 @@ window.setInterval(() => {
 
 bootstrap().catch(error => {
   platformBadge.textContent = 'Error';
-  windowTitle.textContent = error instanceof Error ? error.message : String(error);
+  setConnectionHealth('error', error instanceof Error ? error.message : String(error));
 });

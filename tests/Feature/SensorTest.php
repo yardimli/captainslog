@@ -588,6 +588,13 @@ class SensorTest extends TestCase
         $this->assertStringContainsString('id="extension-health"', $desktopUi);
         $this->assertStringContainsString('<dialog id="connection-panel"', $desktopUi);
         $this->assertStringContainsString('Sync now · log first book', $desktopUi);
+        $this->assertStringContainsString('id="kindle-connect" type="button" class="compact"', $desktopUi);
+        $this->assertStringNotContainsString('Active now', $desktopUi);
+        $this->assertStringNotContainsString('id="application-name"', $desktopUi);
+        $this->assertStringContainsString('Recent active applications', $desktopUi);
+        $this->assertStringContainsString('class="help-tip tooltip-below"', $desktopUi);
+        $this->assertStringNotContainsString('class="activity-help muted"', $desktopUi);
+        $this->assertStringNotContainsString('<aside class="note">', $desktopUi);
         $this->assertStringContainsString('allow-configure-browser-bridge', $desktopPermissions);
         $this->assertStringContainsString('allow-check-server-connection', $desktopPermissions);
         $this->assertStringContainsString('document.querySelector(\'li[role="listitem"]\')', $desktopKindle);

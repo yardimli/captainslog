@@ -10,9 +10,12 @@
     <main class="shell">
       <header class="masthead">
         <div class="brand-mark" aria-hidden="true">TL</div>
-        <div>
+        <div class="brand-copy">
           <p class="eyebrow">Desktop sensor</p>
-          <h1>Total Log</h1>
+          <div class="title-with-help">
+            <h1>Total Log</h1>
+            <span class="help-tip tooltip-below" tabindex="0" role="img" aria-label="Closing this window keeps the desktop and Kindle sensors in the system tray. The optional browser extension is only needed for exact tab domains and synchronized mobile Chrome history." data-tooltip="Closing this window keeps the desktop and Kindle sensors in the system tray. The optional browser extension is only needed for exact tab domains and synchronized mobile Chrome history.">?</span>
+          </div>
         </div>
         <div class="masthead-actions">
           <span id="server-health" class="connection-health" data-state="waiting"><span class="connection-dot" aria-hidden="true"></span><span id="server-health-label">Checking connection</span></span>
@@ -23,19 +26,7 @@
 
       <section id="extension-health" class="integration-health" data-state="waiting" aria-live="polite">
         <span class="connection-dot" aria-hidden="true"></span>
-        <div><strong id="extension-health-label">Checking browser extension</strong><p id="extension-health-detail">Waiting for the extension to contact this desktop app…</p></div>
-      </section>
-
-      <section class="hero panel" aria-labelledby="now-heading">
-        <div>
-          <p class="eyebrow" id="now-heading">Active now</p>
-          <h2 id="application-name">Waiting for Windows…</h2>
-          <p id="window-title" class="muted">The current foreground application will appear here.</p>
-        </div>
-        <div class="metric">
-          <span id="idle-time">0s</span>
-          <small>idle time</small>
-        </div>
+        <div class="integration-health-copy"><strong id="extension-health-label">Checking browser extension</strong><p id="extension-health-detail">Waiting for the extension to contact this desktop app…</p></div>
       </section>
 
       <dialog id="connection-panel" class="panel connection-panel">
@@ -61,32 +52,27 @@
       </dialog>
 
       <section class="panel activity-panel">
-          <p class="eyebrow">Recent activity</p>
-          <h2>Application time</h2>
-          <div class="activity-list-head" aria-hidden="true"><span>Application</span><span>5 min</span><span>Hour</span><span>Today</span></div>
+          <div class="activity-list-head"><span class="activity-column-title">Recent active applications <span class="help-tip tooltip-below" tabindex="0" role="img" aria-label="Collected locally and uploaded as one batch every five minutes." data-tooltip="Collected locally and uploaded as one batch every five minutes.">?</span></span><span aria-hidden="true">5 min</span><span aria-hidden="true">Hour</span><span aria-hidden="true">Today</span></div>
           <ol id="activity-list" class="activity-list"><li class="empty">No activity collected yet.</li></ol>
-          <p class="activity-help muted">Collected locally and uploaded as one batch every five minutes.</p>
       </section>
 
       <section class="panel kindle-panel" aria-labelledby="kindle-heading">
         <div class="kindle-copy">
           <p class="eyebrow">Reading sensor</p>
-          <h2 id="kindle-heading">Kindle Cloud Reader</h2>
-          <p class="muted">This is fully manual. Sync now opens your Kindle library, reads the title and author from its first book, and logs that book. No reading position or percentage is collected.</p>
+          <div class="title-with-help">
+            <h2 id="kindle-heading">Kindle Cloud Reader</h2>
+            <span class="help-tip" tabindex="0" role="img" aria-label="This is fully manual. Sync now opens your Kindle library, reads the title and author from its first book, and logs that book. No reading position or percentage is collected. The Kindle window always remains visible during this manual operation so you can confirm which first library item is being read." data-tooltip="This is fully manual. Sync now opens your Kindle library, reads the title and author from its first book, and logs that book. No reading position or percentage is collected. The Kindle window always remains visible during this manual operation so you can confirm which first library item is being read.">?</span>
+          </div>
         </div>
         <div class="kindle-controls">
-          <p class="field-help muted">The Kindle window always remains visible during this manual operation so you can confirm which first library item is being read.</p>
           <div class="actions">
-            <button id="kindle-connect" type="button">Open Kindle / sign in</button>
-            <button id="kindle-sync" type="button" class="secondary">Sync now · log first book</button>
+            <button id="kindle-connect" type="button" class="compact">Open Kindle / sign in</button>
+            <button id="kindle-sync" type="button" class="secondary compact">Sync now · log first book</button>
           </div>
           <p id="kindle-status" class="status muted" aria-live="polite">Not connected. Open Kindle and sign in to begin.</p>
         </div>
       </section>
 
-      <aside class="note">
-        Closing this window keeps the desktop and Kindle sensors in the system tray. The optional browser extension is only needed for exact tab domains and synchronized mobile Chrome history.
-      </aside>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>
