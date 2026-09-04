@@ -82,6 +82,17 @@
     display: none;
 }
 
+.daily-log-goal-strip {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.daily-log-goal-strip::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
 .emoji-picker-host-active {
     position: relative;
     z-index: 95;

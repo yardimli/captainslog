@@ -117,7 +117,9 @@ class GoalTest extends TestCase
 
         $response = $this->actingAs($user)->get(route('logs.show', '2026-08-12'))->assertOk()
             ->assertSee('data-horizontal-goal-drag', false)
+            ->assertSee('daily-log-goal-strip', false)
             ->assertSee('touch-pan-y select-none flex-nowrap', false)
+            ->assertSee('overflow-x-auto overflow-y-hidden', false)
             ->assertSee('draggable="false"', false);
         $content = $response->getContent();
         $this->assertTrue(strpos($content, 'Inactive goal') < strpos($content, 'Older goal'));
@@ -132,6 +134,9 @@ class GoalTest extends TestCase
         $this->assertStringContainsString('function initializeHorizontalGoalDrag()', $script);
         $this->assertStringContainsString("section.addEventListener('pointermove'", $script);
         $this->assertStringContainsString('if (!suppressClick) return;', $script);
+        $styles = file_get_contents(resource_path('css/app.css'));
+        $this->assertStringContainsString('.daily-log-goal-strip::-webkit-scrollbar', $styles);
+        $this->assertStringContainsString('scrollbar-width: none', $styles);
     }
 
     public function test_completed_one_time_goal_disappears_after_completion_but_remains_in_the_past(): void
