@@ -63,6 +63,77 @@ class GoalTest extends TestCase
         $this->get(route('goals.show', ['goal' => $goal, 'date' => '2026-08-19']))->assertOk()->assertSee('2 <span class="text-lg', false)->assertSee('Second week')->assertDontSee('First week');
     }
 
+    public function test_manual_goal_progress_is_also_a_linked_day_event(): void
+    {
+        $user = User::factory()->create();
+        $goal = Goal::create([
+            'user_id' => $user->id,
+            'name' => 'Write the chapter',
+            'emoji' => '✍️',
+            'target_points' => 5,
+            'period' => 'daily',
+            'manual_enabled' => true,
+        ]);
+
+        $this->actingAs($user)->post(route('goals.entries.store', $goal), [
+            'points' => 2,
+            'note' => 'Finished the opening scene',
+            'occurred_on' => '2026-08-12',
+        ])->assertRedirect();
+
+        $entry = $goal->entries()->sole();
+        $event = TaskEvent::whereNull('task_definition_id')->sole();
+        $this->assertSame('Write the chapter', $event->task_name);
+        $this->assertSame('+2 points', $event->selected_value);
+        $this->assertSame($entry->id, data_get($event->block->metadata, 'goal_entry_id'));
+        $this->assertSame('✍️', $event->block->emoji);
+        $this->assertSame('Finished the opening scene', $event->block->content);
+
+        $this->get(route('logs.show', '2026-08-12'))->assertOk()
+            ->assertSee('Write the chapter')
+            ->assertSee('+2 points')
+            ->assertSee('Finished the opening scene')
+            ->assertSee('✍️');
+
+        $this->patchJson(route('events.update', $event), [
+            'notes' => 'Revised the opening scene',
+            'occurred_at' => '14:30',
+        ])->assertOk();
+        $this->assertSame('Revised the opening scene', $entry->fresh()->note);
+        $this->assertSame('14:30', $entry->fresh()->occurred_at->format('H:i'));
+
+        $this->deleteJson(route('blocks.destroy', $event->log_block_id))->assertOk();
+        $this->assertDatabaseMissing('goal_entries', ['id' => $entry->id]);
+    }
+
+    public function test_daily_goal_strip_is_single_row_draggable_and_orders_least_recent_activity_first(): void
+    {
+        $user = User::factory()->create();
+        $recent = Goal::create(['user_id' => $user->id, 'name' => 'Recent goal', 'target_points' => 5, 'period' => 'daily']);
+        $older = Goal::create(['user_id' => $user->id, 'name' => 'Older goal', 'target_points' => 5, 'period' => 'daily']);
+        $inactive = Goal::create(['user_id' => $user->id, 'name' => 'Inactive goal', 'target_points' => 5, 'period' => 'daily']);
+        $recent->entries()->create(['occurred_at' => '2026-08-12 15:00:00', 'points' => 1]);
+        $older->entries()->create(['occurred_at' => '2026-08-12 09:00:00', 'points' => 1]);
+
+        $response = $this->actingAs($user)->get(route('logs.show', '2026-08-12'))->assertOk()
+            ->assertSee('data-horizontal-goal-drag', false)
+            ->assertSee('touch-pan-y select-none flex-nowrap', false)
+            ->assertSee('draggable="false"', false);
+        $content = $response->getContent();
+        $this->assertTrue(strpos($content, 'Inactive goal') < strpos($content, 'Older goal'));
+        $this->assertTrue(strpos($content, 'Older goal') < strpos($content, 'Recent goal'));
+
+        $this->withHeader('X-Day-State', 'json')->get(route('logs.show', '2026-08-12'))->assertOk()
+            ->assertJsonPath('goals.0.id', $inactive->id)
+            ->assertJsonPath('goals.1.id', $older->id)
+            ->assertJsonPath('goals.2.id', $recent->id);
+
+        $script = file_get_contents(resource_path('js/app.js'));
+        $this->assertStringContainsString('function initializeHorizontalGoalDrag()', $script);
+        $this->assertStringContainsString("section.addEventListener('pointermove'", $script);
+        $this->assertStringContainsString('if (!suppressClick) return;', $script);
+    }
+
     public function test_completed_one_time_goal_disappears_after_completion_but_remains_in_the_past(): void
     {
         $user = User::factory()->create();
@@ -82,7 +153,9 @@ class GoalTest extends TestCase
         $this->patch(route('goals.update', $goal), ['name' => 'Stolen'])->assertForbidden();
         $this->actingAs($owner)->get(route('goals.index'))->assertOk()
             ->assertSee('data-overlay="goal-definition"', false)->assertSee('data-overlay-side="right"', false)
-            ->assertSee('data-goal-open=', false)->assertSee('Private goal');
+            ->assertSee('data-goal-open=', false)->assertSee('Private goal')
+            ->assertSee('data-goal-delete-form data-confirm-delete', false)
+            ->assertSee('data-confirm-title="Delete this goal?"', false);
     }
 
     public function test_goal_accepts_selected_project_names_from_the_picker(): void

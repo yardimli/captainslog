@@ -55,6 +55,21 @@ class TotalLogTest extends TestCase
             ->assertDontSee('href="'.route('calendar', '2026-08-15').'?view=week"', false);
     }
 
+    public function test_navbar_home_opens_todays_log_instead_of_the_calendar(): void
+    {
+        Carbon::setTestNow('2026-09-04 12:00:00');
+        try {
+            $user = User::factory()->create();
+
+            foreach ([route('calendar'), route('tasks.index')] as $page) {
+                $this->actingAs($user)->get($page)->assertOk()
+                    ->assertSee('href="'.route('logs.show', '2026-09-04').'" class="flex min-w-0 items-center gap-2 font-bold" data-navbar-home', false);
+            }
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
     public function test_calendar_uses_week_and_month_icons_and_caps_activity_markers_at_thirty_two(): void
     {
         $user = User::factory()->create();
@@ -146,7 +161,8 @@ class TotalLogTest extends TestCase
 
         $this->get(route('tasks.index'))->assertOk()
             ->assertSee('aria-label="Open notes"', false)
-            ->assertSee('aria-label="Open calendar"', false);
+            ->assertSee('href="'.route('logs.show', today()->toDateString()).'" aria-label="Open today\'s log"', false)
+            ->assertDontSee('href="'.route('calendar').'" aria-label="Open calendar"', false);
     }
 
     public function test_account_setup_pages_share_settings_tabs_without_exposing_admin_to_regular_users(): void
@@ -486,6 +502,52 @@ class TotalLogTest extends TestCase
             ->assertSee('data-timeline-time="17:00"', false);
     }
 
+    public function test_unscheduled_sticky_events_wrap_as_top_bubbles_while_timed_events_stay_in_the_timeline(): void
+    {
+        $user = User::factory()->create();
+        $log = DailyLog::create(['user_id' => $user->id, 'log_date' => '2026-08-15']);
+        $firstFloating = TaskDefinition::create([
+            'user_id' => $user->id,
+            'name' => 'Drink water',
+            'emoji' => '💧',
+            'color' => '#f50000',
+            'is_sticky' => true,
+            'recurrence_type' => 'daily',
+        ]);
+        $secondFloating = TaskDefinition::create([
+            'user_id' => $user->id,
+            'name' => 'Stretch',
+            'emoji' => '🧘',
+            'is_sticky' => true,
+            'recurrence_type' => 'daily',
+        ]);
+        $timed = TaskDefinition::create([
+            'user_id' => $user->id,
+            'name' => 'Evening check',
+            'is_sticky' => true,
+            'recurrence_type' => 'daily',
+            'scheduled_times' => ['17:00'],
+        ]);
+
+        $response = $this->actingAs($user)->get('/logs/2026-08-15')->assertOk()
+            ->assertSee('id="daily-log-sticky-events" class="flex flex-wrap gap-2"', false)
+            ->assertSee('data-sticky-event-bubble', false)
+            ->assertSee('data-scheduled-time="17:00"', false)
+            ->assertDontSee('>Any</time>', false);
+        preg_match('/<section id="daily-log-sticky-events".*?<\/section>/s', $response->getContent(), $matches);
+        $floatingMarkup = $matches[0] ?? '';
+        $this->assertStringContainsString('Drink water', $floatingMarkup);
+        $this->assertStringContainsString('Stretch', $floatingMarkup);
+        $this->assertStringNotContainsString('Evening check', $floatingMarkup);
+        $this->assertStringNotContainsString('timeline-item', $floatingMarkup);
+        $this->assertStringNotContainsString('<time', $floatingMarkup);
+        $this->assertStringNotContainsString('h-3 w-3 shrink-0 rounded-sm', $floatingMarkup);
+
+        $state = $this->withHeader('X-Day-State', 'json')->get('/logs/2026-08-15')->assertOk()->json();
+        $this->assertEqualsCanonicalizing([$firstFloating->id, $secondFloating->id], collect($state['sticky_events'])->pluck('id')->all());
+        $this->assertSame([$timed->id], collect($state['timeline'])->where('kind', 'schedule')->pluck('task.id')->values()->all());
+    }
+
     public function test_sticky_event_disappears_after_reaching_its_daily_default_count(): void
     {
         $user = User::factory()->create();
@@ -561,17 +623,20 @@ class TotalLogTest extends TestCase
 
         $this->actingAs($user)->get('/logs/2026-08-17')->assertOk()
             ->assertDontSee('data-timeline-time="00:00"', false)
+            ->assertDontSee('data-sticky-event-bubble', false)
             ->assertSee('data-timeline-time="20:00"', false)
             ->assertSee('data-next-sticky-visibility="18:00"', false)
             ->assertSee('data-name="Bedtime"', false)
             ->assertSee('data-name="Always ready"', false);
 
         $this->get('/logs/2026-08-18')->assertOk()
-            ->assertSee('data-timeline-time="00:00"', false);
+            ->assertSee('data-sticky-event-bubble', false)
+            ->assertDontSee('data-timeline-time="00:00"', false);
 
         Carbon::setTestNow('2026-08-17 18:00:00');
         $this->get('/logs/2026-08-17')->assertOk()
-            ->assertSee('data-timeline-time="00:00"', false)
+            ->assertSee('data-sticky-event-bubble', false)
+            ->assertDontSee('data-timeline-time="00:00"', false)
             ->assertDontSee('data-next-sticky-visibility', false);
         Carbon::setTestNow();
     }
@@ -594,7 +659,7 @@ class TotalLogTest extends TestCase
             ->assertSee('style="z-index:70"', false);
     }
 
-    public function test_past_empty_time_is_hidden_while_future_time_remains_grouped(): void
+    public function test_open_timeline_items_are_hidden_while_timed_items_and_now_remain_ordered(): void
     {
         Carbon::setTestNow('2026-08-16 14:00:00');
         $user = User::factory()->create();
@@ -607,29 +672,22 @@ class TotalLogTest extends TestCase
         ]);
 
         $this->actingAs($user)->get('/logs/2026-08-16')->assertOk()
-            ->assertDontSee('data-state="past"', false)
-            ->assertDontSee('data-from="00:00"', false)
-            ->assertDontSee('data-from="10:00"', false)
+            ->assertDontSee('data-time-gap', false)
+            ->assertDontSee('>Open</span>', false)
             ->assertSeeInOrder([
                 'data-timeline-time="10:00"',
                 'data-current-time="14:00"',
-                'data-from="14:00"',
                 'data-timeline-time="18:00"',
-                'data-from="18:00"',
-                'data-to="24:00"',
             ], false);
         Carbon::setTestNow();
     }
 
-    public function test_open_timeline_slots_always_default_to_their_start_time(): void
+    public function test_ajax_day_rendering_omits_open_timeline_items(): void
     {
         $script = file_get_contents(resource_path('js/app.js'));
 
-        $this->assertStringContainsString(
-            'configureComposer({time:timelineItem.dataset.from})',
-            $script
-        );
-        $this->assertStringNotContainsString('function gapTime', $script);
+        $this->assertStringContainsString("if (item.kind === 'gap') return null;", $script);
+        $this->assertStringNotContainsString("timelineItem.matches('[data-time-gap]')", $script);
     }
 
     public function test_empty_daily_log_space_opens_the_default_composer(): void

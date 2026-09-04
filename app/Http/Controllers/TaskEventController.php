@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\DailyLog;
+use App\Models\GoalEntry;
 use App\Models\LogBlock;
 use App\Models\TaskDefinition;
 use App\Models\TaskEvent;
@@ -68,6 +69,7 @@ class TaskEventController extends Controller
     public function update(Request $request, TaskEvent $event)
     {
         $this->authorizeEvent($request, $event);
+        $goalEntry = $this->manualGoalEntry($request, $event);
         $data = $request->validate([
             'notes' => 'nullable|string|max:100000',
             'emoji' => 'nullable|string|max:32',
@@ -83,6 +85,12 @@ class TaskEventController extends Controller
             $updates['occurred_at'] = $occurredAt;
         }
         $event->block->update($updates);
+        if ($goalEntry) {
+            $goalEntry->update([
+                'occurred_at' => $updates['occurred_at'] ?? $goalEntry->occurred_at,
+                'note' => $updates['content'],
+            ]);
+        }
 
         if ($request->expectsJson()) {
             return response()->json(['message' => 'Event updated.', 'event' => $event->fresh(), 'updated_time' => $request->user()->formatTime($event->block->fresh()->updated_at)]);
@@ -117,5 +125,17 @@ class TaskEventController extends Controller
     private function authorizeEvent(Request $request, TaskEvent $event): void
     {
         abort_unless($event->dailyLog()->where('user_id', $request->user()->id)->exists(), 403);
+    }
+
+    private function manualGoalEntry(Request $request, TaskEvent $event): ?GoalEntry
+    {
+        $entryId = data_get($event->block->metadata, 'goal_entry_id');
+        if (! $entryId) {
+            return null;
+        }
+
+        return GoalEntry::query()->whereKey($entryId)
+            ->whereHas('goal', fn ($query) => $query->where('user_id', $request->user()->id))
+            ->first();
     }
 }

@@ -82,10 +82,10 @@ class DayLogController extends Controller
             return collect($times)->contains(fn ($time) => (int) data_get($slotCounts, $task->id.'.'.$time, 0) < $task->daily_default_count);
         });
         $plannerTasks = $incompleteStickyTasks->filter(fn (TaskDefinition $task) => $task->isPlannerVisible($day, now()));
+        $floatingStickyTasks = $plannerTasks->filter(fn (TaskDefinition $task) => empty($task->scheduled_times))->values();
         foreach ($plannerTasks as $task) {
-            $times = $task->scheduled_times ?: ['00:00'];
-            foreach ($times as $time) {
-                if (! empty($task->scheduled_times) && (int) data_get($slotCounts, $task->id.'.'.$time, 0) >= $task->daily_default_count) {
+            foreach ($task->scheduled_times ?? [] as $time) {
+                if ((int) data_get($slotCounts, $task->id.'.'.$time, 0) >= $task->daily_default_count) {
                     continue;
                 }
                 [$hour, $minute] = array_map('intval', explode(':', $time));
@@ -95,7 +95,7 @@ class DayLogController extends Controller
                     'minute' => ($hour * 60) + $minute,
                     'sort' => $time.':00-0-'.$task->id,
                     'task' => $task,
-                    'is_unscheduled' => empty($task->scheduled_times),
+                    'is_unscheduled' => false,
                 ]);
             }
         }
@@ -111,7 +111,12 @@ class DayLogController extends Controller
         $goalSnapshots = $request->user()->goals()->with('entries')->get()
             ->filter(fn ($goal) => $goal->isAvailableOn($day))
             ->map(fn ($goal) => $this->goalProgress->snapshot($goal, $day, $request->user()->week_starts_on ?? 1))
-            ->sortBy(fn ($snapshot) => $snapshot['complete'] ? 1 : 0)->values();
+            ->sort(function ($left, $right) {
+                $leftActivity = $left['latest']?->occurred_at?->getTimestamp() ?? PHP_INT_MIN;
+                $rightActivity = $right['latest']?->occurred_at?->getTimestamp() ?? PHP_INT_MIN;
+
+                return ($leftActivity <=> $rightActivity) ?: ($left['goal']->id <=> $right['goal']->id);
+            })->values();
 
         $itemsByMinute = $timelineItems->sortBy('sort')->groupBy('minute');
         $currentMinute = $day->isToday() ? (now()->hour * 60) + now()->minute : null;
@@ -156,9 +161,9 @@ class DayLogController extends Controller
             $timeline = $timeline->where('kind', 'block')->values();
         }
 
-        $dayState = $this->dayState($request, $day, $log, $tasks, $counts, $slotCounts, $timeline, $goalSnapshots, $showHidden, $nextStickyVisibility);
+        $dayState = $this->dayState($request, $day, $log, $tasks, $counts, $slotCounts, $timeline, $goalSnapshots, $floatingStickyTasks, $showHidden, $nextStickyVisibility);
         $mainFragment = $request->header('X-Day-View') === 'main';
-        $viewData = compact('day', 'log', 'tasks', 'counts', 'slotCounts', 'timeline', 'goalSnapshots', 'showHidden', 'mainFragment', 'nextStickyVisibility', 'dayState');
+        $viewData = compact('day', 'log', 'tasks', 'counts', 'slotCounts', 'timeline', 'goalSnapshots', 'floatingStickyTasks', 'showHidden', 'mainFragment', 'nextStickyVisibility', 'dayState');
         $timing = sprintf('day-view;dur=%.1f', (hrtime(true) - $startedAt) / 1_000_000);
 
         if ($request->header('X-Day-State') === 'json') {
@@ -170,7 +175,7 @@ class DayLogController extends Controller
         return response()->view('logs.show', $viewData)->header('Server-Timing', $timing);
     }
 
-    private function dayState(Request $request, Carbon $day, DailyLog $log, $tasks, $counts, $slotCounts, $timeline, $goalSnapshots, bool $showHidden, ?string $nextStickyVisibility): array
+    private function dayState(Request $request, Carbon $day, DailyLog $log, $tasks, $counts, $slotCounts, $timeline, $goalSnapshots, $floatingStickyTasks, bool $showHidden, ?string $nextStickyVisibility): array
     {
         $taskData = $tasks->map(fn (TaskDefinition $task) => $this->taskState($log, $task, $counts, $slotCounts))->values();
 
@@ -194,6 +199,9 @@ class DayLogController extends Controller
                 'chat_url' => route('openrouter.chat', $log),
             ],
             'tasks' => $taskData->all(),
+            'sticky_events' => $floatingStickyTasks
+                ->map(fn (TaskDefinition $task) => $this->taskState($log, $task, $counts, $slotCounts))
+                ->values()->all(),
             'goals' => $goalSnapshots->map(fn ($snapshot) => [
                 'id' => $snapshot['goal']->id,
                 'name' => $snapshot['goal']->name,

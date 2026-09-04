@@ -197,12 +197,15 @@ function element(tag, className = '', text = null) {
     return node;
 }
 
-function renderTaskButton(task, scheduledTime = null) {
-    const button = element('button', 'flex min-w-0 flex-1 items-center rounded-xl px-3 py-2.5 text-left text-sm font-semibold shadow-sm transition hover:brightness-110 disabled:cursor-wait disabled:opacity-50');
+function renderTaskButton(task, scheduledTime = null, {bubble = false} = {}) {
+    const button = element('button', bubble
+        ? 'inline-flex shrink-0 items-center rounded-full px-3 py-2 text-left text-sm font-semibold shadow-sm transition hover:brightness-110 disabled:cursor-wait disabled:opacity-50'
+        : 'flex min-w-0 flex-1 items-center rounded-xl px-3 py-2.5 text-left text-sm font-semibold shadow-sm transition hover:brightness-110 disabled:cursor-wait disabled:opacity-50');
     button.style.backgroundColor = task.color;
     button.style.color = task.text_color;
     button.dataset.taskEvent = task.event_url;
     if (scheduledTime) button.dataset.scheduledTime = scheduledTime;
+    if (bubble) button.dataset.stickyEventBubble = '';
     button.dataset.captureLocation = '';
     button.dataset.name = task.name;
     button.dataset.options = JSON.stringify(task.options || []);
@@ -210,19 +213,12 @@ function renderTaskButton(task, scheduledTime = null) {
     const emoji = element('span', 'mr-2 text-lg', task.emoji); emoji.setAttribute('aria-hidden', 'true');
     const name = element('span', 'truncate', task.name);
     const count = element('span', 'ml-2 rounded-full bg-white/20 px-2', String(scheduledTime ? task.slot_count : task.count)); count.dataset.count = '';
-    button.append(color, emoji, name, count);
+    button.append(...(bubble ? [emoji, name, count] : [color, emoji, name, count]));
     return button;
 }
 
 function renderTimelineItem(item) {
-    if (item.kind === 'gap') {
-        if (item.state === 'past') return null;
-        const row = element('div', 'timeline-item flex cursor-pointer items-center gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-indigo-700 dark:border-indigo-900 dark:bg-indigo-950/20 dark:text-indigo-300');
-        row.dataset.timeGap = ''; row.dataset.state = item.state; row.dataset.from = item.from; row.dataset.to = item.to;
-        row.append(element('span', 'rounded-full bg-indigo-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200', 'Open'), element('span', 'h-px flex-1 bg-current opacity-20'));
-        const time = element('time', 'font-mono text-xs font-bold', `${formatClock(item.from)} – ${formatClock(item.to)}`); row.append(time);
-        return row;
-    }
+    if (item.kind === 'gap') return null;
     if (item.kind === 'now') {
         const row = element('button', 'timeline-item flex w-full scroll-mt-24 items-center gap-3 py-1 text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-4 dark:text-indigo-400 dark:focus:ring-offset-slate-950');
         row.type = 'button'; row.id = 'timeline-now'; row.dataset.currentTime = item.time; row.dataset.composerOpen = ''; row.setAttribute('aria-label', 'Add to the log now');
@@ -232,7 +228,7 @@ function renderTimelineItem(item) {
     if (item.kind === 'schedule') {
         const row = element('div', 'timeline-item flex min-w-0 cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white p-3 pl-0 shadow-sm dark:border-slate-700 dark:bg-slate-900');
         row.dataset.scheduledEvent = ''; row.dataset.timelineTime = item.time;
-        row.append(element('time', 'w-20 shrink-0 text-center font-mono text-xs font-bold text-slate-500', item.is_unscheduled ? 'Any' : formatClock(item.time)), renderTaskButton(item.task, item.is_unscheduled ? null : item.time));
+        row.append(element('time', 'w-20 shrink-0 text-center font-mono text-xs font-bold text-slate-500', formatClock(item.time)), renderTaskButton(item.task, item.time));
         return row;
     }
 
@@ -311,14 +307,82 @@ function updateDayGoals(state) {
     section.classList.toggle('flex', goals.length > 0);
     section.setAttribute('aria-label', `Goals for ${state.date}`);
     goals.forEach(goal => {
-        const link = element('a', 'inline-flex min-w-48 items-center gap-2 rounded-full px-3 py-2 text-sm shadow-sm transition hover:-translate-y-0.5 hover:shadow-md');
+        const link = element('a', 'inline-flex min-w-48 shrink-0 items-center gap-2 rounded-full px-3 py-2 text-sm shadow-sm transition hover:-translate-y-0.5 hover:shadow-md');
         link.href = goal.url; link.style.backgroundColor = goal.color; link.style.color = goal.text_color; link.dataset.dayGoal = goal.id;
+        link.draggable = false;
         const emoji = element('span', 'text-lg', goal.emoji); emoji.setAttribute('aria-hidden', 'true');
         const copy = element('span', 'min-w-0');
         copy.append(element('strong', 'block truncate', goal.name), element('span', 'block text-xs opacity-90', `${goal.points}/${goal.target} points · ${goal.latest || 'No activity'}`));
         link.append(emoji, copy); section.append(link);
     });
 }
+
+function updateDayStickyEvents(state) {
+    const section = document.querySelector('#daily-log-sticky-events');
+    if (!section) return;
+    const stickyEvents = state.sticky_events || [];
+    section.replaceChildren(...stickyEvents.map(task => renderTaskButton(task, null, {bubble:true})));
+    section.classList.toggle('hidden', stickyEvents.length === 0);
+    section.classList.toggle('flex', stickyEvents.length > 0);
+    section.setAttribute('aria-label', `Sticky events for ${state.date}`);
+}
+
+function initializeHorizontalGoalDrag() {
+    const section = document.querySelector('[data-horizontal-goal-drag]');
+    if (!section) return;
+    const threshold = 6;
+    let pointerId = null;
+    let startX = 0;
+    let startY = 0;
+    let startScroll = 0;
+    let dragging = false;
+    let suppressClick = false;
+
+    section.addEventListener('pointerdown', event => {
+        if (pointerId !== null || (event.pointerType === 'mouse' && event.button !== 0)) return;
+        pointerId = event.pointerId;
+        startX = event.clientX;
+        startY = event.clientY;
+        startScroll = section.scrollLeft;
+        dragging = false;
+    });
+    section.addEventListener('pointermove', event => {
+        if (event.pointerId !== pointerId) return;
+        const deltaX = event.clientX - startX;
+        const deltaY = event.clientY - startY;
+        if (!dragging) {
+            if (Math.abs(deltaX) < threshold) return;
+            if (Math.abs(deltaY) > Math.abs(deltaX)) return;
+            dragging = true;
+            section.setPointerCapture?.(event.pointerId);
+            section.classList.add('cursor-grabbing');
+        }
+        section.scrollLeft = startScroll - deltaX;
+        if (event.cancelable) event.preventDefault();
+    });
+    const finishDrag = event => {
+        if (event.pointerId !== pointerId) return;
+        if (dragging) {
+            suppressClick = true;
+            window.setTimeout(() => { suppressClick = false; }, 0);
+        }
+        if (section.hasPointerCapture?.(event.pointerId)) section.releasePointerCapture(event.pointerId);
+        section.classList.remove('cursor-grabbing');
+        pointerId = null;
+        dragging = false;
+    };
+    window.addEventListener('pointerup', finishDrag);
+    window.addEventListener('pointercancel', finishDrag);
+    section.addEventListener('click', event => {
+        if (!suppressClick) return;
+        event.preventDefault();
+        event.stopPropagation();
+        suppressClick = false;
+    }, true);
+    section.addEventListener('dragstart', event => event.preventDefault());
+}
+
+initializeHorizontalGoalDrag();
 
 function updateDayControls(state) {
     const container = document.querySelector('#daily-log-page-container');
@@ -338,6 +402,7 @@ function updateDayControls(state) {
     const headingDate = document.querySelector('#log-composer-heading-copy > p'); if (headingDate) headingDate.textContent = state.title;
     const chat = document.querySelector('[data-smart-chat-form]'); if (chat) chat.action = state.log.chat_url;
     updateDayNavigation(state);
+    updateDayStickyEvents(state);
     updateDayGoals(state);
 }
 
@@ -1618,6 +1683,18 @@ document.addEventListener('submit', async e => {
     if (confirmed) { form.dataset.confirmed = 'true'; form.requestSubmit(); }
 });
 
+document.addEventListener('submit', async event => {
+    const form = event.target.closest('form[data-confirm-delete]');
+    if (!form || form.dataset.confirmed === 'true') return;
+    event.preventDefault();
+    const confirmed = await modal({
+        title:form.dataset.confirmTitle || 'Delete this item?',
+        message:form.dataset.confirmMessage || 'This cannot be undone.',
+        confirmText:form.dataset.confirmText || 'Delete',
+    });
+    if (confirmed) { form.dataset.confirmed = 'true'; form.requestSubmit(); }
+});
+
 document.addEventListener('submit', async e => {
     const form = e.target.closest('form[data-smart-chat-form]'); if (!form) return;
     e.preventDefault();
@@ -1709,7 +1786,6 @@ document.addEventListener('click', async e => {
         else if (timelineItem.matches('[data-timeline-google-calendar]')) openGoogleCalendarDetails(timelineItem);
         else if (demoReadOnly) toast('The demo is read-only. Create an account to save your own entries.');
         else if (timelineItem.matches('[data-timeline-edit]')) configureComposer({time: timelineItem.dataset.timelineTime, mode:'edit', kind:timelineItem.dataset.editKind, eventName:timelineItem.dataset.editEventName, action:timelineItem.dataset.editUrl, content:timelineItem.dataset.editContent, emoji:timelineItem.dataset.editEmoji, updated:timelineItem.dataset.editUpdated, hideUrl:timelineItem.dataset.hideUrl, deleteUrl:timelineItem.dataset.deleteUrl, isHidden:timelineItem.dataset.isHidden === 'true', location:JSON.parse(timelineItem.dataset.editLocation || 'null')});
-        else if (timelineItem.matches('[data-time-gap]')) configureComposer({time:timelineItem.dataset.from});
         else configureComposer({time:timelineItem.dataset.timelineTime || timelineItem.dataset.currentTime});
     }
     const emptyLogSpace = e.target === document.querySelector('#timeline')
@@ -1789,6 +1865,10 @@ document.addEventListener('click', async e => {
         const optimisticTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
         mutateDayState(state => {
             state.tasks.filter(item => item.event_url === eventUrl).forEach(item => { item.count += 1; });
+            state.sticky_events = (state.sticky_events || []).map(item => {
+                if (item.event_url === eventUrl) item.count += 1;
+                return item;
+            }).filter(item => Number(item.count || 0) < Number(item.daily_default_count || 1));
             state.timeline.filter(item => item.kind === 'schedule' && item.task.event_url === eventUrl).forEach(item => {
                 item.task.count += 1;
                 if (!scheduledTime || item.time === scheduledTime) item.task.slot_count = Number(item.task.slot_count || 0) + 1;

@@ -26,7 +26,7 @@ class NotesFeatureTest extends TestCase
             ->assertDontSee('id="notes-page-heading"', false)
             ->assertSee('aria-label="Open today\'s log"', false)
             ->assertSee('href="'.route('logs.show', today()->toDateString()).'"', false)
-            ->assertSee('aria-label="Open calendar"', false)
+            ->assertDontSee('aria-label="Open calendar"', false)
             ->assertDontSee('aria-label="Open notes"', false);
 
         $this->assertDatabaseHas('notebooks', ['user_id' => $user->id, 'name' => 'Notes', 'is_default' => true]);
@@ -51,7 +51,9 @@ class NotesFeatureTest extends TestCase
         $this->get(route('notes.show', $note))->assertOk()
             ->assertSee('First contact')
             ->assertSee('&lt;script&gt;', false)
-            ->assertDontSee("<script>alert('no')</script>", false);
+            ->assertDontSee("<script>alert('no')</script>", false)
+            ->assertSee('id="note-delete-form"', false)
+            ->assertSee('data-confirm-title="Move this note to Trash?"', false);
 
         $this->patch(route('notes.update', $note), [
             'notebook_id' => $notebook->id,
@@ -146,7 +148,8 @@ class NotesFeatureTest extends TestCase
         $this->assertTrue($note->tags()->whereKey($tag->id)->exists());
 
         $this->get(route('notes.index', ['tag' => $tag->id]))->assertOk()->assertSee('Tagged result');
-        $this->get(route('notes.index', ['view' => 'tags']))->assertOk()->assertSee('Create tag')->assertSee('Research');
+        $this->get(route('notes.index', ['view' => 'tags']))->assertOk()->assertSee('Create tag')->assertSee('Research')
+            ->assertSee('data-confirm-title="Delete this tag?"', false);
         $this->delete(route('note-tags.destroy', $tag))->assertRedirect(route('notes.index', ['view' => 'tags']));
         $this->assertDatabaseMissing('note_tags', ['id' => $tag->id]);
     }
@@ -159,7 +162,8 @@ class NotesFeatureTest extends TestCase
 
         $this->actingAs($user)->post(route('note-tasks.store'), ['title' => 'Review the launch', 'note_id' => $note->id])->assertRedirect();
         $task = NoteTask::where('user_id', $user->id)->firstOrFail();
-        $this->get(route('notes.index', ['view' => 'tasks']))->assertOk()->assertSee('Review the launch')->assertSee('Launch plan');
+        $this->get(route('notes.index', ['view' => 'tasks']))->assertOk()->assertSee('Review the launch')->assertSee('Launch plan')
+            ->assertSee('data-confirm-title="Delete this task?"', false);
         $this->patch(route('note-tasks.update', $task), ['is_completed' => true])->assertRedirect();
         $this->assertTrue($task->fresh()->is_completed);
         $this->assertNotNull($task->fresh()->completed_at);
@@ -177,7 +181,9 @@ class NotesFeatureTest extends TestCase
 
         $this->actingAs($other)->post(route('notes.restore', $note->id))->assertNotFound();
         $this->actingAs($user)->get(route('notes.index', ['view' => 'trash']))->assertOk()
-            ->assertSee('Recover me')->assertSee('Delete forever');
+            ->assertSee('Recover me')->assertSee('Delete forever')
+            ->assertSee('data-confirm-title="Permanently delete this note?"', false)
+            ->assertDontSee('onsubmit="return confirm(', false);
         $this->post(route('notes.restore', $note->id))->assertRedirect(route('notes.show', $note->id));
         $this->assertNotSoftDeleted('notes', ['id' => $note->id]);
 

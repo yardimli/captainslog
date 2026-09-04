@@ -42,7 +42,7 @@
                 </fieldset>
                 <button class="btn w-full" data-goal-submit>Create goal</button>
             </form>
-            <div class="event-goal-delete mt-7 hidden border-t border-slate-200 pt-5 dark:border-slate-800" data-goal-delete-section><form method="POST" action="" data-goal-delete-form>@csrf @method('DELETE')<button class="btn-secondary w-full border-rose-300 text-rose-600">Delete goal</button></form><p class="mt-2 text-center text-xs text-slate-500">Original logs and events are not changed.</p></div>
+            <div class="event-goal-delete mt-7 hidden border-t border-slate-200 pt-5 dark:border-slate-800" data-goal-delete-section><form method="POST" action="" data-goal-delete-form data-confirm-delete data-confirm-title="Delete this goal?" data-confirm-message="The goal and its progress history will be deleted. Original logs and tracked events will stay unchanged." data-confirm-text="Delete goal">@csrf @method('DELETE')<button class="btn-secondary w-full border-rose-300 text-rose-600">Delete goal</button></form><p class="mt-2 text-center text-xs text-slate-500">Original logs and events are not changed.</p></div>
         </aside>
     </div>
 @endsection

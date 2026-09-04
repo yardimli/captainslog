@@ -1,29 +1,30 @@
 @extends('layouts.app')
 
 @section('content')
-    <div id="daily-log-page-container" class="mx-auto max-w-5xl space-y-5 p-4 sm:p-6 lg:p-8" data-day-view-fragment @if($nextStickyVisibility) data-next-sticky-visibility="{{ $nextStickyVisibility }}" @endif>
+    <div id="daily-log-page-container" class="mx-auto max-w-5xl space-y-5" data-day-view-fragment @if($nextStickyVisibility) data-next-sticky-visibility="{{ $nextStickyVisibility }}" @endif>
         <script id="day-log-state" type="application/json">@json($dayState)</script>
-        <section id="daily-log-goals" class="{{ $goalSnapshots->isEmpty() ? 'hidden' : 'flex' }} flex-wrap gap-2" aria-label="Goals for {{ $day->toDateString() }}">
+        <section id="daily-log-sticky-events" class="{{ $floatingStickyTasks->isEmpty() ? 'hidden' : 'flex' }} flex-wrap gap-2" aria-label="Sticky events for {{ $day->toDateString() }}">
+            @foreach($floatingStickyTasks as $task)
+                <button class="inline-flex shrink-0 items-center rounded-full px-3 py-2 text-left text-sm font-semibold shadow-sm transition hover:brightness-110 disabled:cursor-wait disabled:opacity-50" style="background-color:{{ $task->color_hex }};color:{{ $task->button_text_color }}" data-sticky-event-bubble data-task-event="{{ route('events.store', [$log, $task]) }}" data-capture-location data-name="{{ $task->name }}" data-options='@json($task->options ?? [])'><span class="mr-2 text-lg" aria-hidden="true">{{ $task->emoji }}</span><span class="truncate">{{ $task->name }}</span><span class="ml-2 rounded-full bg-white/20 px-2" data-count>{{ $counts[$task->id] ?? 0 }}</span></button>
+            @endforeach
+        </section>
+        <section id="daily-log-goals" class="{{ $goalSnapshots->isEmpty() ? 'hidden' : 'flex' }} touch-pan-y select-none flex-nowrap gap-2 overflow-x-auto pb-1 cursor-grab" aria-label="Goals for {{ $day->toDateString() }}" data-horizontal-goal-drag>
             @foreach($goalSnapshots as $snapshot)
                 @php $goal = $snapshot['goal']; @endphp
-                <a href="{{ route('goals.show', ['goal' => $goal, 'date' => $day->toDateString()]) }}" class="inline-flex min-w-48 items-center gap-2 rounded-full px-3 py-2 text-sm shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" style="background-color:{{ $goal->color }};color:{{ $goal->text_color }}" data-day-goal="{{ $goal->id }}"><span class="text-lg" aria-hidden="true">{{ $goal->emoji }}</span><span class="min-w-0"><strong class="block truncate">{{ $goal->name }}</strong><span class="block text-xs opacity-90">{{ $snapshot['points'] }}/{{ $snapshot['target'] }} points{{ $snapshot['latest'] ? ' · '.$snapshot['latest']->occurred_at->diffForHumans() : ' · No activity' }}</span></span></a>
+                <a href="{{ route('goals.show', ['goal' => $goal, 'date' => $day->toDateString()]) }}" class="inline-flex min-w-48 shrink-0 items-center gap-2 rounded-full px-3 py-2 text-sm shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" style="background-color:{{ $goal->color }};color:{{ $goal->text_color }}" draggable="false" data-day-goal="{{ $goal->id }}"><span class="text-lg" aria-hidden="true">{{ $goal->emoji }}</span><span class="min-w-0"><strong class="block truncate">{{ $goal->name }}</strong><span class="block text-xs opacity-90">{{ $snapshot['points'] }}/{{ $snapshot['target'] }} points{{ $snapshot['latest'] ? ' · '.$snapshot['latest']->occurred_at->diffForHumans() : ' · No activity' }}</span></span></a>
             @endforeach
         </section>
         <section id="timeline" class="space-y-2" data-log-date="{{ $day->toDateString() }}">
             @foreach($timeline as $item)
                 @if($item['kind'] === 'gap')
-                    @if($item['state'] !== 'past')
-                        <div class="timeline-item flex cursor-pointer items-center gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-indigo-700 dark:border-indigo-900 dark:bg-indigo-950/20 dark:text-indigo-300" data-time-gap data-state="{{ $item['state'] }}" data-from="{{ $item['from'] }}" data-to="{{ $item['to'] }}">
-                            <span class="rounded-full bg-indigo-100 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200">Open</span><span class="h-px flex-1 bg-current opacity-20"></span><time class="font-mono text-xs font-bold">{{ auth()->user()->formatClock($item['from']) }} &ndash; {{ auth()->user()->formatClock($item['to']) }}</time>
-                        </div>
-                    @endif
+                    @continue
                 @elseif($item['kind'] === 'now')
                     <button type="button" id="timeline-now" class="timeline-item flex w-full scroll-mt-24 items-center gap-3 py-1 text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-4 dark:text-indigo-400 dark:focus:ring-offset-slate-950" data-current-time="{{ $item['time'] }}" data-composer-open aria-label="Add to the log now"><span class="h-px flex-1 bg-current opacity-40"></span><span class="rounded-full bg-indigo-600 px-3 py-1 text-xs font-bold text-white">Now &middot; {{ auth()->user()->formatClock($item['time']) }}</span><span class="h-px flex-1 bg-current opacity-40"></span></button>
                 @elseif($item['kind'] === 'schedule')
                     @php $task = $item['task']; @endphp
                     <div class="timeline-item flex min-w-0 cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white p-3 pl-0 shadow-sm dark:border-slate-700 dark:bg-slate-900" data-scheduled-event data-timeline-time="{{ $item['time'] }}">
-                        <time class="w-20 shrink-0 text-center font-mono text-xs font-bold text-slate-500">{{ $item['is_unscheduled'] ? 'Any' : auth()->user()->formatClock($item['time']) }}</time>
-                        <button class="flex min-w-0 flex-1 items-center rounded-xl px-3 py-2.5 text-left text-sm font-semibold shadow-sm transition hover:brightness-110 disabled:cursor-wait disabled:opacity-50" style="background-color:{{ $task->color_hex }};color:{{ $task->button_text_color }}" data-task-event="{{ route('events.store', [$log, $task]) }}" @if(! $item['is_unscheduled']) data-scheduled-time="{{ $item['time'] }}" @endif data-capture-location data-name="{{ $task->name }}" data-options='@json($task->options ?? [])'><span class="mr-2 h-3 w-3 shrink-0 rounded-sm border border-current opacity-80" style="background-color:{{ $task->color_hex }}"></span><span class="mr-2 text-lg" aria-hidden="true">{{ $task->emoji }}</span><span class="truncate">{{ $task->name }}</span><span class="ml-2 rounded-full bg-white/20 px-2" data-count>{{ $item['is_unscheduled'] ? ($counts[$task->id] ?? 0) : data_get($slotCounts, $task->id.'.'.$item['time'], 0) }}</span></button>
+                        <time class="w-20 shrink-0 text-center font-mono text-xs font-bold text-slate-500">{{ auth()->user()->formatClock($item['time']) }}</time>
+                        <button class="flex min-w-0 flex-1 items-center rounded-xl px-3 py-2.5 text-left text-sm font-semibold shadow-sm transition hover:brightness-110 disabled:cursor-wait disabled:opacity-50" style="background-color:{{ $task->color_hex }};color:{{ $task->button_text_color }}" data-task-event="{{ route('events.store', [$log, $task]) }}" data-scheduled-time="{{ $item['time'] }}" data-capture-location data-name="{{ $task->name }}" data-options='@json($task->options ?? [])'><span class="mr-2 h-3 w-3 shrink-0 rounded-sm border border-current opacity-80" style="background-color:{{ $task->color_hex }}"></span><span class="mr-2 text-lg" aria-hidden="true">{{ $task->emoji }}</span><span class="truncate">{{ $task->name }}</span><span class="ml-2 rounded-full bg-white/20 px-2" data-count>{{ data_get($slotCounts, $task->id.'.'.$item['time'], 0) }}</span></button>
                     </div>
                 @else
                     @php
