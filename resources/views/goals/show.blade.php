@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('header')
-    <div id="goal-detail-heading" class="flex flex-wrap items-center gap-3"><span class="grid h-11 w-11 place-items-center rounded-2xl text-2xl" style="background-color:{{ $goal->color }};color:{{ $goal->text_color }}">{{ $goal->emoji }}</span><div id="goal-detail-heading-copy"><p class="text-xs font-semibold uppercase tracking-wide text-indigo-600">Goal details</p><h1 class="text-xl font-bold">{{ $goal->name }}</h1></div><a class="btn-secondary ml-auto" href="{{ route('goals.index') }}">Goal setup</a></div>
+    <div id="goal-detail-heading" class="flex flex-wrap items-center gap-3"><span class="grid h-11 w-11 place-items-center overflow-hidden rounded-2xl text-2xl" style="background-color:{{ $goal->color }};color:{{ $goal->text_color }}">@if($goal->icon_data)<img src="{{ $goal->icon_data }}" class="h-full w-full object-cover" alt="">@else{{ $goal->emoji }}@endif</span><div id="goal-detail-heading-copy"><p class="text-xs font-semibold uppercase tracking-wide text-indigo-600">Goal details</p><h1 class="text-xl font-bold">{{ $goal->name }}</h1></div><a class="btn-secondary ml-auto" href="{{ route('goals.index') }}">Goal setup</a></div>
 @endsection
 
 @section('content')

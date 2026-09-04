@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Goal;
 use App\Models\LogBlock;
 use App\Models\TaskDefinition;
+use App\Rules\CroppedIcon;
 use App\Services\GoalProgressService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -92,6 +93,7 @@ class GoalController extends Controller
     {
         $data = $request->validate([
             'name' => 'required|string|max:100', 'emoji' => 'nullable|string|max:32',
+            'icon_data' => ['nullable', 'string', 'max:500000', new CroppedIcon], 'remove_icon' => 'nullable|boolean',
             'color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'target_points' => 'required|integer|min:1|max:1000000',
             'period' => 'required|in:daily,weekly,monthly,none',
@@ -105,13 +107,20 @@ class GoalController extends Controller
             TaskDefinition::where('user_id', $request->user()->id)->findOrFail($taskId);
         }
 
+        $goalData = [
+            'name' => $data['name'], 'emoji' => ($data['emoji'] ?? null) ?: Goal::DEFAULT_EMOJI,
+            'color' => strtolower($data['color']), 'target_points' => $data['target_points'], 'period' => $data['period'],
+            'start_date' => $data['start_date'] ?? null, 'end_date' => $data['end_date'] ?? null,
+            'manual_enabled' => $request->boolean('manual_enabled'),
+        ];
+        if (filled($data['icon_data'] ?? null)) {
+            $goalData['icon_data'] = $data['icon_data'];
+        } elseif ($request->boolean('remove_icon')) {
+            $goalData['icon_data'] = null;
+        }
+
         return [
-            'goal' => [
-                'name' => $data['name'], 'emoji' => ($data['emoji'] ?? null) ?: Goal::DEFAULT_EMOJI,
-                'color' => strtolower($data['color']), 'target_points' => $data['target_points'], 'period' => $data['period'],
-                'start_date' => $data['start_date'] ?? null, 'end_date' => $data['end_date'] ?? null,
-                'manual_enabled' => $request->boolean('manual_enabled'),
-            ],
+            'goal' => $goalData,
             'task_id' => $taskId,
             'projects' => collect($data['github_projects'] ?? [])
                 ->merge(preg_split('/[\r\n,]+/', $data['github_projects_text'] ?? ''))

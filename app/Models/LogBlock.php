@@ -23,7 +23,7 @@ class LogBlock extends Model
         'sensor_google_calendar' => '📅',
     ];
 
-    protected $fillable = ['daily_log_id', 'type', 'emoji', 'content', 'metadata', 'position', 'occurred_at', 'is_hidden'];
+    protected $fillable = ['daily_log_id', 'type', 'emoji', 'icon_data', 'content', 'metadata', 'position', 'occurred_at', 'is_hidden'];
 
     protected $casts = ['metadata' => 'array', 'occurred_at' => 'datetime', 'is_hidden' => 'boolean'];
 

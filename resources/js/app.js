@@ -197,6 +197,19 @@ function element(tag, className = '', text = null) {
     return node;
 }
 
+function renderEntryIcon(iconData, emoji, className = 'h-7 w-7 shrink-0 rounded-lg object-cover') {
+    if (iconData) {
+        const image = element('img', className);
+        image.src = iconData;
+        image.alt = '';
+        image.setAttribute('aria-hidden', 'true');
+        return image;
+    }
+    const fallback = element('span', className.includes('mr-2') ? 'mr-2 text-lg' : 'text-lg', emoji || '📝');
+    fallback.setAttribute('aria-hidden', 'true');
+    return fallback;
+}
+
 function renderTaskButton(task, scheduledTime = null, {bubble = false} = {}) {
     const button = element('button', bubble
         ? 'inline-flex shrink-0 items-center rounded-full px-3 py-2 text-left text-sm font-semibold shadow-sm transition hover:brightness-110 disabled:cursor-wait disabled:opacity-50'
@@ -208,9 +221,11 @@ function renderTaskButton(task, scheduledTime = null, {bubble = false} = {}) {
     if (bubble) button.dataset.stickyEventBubble = '';
     button.dataset.captureLocation = '';
     button.dataset.name = task.name;
+    button.dataset.taskEmoji = task.emoji || '✅';
+    button.dataset.taskIcon = task.icon_data || '';
     button.dataset.options = JSON.stringify(task.options || []);
     const color = element('span', 'mr-2 h-3 w-3 shrink-0 rounded-sm border border-current opacity-80'); color.style.backgroundColor = task.color;
-    const emoji = element('span', 'mr-2 text-lg', task.emoji); emoji.setAttribute('aria-hidden', 'true');
+    const emoji = renderEntryIcon(task.icon_data, task.emoji, 'mr-2 h-7 w-7 shrink-0 rounded-lg object-cover');
     const name = element('span', 'truncate', task.name);
     const count = element('span', 'ml-2 rounded-full bg-white/20 px-2', String(scheduledTime ? task.slot_count : task.count)); count.dataset.count = '';
     button.append(...(bubble ? [emoji, name, count] : [color, emoji, name, count]));
@@ -254,7 +269,10 @@ function renderTimelineItem(item) {
     const article = element('article', `panel group ${block.is_hidden ? 'ring-2 ring-amber-400' : ''} ${block.optimistic ? 'ring-2 ring-indigo-300' : ''}`); article.id = `block-${block.id}`;
     const sensorBrowsing = ['sensor_browser', 'sensor_desktop', 'sensor_mobile_browser'].includes(block.type);
     const description = element('div', block.event || sensorBrowsing ? 'flex flex-wrap items-center gap-2 leading-relaxed' : 'block-text-description whitespace-pre-wrap leading-relaxed'); description.dataset.blockDescription = '';
-    const emoji = element('span', block.event || sensorBrowsing ? 'text-xl' : 'mr-2 inline-block align-middle text-xl', block.emoji || '📝'); emoji.dataset.blockEmoji = ''; emoji.setAttribute('aria-hidden', 'true');
+    const emoji = block.icon_data
+        ? renderEntryIcon(block.icon_data, block.emoji, 'h-8 w-8 shrink-0 rounded-lg object-cover')
+        : element('span', block.event || sensorBrowsing ? 'text-xl' : 'mr-2 inline-block align-middle text-xl', block.emoji || '📝');
+    emoji.dataset.blockEmoji = ''; emoji.setAttribute('aria-hidden', 'true');
     const labelText = block.type === 'sensor_mobile_browser' ? 'Mobile browsing' : (block.type === 'sensor_desktop' ? 'Desktop' : (block.type === 'sensor_browser' ? 'Browsing' : block.type.replaceAll('_', ' ')));
     const labelColor = block.type === 'sensor_mobile_browser' ? 'bg-violet-100 text-violet-800' : (block.type === 'sensor_desktop' ? 'bg-cyan-100 text-cyan-900' : (block.type === 'sensor_browser' ? 'bg-sky-100 text-sky-800' : (block.event ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600')));
     const label = element('span', `mr-2 inline-flex align-middle rounded-lg px-2 py-1 text-xs font-bold uppercase ${labelColor}`, labelText); label.dataset.blockTypeLabel = '';
@@ -310,7 +328,7 @@ function updateDayGoals(state) {
         const link = element('a', 'inline-flex min-w-48 shrink-0 items-center gap-2 rounded-full px-3 py-2 text-sm shadow-sm transition hover:-translate-y-0.5 hover:shadow-md');
         link.href = goal.url; link.style.backgroundColor = goal.color; link.style.color = goal.text_color; link.dataset.dayGoal = goal.id;
         link.draggable = false;
-        const emoji = element('span', 'text-lg', goal.emoji); emoji.setAttribute('aria-hidden', 'true');
+        const emoji = renderEntryIcon(goal.icon_data, goal.emoji, 'h-8 w-8 shrink-0 rounded-lg object-cover');
         const copy = element('span', 'min-w-0');
         copy.append(element('strong', 'block truncate', goal.name), element('span', 'block text-xs opacity-90', `${goal.points}/${goal.target} points · ${goal.latest || 'No activity'}`));
         link.append(emoji, copy); section.append(link);
@@ -1123,6 +1141,149 @@ function initEmojiPicker(picker) {
 
 document.querySelectorAll('[data-emoji-picker]').forEach(initEmojiPicker);
 
+function setIconUploadValue(root, iconData = '') {
+    if (!root) return;
+    const preview = root.querySelector('[data-icon-preview]');
+    const empty = root.querySelector('[data-icon-empty]');
+    const remove = root.querySelector('[data-icon-remove]');
+    const data = root.querySelector('[data-icon-data]');
+    const removeInput = root.querySelector('[data-icon-remove-input]');
+    root.dataset.currentIcon = iconData || '';
+    if (data) data.value = '';
+    if (removeInput) removeInput.value = '0';
+    if (preview) {
+        preview.src = iconData || '';
+        preview.classList.toggle('hidden', !iconData);
+    }
+    empty?.classList.toggle('hidden', Boolean(iconData));
+    remove?.classList.toggle('hidden', !iconData);
+}
+
+function initializeIconCropper() {
+    const dialog = document.querySelector('[data-icon-crop-dialog]');
+    if (!dialog) return;
+    const stage = dialog.querySelector('[data-icon-crop-stage]');
+    const image = dialog.querySelector('[data-icon-crop-image]');
+    const zoomInput = dialog.querySelector('[data-icon-zoom]');
+    const targetSize = 128;
+    const stageSize = 288;
+    const targetOffset = (stageSize - targetSize) / 2;
+    let activeUpload = null;
+    let sourceWidth = 0;
+    let sourceHeight = 0;
+    let minimumScale = 1;
+    let zoom = 1;
+    let panX = 0;
+    let panY = 0;
+    let pointer = null;
+
+    const render = () => {
+        if (!sourceWidth || !sourceHeight) return;
+        const scale = minimumScale * zoom;
+        const width = sourceWidth * scale;
+        const height = sourceHeight * scale;
+        const maxPanX = Math.max(0, (width - targetSize) / 2);
+        const maxPanY = Math.max(0, (height - targetSize) / 2);
+        panX = Math.max(-maxPanX, Math.min(maxPanX, panX));
+        panY = Math.max(-maxPanY, Math.min(maxPanY, panY));
+        image.style.width = `${width}px`;
+        image.style.height = `${height}px`;
+        image.style.left = `${(stageSize - width) / 2 + panX}px`;
+        image.style.top = `${(stageSize - height) / 2 + panY}px`;
+    };
+
+    const setZoom = value => {
+        zoom = Math.max(1, Math.min(4, Number(value) || 1));
+        zoomInput.value = String(zoom);
+        render();
+    };
+
+    const openCropper = (upload, file) => {
+        if (!file?.type?.startsWith('image/')) return;
+        const reader = new FileReader();
+        reader.addEventListener('load', () => {
+            image.onload = () => {
+                activeUpload = upload;
+                sourceWidth = image.naturalWidth;
+                sourceHeight = image.naturalHeight;
+                minimumScale = Math.max(targetSize / sourceWidth, targetSize / sourceHeight);
+                panX = 0;
+                panY = 0;
+                setZoom(1);
+                dialog.showModal();
+            };
+            image.src = String(reader.result);
+        });
+        reader.readAsDataURL(file);
+    };
+
+    document.querySelectorAll('[data-icon-upload]').forEach(upload => {
+        const file = upload.querySelector('[data-icon-file]');
+        upload.querySelector('[data-icon-choose]')?.addEventListener('click', () => file?.click());
+        file?.addEventListener('change', () => {
+            openCropper(upload, file.files?.[0]);
+            file.value = '';
+        });
+        upload.querySelector('[data-icon-remove]')?.addEventListener('click', () => {
+            setIconUploadValue(upload, '');
+            upload.querySelector('[data-icon-remove-input]').value = '1';
+        });
+        setIconUploadValue(upload, '');
+    });
+
+    stage?.addEventListener('pointerdown', event => {
+        pointer = {id:event.pointerId, x:event.clientX, y:event.clientY, panX, panY};
+        stage.setPointerCapture(event.pointerId);
+    });
+    stage?.addEventListener('pointermove', event => {
+        if (!pointer || pointer.id !== event.pointerId) return;
+        panX = pointer.panX + event.clientX - pointer.x;
+        panY = pointer.panY + event.clientY - pointer.y;
+        render();
+    });
+    const finishPointer = event => {
+        if (pointer?.id === event.pointerId) pointer = null;
+    };
+    stage?.addEventListener('pointerup', finishPointer);
+    stage?.addEventListener('pointercancel', finishPointer);
+    stage?.addEventListener('wheel', event => {
+        event.preventDefault();
+        setZoom(zoom + (event.deltaY < 0 ? 0.1 : -0.1));
+    }, {passive:false});
+    zoomInput?.addEventListener('input', () => setZoom(zoomInput.value));
+    dialog.querySelector('[data-icon-zoom-out]')?.addEventListener('click', () => setZoom(zoom - 0.25));
+    dialog.querySelector('[data-icon-zoom-in]')?.addEventListener('click', () => setZoom(zoom + 0.25));
+    dialog.querySelector('[data-icon-crop-cancel]')?.addEventListener('click', () => dialog.close());
+    dialog.querySelector('[data-icon-crop-apply]')?.addEventListener('click', () => {
+        if (!activeUpload || !sourceWidth || !sourceHeight) return;
+        const scale = minimumScale * zoom;
+        const displayedWidth = sourceWidth * scale;
+        const displayedHeight = sourceHeight * scale;
+        const imageLeft = (stageSize - displayedWidth) / 2 + panX;
+        const imageTop = (stageSize - displayedHeight) / 2 + panY;
+        const canvas = document.createElement('canvas');
+        canvas.width = targetSize;
+        canvas.height = targetSize;
+        canvas.getContext('2d').drawImage(
+            image,
+            (targetOffset - imageLeft) / scale,
+            (targetOffset - imageTop) / scale,
+            targetSize / scale,
+            targetSize / scale,
+            0,
+            0,
+            targetSize,
+            targetSize,
+        );
+        const iconData = canvas.toDataURL('image/png');
+        setIconUploadValue(activeUpload, iconData);
+        activeUpload.querySelector('[data-icon-data]').value = iconData;
+        dialog.close();
+    });
+}
+
+initializeIconCropper();
+
 function syncEventVisibilityControls(form) {
     const sticky = form.querySelector('[data-event-sticky-toggle]')?.checked === true;
     const field = form.querySelector('[data-sticky-visibility-field]');
@@ -1150,6 +1311,7 @@ function configureEventDefinition(data = null) {
     } else method?.remove();
     form.querySelector('[name="name"]').value = data?.name || '';
     setEmojiPickerValue(form.querySelector('[data-emoji-picker]'), data?.emoji || '✅');
+    setIconUploadValue(form.querySelector('[data-icon-upload]'), data?.icon_data || '');
     const color = form.querySelector('[name="color"]');
     color.value = data?.color || '#4f46e5';
     const colorPreview = document.getElementById(color.dataset.colorInput);
@@ -1194,6 +1356,7 @@ function configureGoal(data = null) {
     } else method?.remove();
     form.querySelector('[name="name"]').value = data?.name || '';
     setEmojiPickerValue(form.querySelector('[data-emoji-picker]'), data?.emoji || '🎯');
+    setIconUploadValue(form.querySelector('[data-icon-upload]'), data?.icon_data || '');
     const color = form.querySelector('[name="color"]');
     color.value = data?.color || '#4f46e5';
     const preview = document.getElementById(color.dataset.colorInput);
@@ -1479,11 +1642,11 @@ function findPendingBlockItem(state, pendingEventId) {
     return state.timeline.find(item => item.kind === 'block' && item.block?.client_id === pendingEventId);
 }
 
-function addOptimisticTimelineBlock(state, {id, time, emoji, content, kind = 'text', editUrl = '', hideUrl = '', deleteUrl = '', eventName = '', selectedValue = ''}) {
+function addOptimisticTimelineBlock(state, {id, time, emoji, iconData = '', content, kind = 'text', editUrl = '', hideUrl = '', deleteUrl = '', eventName = '', selectedValue = ''}) {
     const item = {
         kind:'block', time,
         block:{
-            id, client_id:id, type:kind === 'event' ? 'event' : 'text', emoji, content, is_hidden:false, updated:'syncing', optimistic:true,
+            id, client_id:id, type:kind === 'event' ? 'event' : 'text', emoji, icon_data:iconData, content, is_hidden:false, updated:'syncing', optimistic:true,
             edit_kind:kind === 'event' ? 'event' : 'block', edit_url:editUrl, hide_url:hideUrl, delete_url:deleteUrl,
             event:kind === 'event' ? {name:eventName, value:selectedValue || null, location:null} : null,
             attachments:[], browsing_domains:[], mobile_browsing_domains:[], github_events:[], calendar_event:null,
@@ -1535,6 +1698,7 @@ function reconcileOptimisticBlock(id, body) {
     item.block.edit_url = body.edit_url || item.block.edit_url;
     item.block.hide_url = body.hide_url || item.block.hide_url;
     item.block.delete_url = body.delete_url || item.block.delete_url;
+    item.block.icon_data = body.icon_data || item.block.icon_data;
     item.block.updated = body.updated_time || '';
     item.block.optimistic = false;
     const row = document.querySelector(`#block-${CSS.escape(String(id))}`)?.closest('.timeline-item');
@@ -1859,7 +2023,8 @@ document.addEventListener('click', async e => {
         const eventUrl = task.dataset.taskEvent;
         const scheduledTime = task.dataset.scheduledTime || null;
         const taskName = task.dataset.name;
-        const taskEmoji = task.querySelector('[aria-hidden="true"]')?.textContent?.trim() || '✅';
+        const taskEmoji = task.dataset.taskEmoji || task.querySelector('[aria-hidden="true"]')?.textContent?.trim() || '✅';
+        const taskIcon = task.dataset.taskIcon || '';
         const optimisticId = `local-event-${crypto.randomUUID?.() || Date.now()}`;
         const now = new Date();
         const optimisticTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -1877,6 +2042,7 @@ document.addEventListener('click', async e => {
                 id:optimisticId,
                 time:optimisticTime,
                 emoji:taskEmoji,
+                iconData:taskIcon,
                 content:'',
                 kind:'event',
                 editUrl:eventUrl,

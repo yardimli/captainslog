@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\TaskDefinition;
+use App\Rules\CroppedIcon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -78,6 +79,8 @@ class TaskController extends Controller
         $data = $request->validate([
             'name' => 'required|string|max:80',
             'emoji' => 'nullable|string|max:32',
+            'icon_data' => ['nullable', 'string', 'max:500000', new CroppedIcon],
+            'remove_icon' => 'nullable|boolean',
             'color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'options_text' => 'nullable|string|max:1000',
             'recurrence_type' => 'required|in:daily,weekly,monthly',
@@ -105,7 +108,7 @@ class TaskController extends Controller
         if ($scheduledTimes->contains(fn ($time) => ! preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $time))) {
             throw ValidationException::withMessages(['scheduled_times_text' => 'Use 24-hour times such as 08:30 or 17:00.']);
         }
-        return [
+        $result = [
             'name' => $data['name'],
             'emoji' => filled($data['emoji'] ?? null) ? $data['emoji'] : TaskDefinition::DEFAULT_EMOJI,
             'color' => strtolower($data['color']),
@@ -118,5 +121,12 @@ class TaskController extends Controller
             'options' => $options ?: null,
             'is_active' => true,
         ];
+        if (filled($data['icon_data'] ?? null)) {
+            $result['icon_data'] = $data['icon_data'];
+        } elseif ($request->boolean('remove_icon')) {
+            $result['icon_data'] = null;
+        }
+
+        return $result;
     }
 }

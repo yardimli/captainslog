@@ -27,6 +27,7 @@ class GoalEntryController extends Controller
             $block = $log->blocks()->create([
                 'type' => 'event',
                 'emoji' => $goal->emoji,
+                'icon_data' => $goal->icon_data,
                 'content' => $data['note'] ?? null,
                 'metadata' => ['goal_id' => $goal->id, 'goal_entry_id' => $entry->id],
                 'position' => ($occurredAt->hour * 3600) + ($occurredAt->minute * 60) + $occurredAt->second,

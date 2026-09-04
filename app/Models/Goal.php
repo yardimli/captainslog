@@ -11,7 +11,7 @@ class Goal extends Model
 {
     public const DEFAULT_EMOJI = '🎯';
 
-    protected $fillable = ['user_id', 'name', 'emoji', 'color', 'target_points', 'period', 'start_date', 'end_date', 'manual_enabled', 'completed_at'];
+    protected $fillable = ['user_id', 'name', 'emoji', 'icon_data', 'color', 'target_points', 'period', 'start_date', 'end_date', 'manual_enabled', 'completed_at'];
 
     protected $casts = ['target_points' => 'integer', 'start_date' => 'date', 'end_date' => 'date', 'manual_enabled' => 'boolean', 'completed_at' => 'datetime'];
 

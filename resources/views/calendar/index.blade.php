@@ -21,7 +21,7 @@
                 @foreach($goalSnapshots as $snapshot)
                     @php $goal = $snapshot['goal']; @endphp
                     <a href="{{ route('goals.show', ['goal' => $goal, 'date' => $focus->toDateString()]) }}" class="inline-flex min-w-48 items-center gap-2 rounded-full px-3 py-2 text-sm shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" style="background-color:{{ $goal->color }};color:{{ $goal->text_color }}" data-calendar-goal="{{ $goal->id }}">
-                        <span class="text-lg" aria-hidden="true">{{ $goal->emoji }}</span>
+                        @if($goal->icon_data)<img src="{{ $goal->icon_data }}" class="h-8 w-8 shrink-0 rounded-lg object-cover" alt="">@else<span class="text-lg" aria-hidden="true">{{ $goal->emoji }}</span>@endif
                         <span class="min-w-0"><strong class="block truncate">{{ $goal->name }}</strong><span class="block text-xs opacity-90">{{ $snapshot['points'] }}/{{ $snapshot['target'] }} points{{ $snapshot['latest'] ? ' · '.$snapshot['latest']->occurred_at->diffForHumans() : ' · No activity' }}</span></span>
                     </a>
                 @endforeach
