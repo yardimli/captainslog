@@ -80,6 +80,7 @@
             @endif
             @unless(auth()->user()->is_guest)
             <div class="navigation-divider my-1 border-t border-slate-200 dark:border-slate-800"></div>
+            <button type="button" class="nav-link flex w-full items-center gap-2 text-left" data-screensaver-toggle data-toggle-url="{{ route('settings.screensaver.toggle') }}" aria-pressed="{{ auth()->user()->screensaver_enabled ? 'true' : 'false' }}"><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 22h8M12 18v4"/></svg><span data-screensaver-toggle-label>{{ auth()->user()->screensaver_enabled ? 'Disable screensaver' : 'Enable screensaver' }}</span></button>
             @if(request()->routeIs('logs.show'))
                 <button type="button" class="nav-link flex items-center gap-2 text-left font-semibold text-indigo-600 dark:text-indigo-400" data-panel-open="chat"><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/></svg><span>Chat with log</span></button>
             @else

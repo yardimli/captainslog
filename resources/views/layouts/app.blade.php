@@ -17,7 +17,7 @@
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="font-sans antialiased text-slate-900 dark:text-slate-100 {{ request()->routeIs('notes.*') ? 'overflow-hidden' : '' }}" data-time-format="{{ auth()->user()->time_format ?? '24' }}" data-demo-readonly="{{ auth()->user()?->is_guest ? 'true' : 'false' }}" data-session-keepalive-url="{{ route('session.keep-alive') }}" data-login-url="{{ route('login') }}">
+    <body class="font-sans antialiased text-slate-900 dark:text-slate-100 {{ request()->routeIs('notes.*') ? 'overflow-hidden' : '' }}" data-time-format="{{ auth()->user()->time_format ?? '24' }}" data-demo-readonly="{{ auth()->user()?->is_guest ? 'true' : 'false' }}" data-session-keepalive-url="{{ route('session.keep-alive') }}" data-login-url="{{ route('login') }}" data-screensaver-enabled="{{ auth()->user()?->screensaver_enabled ? 'true' : 'false' }}" data-screensaver-style="{{ auth()->user()?->screensaver_style ?? 'flying-toasters' }}" data-screensaver-wait="{{ auth()->user()?->screensaver_wait_minutes ?? 10 }}" data-screensaver-speed="{{ auth()->user()?->screensaver_speed ?? 1 }}" data-screensaver-message="{{ auth()->user()?->screensaver_message ?? 'OUT TO LUNCH' }}" data-screensaver-logo="{{ auth()->user()?->screensaver_logo_path ? route('settings.screensaver.logo') : asset('screensavers/after-dark/img/logo.png') }}" data-screensaver-base="{{ asset('screensavers/after-dark/all') }}" data-screensaver-starry-night="{{ asset('screensavers/starry-night/index.html') }}">
         <div id="authenticated-app-shell" class="min-h-screen bg-slate-100 dark:bg-slate-950">
             @include('layouts.navigation')
             @if(auth()->user()->is_guest)
@@ -53,6 +53,11 @@
             </div>
         </div>
         <div id="background-sync-status" class="fixed bottom-4 left-4 z-50 hidden rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white shadow-xl dark:bg-white dark:text-slate-900" data-sync-status role="status" aria-live="polite"></div>
+        <div id="screensaver-overlay" class="fixed inset-0 hidden overflow-hidden bg-black" style="z-index:1000" data-screensaver-overlay role="dialog" aria-modal="true" aria-label="Screensaver" tabindex="-1">
+            <iframe class="h-full w-full border-0 bg-black" title="Active screensaver" data-screensaver-frame></iframe>
+            <div id="screensaver-spotlight" class="absolute inset-0 hidden overflow-hidden" data-screensaver-spotlight aria-hidden="true"><span class="screensaver-spotlight-lens"></span></div>
+            <button type="button" class="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-2 text-xs font-semibold text-white opacity-0 transition hover:opacity-100 focus:opacity-100" data-screensaver-close>Move the pointer or press any key to return</button>
+        </div>
         @include('partials.javascript-templates')
     </body>
 </html>

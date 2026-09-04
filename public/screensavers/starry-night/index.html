@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Starry Night screensaver</title>
+    <style>
+        :root { --screensaver-speed: 1; }
+        * { box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #000; }
+        #sky { position: absolute; inset: 0; overflow: hidden; background: #000; }
+        .star { position: absolute; width: 1px; height: 1px; opacity: 0; animation: appear calc(900ms / var(--screensaver-speed)) ease-out forwards, twinkle calc(4s / var(--screensaver-speed)) ease-in-out infinite alternate; }
+        #city { position: absolute; inset: auto 0 0; height: 28%; overflow: hidden; }
+        .building { position: absolute; bottom: 0; background: #020202; border-top: 1px solid #101010; }
+        .window { position: absolute; width: 2px; height: 2px; background: #d7c849; opacity: .75; }
+        .window.off { background: #111; opacity: 1; }
+        #signal { position: absolute; z-index: 3; width: 6px; height: 6px; border-radius: 50%; background: #d00; box-shadow: 0 0 3px #f22; animation: signal calc(1.35s / var(--screensaver-speed)) steps(1, end) infinite; }
+        @keyframes appear { to { opacity: 1; } }
+        @keyframes twinkle { from { filter: brightness(.65); } to { filter: brightness(1.35); } }
+        @keyframes signal { 0%, 48% { opacity: 1; } 49%, 100% { opacity: .08; } }
+        @media (prefers-reduced-motion: reduce) { .star, #signal { animation: none; opacity: 1; } }
+    </style>
+</head>
+<body>
+    <main id="sky" aria-label="Starry night over a city skyline"></main>
+    <div id="city" aria-hidden="true"></div>
+    <span id="signal" aria-hidden="true"></span>
+    <script>
+        (() => {
+            const sky = document.querySelector('#sky');
+            const city = document.querySelector('#city');
+            const signal = document.querySelector('#signal');
+            const drift = [[1, 0], [1, 1], [0, 1], [0, 0]];
+            let speed = 1;
+            let starTimer;
+            let windowTimer;
+
+            function beginOledDrift(element) {
+                let phase = 0;
+                const move = () => {
+                    if (!element.isConnected) return;
+                    const [x, y] = drift[phase++ % drift.length];
+                    element.style.translate = `${x}px ${y}px`;
+                    window.setTimeout(move, 5000);
+                };
+                window.setTimeout(move, 5000);
+            }
+
+            function addStar() {
+                if (sky.childElementCount >= 700) return;
+                const star = document.createElement('i');
+                const shade = 115 + Math.floor(Math.random() * 141);
+                star.className = 'star';
+                star.style.left = `${Math.random() * 100}%`;
+                star.style.top = `${Math.pow(Math.random(), 1.65) * 78}%`;
+                star.style.backgroundColor = `rgb(${shade} ${shade} ${shade})`;
+                star.style.animationDelay = `0ms, ${Math.random() * -4000}ms`;
+                sky.append(star);
+                beginOledDrift(star);
+            }
+
+            function addBuilding(left, width, height) {
+                const building = document.createElement('section');
+                building.className = 'building';
+                building.style.cssText = `left:${left}px;width:${width}px;height:${height}px`;
+                for (let y = 9; y < height - 5; y += 9) {
+                    for (let x = 7; x < width - 4; x += 9) {
+                        const light = document.createElement('b');
+                        light.className = `window${Math.random() < .32 ? ' off' : ''}`;
+                        light.style.left = `${x}px`;
+                        light.style.bottom = `${y}px`;
+                        building.append(light);
+                    }
+                }
+                city.append(building);
+                return building;
+            }
+
+            function buildCity() {
+                city.replaceChildren();
+                let left = -12;
+                let tallest = null;
+                while (left < innerWidth + 20) {
+                    const width = 34 + Math.floor(Math.random() * 74);
+                    const height = Math.round(city.clientHeight * (.28 + Math.random() * .72));
+                    const building = addBuilding(left, width, height);
+                    if (!tallest || height > tallest.height) tallest = {left, width, height, building};
+                    left += width - Math.floor(Math.random() * 12);
+                }
+                signal.style.left = `${tallest.left + tallest.width / 2 - 3}px`;
+                signal.style.bottom = `${tallest.height + 2}px`;
+            }
+
+            function switchWindow() {
+                const windows = city.querySelectorAll('.window');
+                const light = windows[Math.floor(Math.random() * windows.length)];
+                light?.classList.toggle('off');
+            }
+
+            function startTimers() {
+                clearInterval(starTimer);
+                clearInterval(windowTimer);
+                starTimer = setInterval(addStar, Math.max(45, 150 / speed));
+                windowTimer = setInterval(switchWindow, Math.max(90, 210 / speed));
+            }
+
+            window.addEventListener('message', event => {
+                if (event.origin !== location.origin || event.data?.type !== 'totallog-screensaver-settings') return;
+                speed = Math.min(2, Math.max(.5, Number(event.data.speed) || 1));
+                document.documentElement.style.setProperty('--screensaver-speed', String(speed));
+                startTimers();
+            });
+            window.addEventListener('resize', buildCity);
+
+            buildCity();
+            beginOledDrift(signal);
+            for (let i = 0; i < 36; i++) addStar();
+            startTimers();
+        })();
+    </script>
+</body>
+</html>

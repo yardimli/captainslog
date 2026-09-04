@@ -4,6 +4,7 @@ if (document.querySelector('[data-note-rich-editor]')) import('./notes');
 
 const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
 const demoReadOnly = document.body.dataset.demoReadonly === 'true';
+const isScreenSaverRunning = () => document.body.dataset.screensaverRunning === 'true';
 const cloneTemplate = id => document.getElementById(id)?.content.firstElementChild.cloneNode(true);
 const setButtonBusy = (button, busy) => {
     if (!button) return;
@@ -505,6 +506,7 @@ async function navigateToDay(url, {history = true, fresh = false} = {}) {
 }
 
 async function refreshDayView({loading = true} = {}) {
+    if (isScreenSaverRunning()) return false;
     if (!document.querySelector('#daily-log-page-container')) return false;
     if (loading) beginPageLoading();
     try {
@@ -521,7 +523,7 @@ function startTodayActivityRefresh() {
     let running = false;
 
     const refresh = async () => {
-        if (running || document.hidden || !activeDayState?.is_today || backgroundSyncQueue.size > 0) return;
+        if (running || document.hidden || isScreenSaverRunning() || !activeDayState?.is_today || backgroundSyncQueue.size > 0) return;
         if (document.querySelector('[data-overlay][data-open="true"], [data-modal-backdrop]')) return;
         running = true;
         lastRefresh = Date.now();
@@ -535,6 +537,7 @@ function startTodayActivityRefresh() {
     };
     document.addEventListener('visibilitychange', refreshWhenDue);
     window.addEventListener('focus', refreshWhenDue);
+    document.addEventListener('screensaver:stopped', refreshWhenDue);
 }
 
 const reloadScrollKey = `totallog.reload-scroll:${window.location.pathname}${window.location.search}`;
@@ -556,6 +559,7 @@ function restoreReloadScrollPosition() {
 restoreReloadScrollPosition();
 
 async function refreshDayViewOrReload() {
+    if (isScreenSaverRunning()) return;
     if (!await refreshDayView()) reloadAtCurrentScroll();
 }
 
@@ -583,7 +587,7 @@ function startSessionKeepAlive() {
     let timer;
 
     const ping = async () => {
-        if (!navigator.onLine) return;
+        if (!navigator.onLine || isScreenSaverRunning()) return;
         lastPing = Date.now();
 
         try {
@@ -609,9 +613,202 @@ function startSessionKeepAlive() {
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden && Date.now() - lastPing >= interval) ping();
     });
+    document.addEventListener('screensaver:stopped', () => {
+        if (Date.now() - lastPing >= interval) ping();
+    });
+}
+
+function screenSaverSettings() {
+    const selected = document.querySelector('input[name="screensaver_style"]:checked')?.value;
+    const logoInput = document.querySelector('[data-screensaver-logo]');
+    return {
+        style: selected || document.body.dataset.screensaverStyle || 'flying-toasters',
+        speed: Number(document.querySelector('[data-screensaver-speed]')?.value || document.body.dataset.screensaverSpeed || 1),
+        message: document.querySelector('[data-screensaver-message]')?.value || document.body.dataset.screensaverMessage || 'OUT TO LUNCH',
+        logo: logoInput?.dataset.previewUrl || document.body.dataset.screensaverLogo,
+    };
+}
+
+function screenSaverUrl(style) {
+    return style === 'starry-night'
+        ? document.body.dataset.screensaverStarryNight
+        : `${document.body.dataset.screensaverBase}/${style}.html`;
+}
+
+function configureScreenSaverFrame(frame, settings = screenSaverSettings()) {
+    const apply = () => {
+        const frameDocument = frame.contentDocument;
+        if (!frameDocument) return;
+        frameDocument.documentElement.style.setProperty('--screensaver-speed', String(settings.speed));
+        frameDocument.querySelectorAll('.message').forEach(message => { message.textContent = settings.message; });
+        if (settings.style === 'logo' && settings.logo) {
+            frameDocument.querySelectorAll('body img').forEach(image => { image.src = settings.logo; });
+        }
+        frame.contentWindow?.postMessage({type:'totallog-screensaver-settings', speed:settings.speed}, window.location.origin);
+    };
+    if (frame.contentDocument?.readyState === 'complete') apply();
+    else frame.addEventListener('load', apply, {once:true});
+}
+
+function initScreenSaver() {
+    const overlay = document.querySelector('[data-screensaver-overlay]');
+    const frame = overlay?.querySelector('[data-screensaver-frame]');
+    const spotlight = overlay?.querySelector('[data-screensaver-spotlight]');
+    if (!overlay || !frame) return;
+
+    let idleTimer = null;
+    let ignoreActivityUntil = 0;
+    let previousHtmlOverflow = '';
+    let previousBodyOverflow = '';
+    let previousFocus = null;
+    const enabled = () => document.body.dataset.screensaverEnabled === 'true';
+    const waitMilliseconds = () => Math.max(1, Number(document.body.dataset.screensaverWait || 10)) * 60 * 1000;
+
+    const schedule = () => {
+        window.clearTimeout(idleTimer);
+        if (!enabled() || document.hidden || isScreenSaverRunning()) return;
+        idleTimer = window.setTimeout(() => start(), waitMilliseconds());
+    };
+
+    const stop = () => {
+        if (!isScreenSaverRunning()) return;
+        document.body.dataset.screensaverRunning = 'false';
+        overlay.classList.add('hidden');
+        overlay.classList.remove('block');
+        frame.removeAttribute('src');
+        frame.classList.remove('hidden');
+        spotlight?.classList.add('hidden');
+        overlay.style.backgroundColor = '';
+        document.documentElement.style.overflow = previousHtmlOverflow;
+        document.body.style.overflow = previousBodyOverflow;
+        previousFocus?.focus?.({preventScroll:true});
+        previousFocus = null;
+        document.dispatchEvent(new CustomEvent('screensaver:stopped'));
+        schedule();
+    };
+
+    const start = () => {
+        const settings = screenSaverSettings();
+        ignoreActivityUntil = Date.now() + 350;
+        window.clearTimeout(idleTimer);
+        previousHtmlOverflow = document.documentElement.style.overflow;
+        previousBodyOverflow = document.body.style.overflow;
+        previousFocus = document.activeElement;
+        document.body.dataset.screensaverRunning = 'true';
+        overlay.classList.remove('hidden');
+        overlay.classList.add('block');
+        document.documentElement.style.overflow = 'hidden';
+        document.body.style.overflow = 'hidden';
+        if (settings.style === 'spotlight') {
+            frame.classList.add('hidden');
+            frame.removeAttribute('src');
+            spotlight?.classList.remove('hidden');
+            spotlight?.querySelector('.screensaver-spotlight-lens')?.style.setProperty('animation-duration', `${12 / settings.speed}s`);
+            overlay.style.backgroundColor = 'transparent';
+        } else {
+            spotlight?.classList.add('hidden');
+            frame.classList.remove('hidden');
+            overlay.style.backgroundColor = '';
+            frame.src = screenSaverUrl(settings.style);
+            configureScreenSaverFrame(frame, settings);
+        }
+        overlay.focus({preventScroll:true});
+        setMobileNavigation(false);
+    };
+
+    const bindFrameExitEvents = () => {
+        const frameDocument = frame.contentDocument;
+        if (!frameDocument) return;
+        frameDocument.documentElement.style.setProperty('overflow', 'hidden', 'important');
+        frameDocument.body?.style.setProperty('overflow', 'hidden', 'important');
+        ['pointermove', 'pointerdown', 'keydown', 'touchstart', 'wheel'].forEach(eventName => {
+            frameDocument.addEventListener(eventName, activity, {passive:true});
+        });
+        frame.contentWindow?.focus();
+    };
+
+    const activity = () => {
+        if (isScreenSaverRunning()) {
+            if (Date.now() >= ignoreActivityUntil) stop();
+            return;
+        }
+        schedule();
+    };
+
+    ['pointerdown', 'pointermove', 'keydown', 'touchstart', 'wheel', 'scroll'].forEach(eventName => {
+        document.addEventListener(eventName, activity, {passive:true});
+    });
+    document.addEventListener('visibilitychange', () => document.hidden ? window.clearTimeout(idleTimer) : schedule());
+    frame.addEventListener('load', bindFrameExitEvents);
+    overlay.querySelector('[data-screensaver-close]')?.addEventListener('click', stop);
+    document.querySelectorAll('[data-screensaver-start]').forEach(button => button.addEventListener('click', start));
+
+    document.querySelector('[data-screensaver-toggle]')?.addEventListener('click', async event => {
+        const button = event.currentTarget;
+        button.disabled = true;
+        try {
+            const result = await ajax(button.dataset.toggleUrl, {method:'PATCH'});
+            document.body.dataset.screensaverEnabled = result.enabled ? 'true' : 'false';
+            button.setAttribute('aria-pressed', result.enabled ? 'true' : 'false');
+            button.querySelector('[data-screensaver-toggle-label]').textContent = result.enabled ? 'Disable screensaver' : 'Enable screensaver';
+            if (!result.enabled) stop();
+            else schedule();
+            toast(result.message);
+        } catch (error) {
+            toast(error.message, true);
+        } finally {
+            button.disabled = false;
+            setMobileNavigation(false);
+        }
+    });
+
+    const preview = document.querySelector('[data-screensaver-preview]');
+    const spotlightPreview = document.querySelector('[data-screensaver-spotlight-preview]');
+    const messageSetting = document.querySelector('[data-screensaver-message-setting]');
+    const logoSetting = document.querySelector('[data-screensaver-logo-setting]');
+    const previewTitle = document.querySelector('[data-screensaver-preview-title]');
+    const updatePreview = () => {
+        const settings = screenSaverSettings();
+        const selectedOption = document.querySelector('[data-screensaver-option]:checked');
+        if (previewTitle) previewTitle.textContent = selectedOption?.dataset.screensaverLabel || 'Preview';
+        messageSetting?.classList.toggle('hidden', !['messages', 'messages2'].includes(settings.style));
+        logoSetting?.classList.toggle('hidden', settings.style !== 'logo');
+        document.querySelectorAll('[data-screensaver-option]').forEach(option => option.closest('label')?.classList.toggle('screensaver-list-option-selected', option.checked));
+
+        if (!preview) return;
+        const isSpotlight = settings.style === 'spotlight';
+        preview.classList.toggle('hidden', isSpotlight);
+        spotlightPreview?.classList.toggle('hidden', !isSpotlight);
+        spotlightPreview?.querySelector('.screensaver-spotlight-lens')?.style.setProperty('animation-duration', `${12 / settings.speed}s`);
+        if (isSpotlight) {
+            preview.removeAttribute('src');
+            preview.dataset.screensaverName = '';
+            return;
+        }
+
+        if (preview.dataset.screensaverName !== settings.style) {
+            preview.dataset.screensaverName = settings.style;
+            preview.src = screenSaverUrl(settings.style);
+        } else {
+            configureScreenSaverFrame(preview, settings);
+        }
+    };
+    preview?.addEventListener('load', updatePreview);
+    document.querySelectorAll('[data-screensaver-option]').forEach(option => option.addEventListener('change', updatePreview));
+    document.querySelector('[data-screensaver-speed]')?.addEventListener('change', updatePreview);
+    document.querySelector('[data-screensaver-message]')?.addEventListener('input', updatePreview);
+    document.querySelector('[data-screensaver-logo]')?.addEventListener('change', event => {
+        const input = event.currentTarget;
+        if (input.dataset.previewUrl) URL.revokeObjectURL(input.dataset.previewUrl);
+        input.dataset.previewUrl = input.files[0] ? URL.createObjectURL(input.files[0]) : '';
+        updatePreview();
+    });
+    updatePreview();
+    schedule();
 }
 
 startSessionKeepAlive();
+initScreenSaver();
 captureCurrentDayState();
 scheduleDayReturnReminder();
 startTodayActivityRefresh();

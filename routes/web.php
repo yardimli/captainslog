@@ -110,8 +110,12 @@ Route::middleware('auth')->group(function () {
     Route::delete('/sensors/google-calendar', [GoogleCalendarSensorController::class, 'unlink'])->name('sensors.google-calendar.unlink');
 
     Route::get('/settings', [SettingsController::class, 'edit'])->name('settings.edit');
+    Route::get('/settings/screensaver', [SettingsController::class, 'screensaver'])->name('settings.screensaver');
+    Route::get('/settings/screensaver/logo', [SettingsController::class, 'screensaverLogo'])->name('settings.screensaver.logo');
     Route::get('/api-usage', [ApiUsageController::class, 'index'])->name('api-usage.index');
     Route::patch('/settings', [SettingsController::class, 'update'])->name('settings.update');
+    Route::patch('/settings/screensaver', [SettingsController::class, 'updateScreensaver'])->name('settings.screensaver.update');
+    Route::patch('/settings/screensaver/toggle', [SettingsController::class, 'toggleScreensaver'])->name('settings.screensaver.toggle');
     Route::get('/openrouter/models', [OpenRouterController::class, 'models'])->name('openrouter.models');
     Route::post('/logs/{dailyLog}/chat', [OpenRouterController::class, 'chat'])->name('openrouter.chat');
     Route::post('/chat-actions/{proposal}/confirm', [OpenRouterController::class, 'confirmChatAction'])->name('openrouter.chat-actions.confirm');

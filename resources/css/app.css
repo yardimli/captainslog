@@ -249,3 +249,52 @@ html[data-theme="blue"] #notes-workspace :is(.bg-slate-100, .bg-slate-800),
 html[data-theme="red"] #notes-workspace :is(.bg-slate-100, .bg-slate-800) {
     background-color: var(--theme-surface-soft) !important;
 }
+
+.screensaver-list-option-selected {
+    background-color: rgb(238 242 255);
+    color: rgb(67 56 202);
+}
+
+[data-screensaver-overlay] iframe {
+    color-scheme: dark;
+    overflow: hidden;
+}
+
+html:has([data-screensaver-overlay].block) {
+    overflow: hidden;
+    scrollbar-width: none;
+}
+
+html:has([data-screensaver-overlay].block)::-webkit-scrollbar {
+    display: none;
+}
+
+.dark .screensaver-list-option-selected {
+    background-color: rgb(30 41 59);
+    color: rgb(165 180 252);
+}
+
+.screensaver-spotlight-lens {
+    position: absolute;
+    left: 8%;
+    top: 12%;
+    display: block;
+    width: clamp(7rem, 24vmin, 22rem);
+    height: clamp(7rem, 24vmin, 22rem);
+    border-radius: 9999px;
+    box-shadow: 0 0 2.5rem 1rem rgb(0 0 0 / 0.45), 0 0 0 200vmax rgb(0 0 0 / 0.96);
+    animation: screensaver-spotlight-move 12s linear infinite alternate;
+}
+
+[data-screensaver-spotlight-preview] .screensaver-spotlight-lens {
+    width: 28%;
+    height: 50%;
+}
+
+@keyframes screensaver-spotlight-move {
+    0% { left: 4%; top: 8%; }
+    25% { left: 66%; top: 16%; }
+    50% { left: 38%; top: 64%; }
+    75% { left: 12%; top: 48%; }
+    100% { left: 70%; top: 66%; }
+}

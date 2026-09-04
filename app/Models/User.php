@@ -28,6 +28,12 @@ class User extends Authenticatable
         'time_format',
         'week_starts_on',
         'default_chat_model',
+        'screensaver_enabled',
+        'screensaver_style',
+        'screensaver_wait_minutes',
+        'screensaver_speed',
+        'screensaver_message',
+        'screensaver_logo_path',
         'is_guest',
         'is_admin',
         'guest_token_hash',
@@ -57,6 +63,9 @@ class User extends Authenticatable
         'is_guest' => 'boolean',
         'is_admin' => 'boolean',
         'week_starts_on' => 'integer',
+        'screensaver_enabled' => 'boolean',
+        'screensaver_wait_minutes' => 'integer',
+        'screensaver_speed' => 'float',
         'demo_seed_version' => 'integer',
     ];
 

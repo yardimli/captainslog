@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class TotalLogTest extends TestCase
@@ -170,15 +172,143 @@ class TotalLogTest extends TestCase
         $user = User::factory()->create();
         $this->actingAs($user);
 
-        foreach ([route('profile.edit'), route('settings.edit'), route('sensors.index'), route('api-usage.index')] as $url) {
+        foreach ([route('profile.edit'), route('settings.edit'), route('settings.screensaver'), route('sensors.index'), route('api-usage.index')] as $url) {
             $this->get($url)->assertOk()
                 ->assertSee('id="account-setup-tabs"', false)
                 ->assertSee('href="'.route('profile.edit').'"', false)
                 ->assertSee('href="'.route('settings.edit').'"', false)
+                ->assertSee('href="'.route('settings.screensaver').'"', false)
                 ->assertSee('href="'.route('sensors.index').'"', false)
                 ->assertSee('href="'.route('api-usage.index').'"', false)
                 ->assertDontSee('href="'.route('admin.users').'"', false);
         }
+    }
+
+    public function test_screensaver_preferences_are_saved_and_exposed_to_the_app_shell(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->patch(route('settings.screensaver.update'), [
+            'screensaver_enabled' => '1',
+            'screensaver_style' => 'messages',
+            'screensaver_wait_minutes' => 5,
+            'screensaver_speed' => 1.5,
+            'screensaver_message' => 'Back after lunch',
+        ])->assertRedirect();
+
+        $user->refresh();
+        $this->assertTrue($user->screensaver_enabled);
+        $this->assertSame('messages', $user->screensaver_style);
+        $this->assertSame(5, $user->screensaver_wait_minutes);
+        $this->assertSame(1.5, $user->screensaver_speed);
+        $this->assertSame('Back after lunch', $user->screensaver_message);
+
+        $response = $this->get(route('settings.screensaver'))->assertOk()
+            ->assertSee('id="screensaver-list"', false)
+            ->assertSee('data-screensaver-preview', false)
+            ->assertSee('data-screensaver-message-setting', false)
+            ->assertSee('data-screensaver-logo-setting', false)
+            ->assertSee('data-screensaver-spotlight-preview', false)
+            ->assertSee('data-screensaver-style="messages"', false)
+            ->assertSee('data-screensaver-message="Back after lunch"', false)
+            ->assertSee('value="messages" data-screensaver-option', false);
+
+        $this->assertSame(2, substr_count($response->getContent(), '<iframe'));
+    }
+
+    public function test_hamburger_can_toggle_the_screensaver(): void
+    {
+        $user = User::factory()->create(['screensaver_enabled' => false]);
+
+        $this->actingAs($user)->get(route('calendar'))->assertOk()
+            ->assertSee('data-screensaver-toggle', false)
+            ->assertSee('Enable screensaver')
+            ->assertDontSee('Start screensaver now')
+            ->assertDontSee('Screensaver settings')
+            ->assertSee('data-screensaver-overlay', false);
+
+        $this->patchJson(route('settings.screensaver.toggle'))
+            ->assertOk()
+            ->assertJson(['enabled' => true]);
+
+        $this->assertTrue($user->refresh()->screensaver_enabled);
+    }
+
+    public function test_user_can_upload_a_custom_screensaver_logo(): void
+    {
+        Storage::fake('public');
+        $user = User::factory()->create();
+        $logo = UploadedFile::fake()->image('my-logo.png', 320, 180);
+
+        $this->actingAs($user)->patch(route('settings.screensaver.update'), [
+            'screensaver_style' => 'logo',
+            'screensaver_wait_minutes' => 10,
+            'screensaver_speed' => 1,
+            'screensaver_message' => 'OUT TO LUNCH',
+            'screensaver_logo' => $logo,
+        ])->assertRedirect();
+
+        $path = $user->refresh()->screensaver_logo_path;
+        $this->assertNotNull($path);
+        Storage::disk('public')->assertExists($path);
+        $this->get(route('settings.screensaver.logo'))->assertOk();
+    }
+
+    public function test_screensaver_settings_reject_unknown_savers_and_unsafe_waits(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->from(route('settings.screensaver'))->patch(route('settings.screensaver.update'), [
+            'screensaver_style' => '../other',
+            'screensaver_wait_minutes' => 0,
+            'screensaver_speed' => 99,
+        ])->assertRedirect(route('settings.screensaver'))
+            ->assertSessionHasErrors(['screensaver_style', 'screensaver_wait_minutes', 'screensaver_speed']);
+    }
+
+    public function test_starry_night_is_available_with_oled_safe_five_second_drift(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->patch(route('settings.screensaver.update'), [
+            'screensaver_style' => 'starry-night',
+            'screensaver_wait_minutes' => 10,
+            'screensaver_speed' => 1,
+        ])->assertRedirect();
+
+        $this->assertSame('starry-night', $user->refresh()->screensaver_style);
+        $this->get(route('settings.screensaver'))->assertOk()
+            ->assertSee('value="starry-night"', false)
+            ->assertSee('data-screensaver-starry-night="/screensavers/starry-night/index.html"', false);
+
+        $source = file_get_contents(public_path('screensavers/starry-night/index.html'));
+        $this->assertStringContainsString('window.setTimeout(move, 5000)', $source);
+        $this->assertStringContainsString('[[1, 0], [1, 1], [0, 1], [0, 0]]', $source);
+    }
+
+    public function test_full_screen_screensavers_hide_scrollbars_and_exit_from_iframe_activity(): void
+    {
+        $script = file_get_contents(resource_path('js/app.js'));
+        $styles = file_get_contents(resource_path('css/app.css'));
+
+        $this->assertStringContainsString("frameDocument.addEventListener(eventName, activity", $script);
+        $this->assertStringContainsString("['pointermove', 'pointerdown', 'keydown', 'touchstart', 'wheel']", $script);
+        $this->assertStringContainsString("document.documentElement.style.overflow = 'hidden'", $script);
+        $this->assertStringContainsString('html:has([data-screensaver-overlay].block)', $styles);
+    }
+
+    public function test_screensaver_speed_is_injected_as_a_css_timing_variable(): void
+    {
+        $script = file_get_contents(resource_path('js/app.js'));
+        $ball = file_get_contents(public_path('screensavers/after-dark/all/bouncing-ball.html'));
+        $warp = file_get_contents(public_path('screensavers/after-dark/all/warp.html'));
+        $starry = file_get_contents(public_path('screensavers/starry-night/index.html'));
+
+        $this->assertStringContainsString("style.setProperty('--screensaver-speed', String(settings.speed))", $script);
+        $this->assertStringNotContainsString('playbackRate = settings.speed', $script);
+        $this->assertStringContainsString('calc(3.4s / var(--screensaver-speed, 1))', $ball);
+        $this->assertStringContainsString('animation-delay: calc(500ms / var(--screensaver-speed, 1))', $warp);
+        $this->assertStringContainsString('calc(4s / var(--screensaver-speed))', $starry);
     }
 
     public function test_account_display_and_chat_preferences_are_saved_and_applied(): void
