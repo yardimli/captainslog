@@ -2,16 +2,17 @@
 
 @section('content')
     <div id="admin-users-page" class="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
+        @include('partials.account-tabs')
         <section id="admin-users-heading" class="panel flex flex-wrap items-start gap-4">
             <div id="admin-users-heading-copy" class="min-w-0 flex-1">
                 <p class="text-xs font-bold uppercase tracking-wider text-indigo-600">Administration</p>
                 <h1 class="mt-1 text-3xl font-black">Users</h1>
-                <p class="mt-2 text-sm text-slate-500">Review registered and temporary demo accounts.</p>
+                <p class="mt-2 text-sm text-slate-500">Review registered users and reset the shared read-only demo.</p>
             </div>
             <form method="POST" action="{{ route('admin.demo-data.destroy') }}" data-confirm-demo-delete>
                 @csrf
                 @method('DELETE')
-                <button type="submit" class="btn-secondary border-rose-300 text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-rose-800 dark:text-rose-300 dark:hover:bg-rose-950" @disabled($demoUserCount === 0)>Delete all demo data</button>
+                <button type="submit" class="btn-secondary border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950">Reset demo data</button>
             </form>
         </section>
 

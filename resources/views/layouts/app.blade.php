@@ -17,9 +17,12 @@
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="font-sans antialiased text-slate-900 dark:text-slate-100 {{ request()->routeIs('notes.*') ? 'overflow-hidden' : '' }}" data-time-format="{{ auth()->user()->time_format ?? '24' }}" data-session-keepalive-url="{{ route('session.keep-alive') }}" data-login-url="{{ route('login') }}">
+    <body class="font-sans antialiased text-slate-900 dark:text-slate-100 {{ request()->routeIs('notes.*') ? 'overflow-hidden' : '' }}" data-time-format="{{ auth()->user()->time_format ?? '24' }}" data-demo-readonly="{{ auth()->user()?->is_guest ? 'true' : 'false' }}" data-session-keepalive-url="{{ route('session.keep-alive') }}" data-login-url="{{ route('login') }}">
         <div id="authenticated-app-shell" class="min-h-screen bg-slate-100 dark:bg-slate-950">
             @include('layouts.navigation')
+            @if(auth()->user()->is_guest)
+                <div id="demo-readonly-banner" class="flex flex-wrap items-center justify-center gap-2 bg-amber-100 px-4 py-2 text-center text-sm font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-100"><span>Read-only demo · Changes are disabled.</span><form method="POST" action="{{ route('demo.leave') }}">@csrf<button class="underline underline-offset-2">Create an account to save your own log.</button></form></div>
+            @endif
 
             <!-- Page Heading -->
             @hasSection('header')

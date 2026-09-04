@@ -100,6 +100,11 @@ class User extends Authenticatable
         return $this->hasMany(TaskDefinition::class);
     }
 
+    public function goals()
+    {
+        return $this->hasMany(Goal::class);
+    }
+
     public function sensors()
     {
         return $this->hasMany(Sensor::class);

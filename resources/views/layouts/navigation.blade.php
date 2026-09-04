@@ -43,6 +43,7 @@
             </div>
         @endif
 
+        @unless(auth()->user()->is_guest)
         @if(request()->routeIs('notes.*'))
             <a class="nav-link ml-auto grid h-9 w-9 place-items-center p-0" href="{{ route('logs.show', today()->toDateString()) }}" aria-label="Open today's log" title="Today's log">
                 <svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/><path d="M8 7h8M8 11h6"/></svg>
@@ -52,35 +53,40 @@
                 <svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4M9 11h6M9 15h6"/></svg>
             </a>
         @endif
+        @endunless
         @unless(request()->routeIs('calendar', 'logs.*'))
             <a class="nav-link grid h-9 w-9 place-items-center p-0" href="{{ route('calendar') }}" aria-label="Open calendar" title="Calendar">
                 <svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M8 14h2M12 14h2M16 14h2M8 18h2M12 18h2"/></svg>
             </a>
         @endunless
+        <a class="nav-link {{ auth()->user()->is_guest ? 'ml-auto' : '' }} grid h-9 w-9 place-items-center p-0 {{ request()->routeIs('search.*') ? 'nav-active' : '' }}" href="{{ route('search.index') }}" aria-label="Search logs" title="Search logs">
+            <svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        </a>
         @include('partials.theme-selector')
         <button type="button" class="nav-link p-2" data-mobile-nav-toggle aria-expanded="false" aria-controls="account-navigation" aria-label="Open navigation" title="Menu"><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
     </div>
 
     <div id="account-navigation" class="absolute right-4 top-14 hidden w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl dark:border-slate-800 dark:bg-slate-900 sm:right-6 lg:right-8" data-mobile-nav-menu>
         <div id="account-navigation-links" class="grid gap-1 text-sm">
-            <a class="nav-link {{ request()->routeIs('notes.*') ? 'nav-active' : '' }}" href="{{ route('notes.index') }}">Notes</a>
-            <a class="nav-link {{ request()->routeIs('settings.*') ? 'nav-active' : '' }}" href="{{ route('settings.edit') }}">API settings</a>
-            <a class="nav-link {{ request()->routeIs('tasks.*') ? 'nav-active' : '' }}" href="{{ route('tasks.index') }}">Event setup</a>
-            <a class="nav-link {{ request()->routeIs('sensors.*') ? 'nav-active' : '' }}" href="{{ route('sensors.index') }}">Sensors</a>
-            <a class="nav-link {{ request()->routeIs('api-usage.*') ? 'nav-active' : '' }}" href="{{ route('api-usage.index') }}">API usage</a>
-            @if(auth()->user()->is_admin)<a class="nav-link {{ request()->routeIs('admin.*') ? 'nav-active' : '' }}" href="{{ route('admin.users') }}">Admin</a>@endif
-            <a class="nav-link {{ request()->routeIs('profile.*') ? 'nav-active' : '' }}" href="{{ route('profile.edit') }}">Account settings</a>
+            @unless(auth()->user()->is_guest)
+            <a class="nav-link flex items-center gap-2 {{ request()->routeIs('notes.*') ? 'nav-active' : '' }}" href="{{ route('notes.index') }}"><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4M9 11h6M9 15h6"/></svg><span>Notes</span></a>
+            <a class="nav-link flex items-center gap-2 {{ request()->routeIs('tasks.*') ? 'nav-active' : '' }}" href="{{ route('tasks.index') }}"><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m4 6 2 2 3-3M11 7h9M4 12l2 2 3-3M11 13h9M4 18l2 2 3-3M11 19h9"/></svg><span>Event setup</span></a>
+            <a class="nav-link flex items-center gap-2 {{ request()->routeIs('goals.*') ? 'nav-active' : '' }}" href="{{ route('goals.index') }}"><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg><span>Goals</span></a>
+            <a class="nav-link flex items-center gap-2 {{ request()->routeIs('profile.*', 'settings.*', 'sensors.*', 'api-usage.*', 'admin.*') ? 'nav-active' : '' }}" href="{{ route('profile.edit') }}"><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span>Account setup</span></a>
+            @endunless
             @if(request()->routeIs('logs.show') && request()->boolean('show_hidden'))
-                <a class="nav-link font-semibold text-amber-700 dark:text-amber-300" href="{{ route('logs.show', $activeLogDate) }}" data-hidden-entries-toggle>Hide hidden entries</a>
+                <a class="nav-link flex items-center gap-2 font-semibold text-amber-700 dark:text-amber-300" href="{{ route('logs.show', $activeLogDate) }}" data-hidden-entries-toggle><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2"/></svg><span data-hidden-entries-label>Hide hidden entries</span></a>
             @else
-                <a class="nav-link font-semibold text-amber-700 dark:text-amber-300" href="{{ route('logs.show', $activeLogDate) }}?show_hidden=1" data-hidden-entries-toggle>Show hidden entries</a>
+                <a class="nav-link flex items-center gap-2 font-semibold text-amber-700 dark:text-amber-300" href="{{ route('logs.show', $activeLogDate) }}?show_hidden=1" data-hidden-entries-toggle><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2"/></svg><span data-hidden-entries-label>Show hidden entries</span></a>
             @endif
+            @unless(auth()->user()->is_guest)
             <div class="navigation-divider my-1 border-t border-slate-200 dark:border-slate-800"></div>
             @if(request()->routeIs('logs.show'))
-                <button type="button" class="nav-link text-left font-semibold text-indigo-600 dark:text-indigo-400" data-panel-open="chat">Chat with log</button>
+                <button type="button" class="nav-link flex items-center gap-2 text-left font-semibold text-indigo-600 dark:text-indigo-400" data-panel-open="chat"><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/></svg><span>Chat with log</span></button>
             @else
-                <a class="nav-link font-semibold text-indigo-600 dark:text-indigo-400" href="{{ route('logs.show', $activeLogDate) }}?panel=chat">Chat with log</a>
+                <a class="nav-link flex items-center gap-2 font-semibold text-indigo-600 dark:text-indigo-400" href="{{ route('logs.show', $activeLogDate) }}?panel=chat"><svg class="{{ $iconClass }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/></svg><span>Chat with log</span></a>
             @endif
+            @endunless
             <div class="navigation-divider my-1 border-t border-slate-200 dark:border-slate-800"></div>
             <form method="POST" action="{{ route('logout') }}" data-navigation-sign-out>
                 @csrf

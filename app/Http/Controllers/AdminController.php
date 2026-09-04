@@ -3,12 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\GuestDemoService;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class AdminController extends Controller
 {
+    public function __construct(private GuestDemoService $demo) {}
+
     public function users(): View
     {
         $users = User::query()
@@ -22,10 +24,8 @@ class AdminController extends Controller
 
     public function destroyDemoData(): RedirectResponse
     {
-        $deleted = DB::transaction(fn () => User::where('is_guest', true)->delete());
+        $this->demo->reset();
 
-        return redirect()->route('admin.users')->with('status', $deleted
-            ? "Deleted {$deleted} demo ".($deleted === 1 ? 'user' : 'users').' and all associated demo data.'
-            : 'There was no demo data to delete.');
+        return redirect()->route('admin.users')->with('status', 'Demo data reset around today.');
     }
 }

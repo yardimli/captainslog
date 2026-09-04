@@ -4,16 +4,17 @@ namespace App\Http\Controllers;
 
 use App\Models\DailyLog;
 use App\Models\TaskDefinition;
-use App\Services\GithubSensorSync;
 use App\Services\BrowsingActivityRecorder;
 use App\Services\DesktopActivityRecorder;
+use App\Services\GithubSensorSync;
+use App\Services\GoalProgressService;
 use App\Services\GoogleCalendarSync;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class DayLogController extends Controller
 {
-    public function __construct(private GithubSensorSync $githubSensor, private BrowsingActivityRecorder $browsingRecorder, private DesktopActivityRecorder $desktopRecorder, private GoogleCalendarSync $googleCalendar) {}
+    public function __construct(private GithubSensorSync $githubSensor, private BrowsingActivityRecorder $browsingRecorder, private DesktopActivityRecorder $desktopRecorder, private GoogleCalendarSync $googleCalendar, private GoalProgressService $goalProgress) {}
 
     public function show(Request $request, string $date)
     {
@@ -21,15 +22,21 @@ class DayLogController extends Controller
         $day = Carbon::parse($date)->startOfDay();
         $log = DailyLog::where('user_id', $request->user()->id)->whereDate('log_date', $day)->first();
         if (! $log) {
+            if ($request->user()->is_guest) {
+                return redirect()->route('calendar')->with('status', 'That date is outside the read-only demo data.');
+            }
             $log = DailyLog::create(['user_id' => $request->user()->id, 'log_date' => $day]);
         }
-        if ($day->format('Y-m') === now()->format('Y-m')) {
+        if (! $request->user()->is_guest && $day->format('Y-m') === now()->format('Y-m')) {
             $this->googleCalendar->syncUser($request->user());
             $log = $log->fresh();
         }
-        $this->githubSensor->sync($request->user(), $log, $day);
-        $this->browsingRecorder->finalizeStale($request->user());
-        $this->desktopRecorder->finalizeStale($request->user());
+        if (! $request->user()->is_guest) {
+            $this->githubSensor->sync($request->user(), $log, $day);
+            $this->browsingRecorder->finalizeStale($request->user());
+            $this->desktopRecorder->finalizeStale($request->user());
+            $this->goalProgress->syncForUser($request->user());
+        }
         $showHidden = $request->boolean('show_hidden');
         $log->load(['blocks.attachments', 'blocks.taskEvent', 'blocks.browsingActivities', 'blocks.desktopActivities', 'blocks.mobileBrowsingVisits']);
         $tasks = TaskDefinition::where('user_id', $request->user()->id)
@@ -38,6 +45,9 @@ class DayLogController extends Controller
             ->get()
             ->filter(fn (TaskDefinition $task) => $task->occursOn($day))
             ->values();
+        if ($request->user()->is_guest) {
+            $tasks = collect();
+        }
         $counts = $log->taskEvents()->selectRaw('task_definition_id, count(*) as total')->groupBy('task_definition_id')->pluck('total', 'task_definition_id');
         $slotCounts = $log->taskEvents()
             ->whereNotNull('scheduled_time')
@@ -98,6 +108,11 @@ class DayLogController extends Controller
                 ->first()
             : null;
 
+        $goalSnapshots = $request->user()->goals()->with('entries')->get()
+            ->filter(fn ($goal) => $goal->isAvailableOn($day))
+            ->map(fn ($goal) => $this->goalProgress->snapshot($goal, $day, $request->user()->week_starts_on ?? 1))
+            ->sortBy(fn ($snapshot) => $snapshot['complete'] ? 1 : 0)->values();
+
         $itemsByMinute = $timelineItems->sortBy('sort')->groupBy('minute');
         $currentMinute = $day->isToday() ? (now()->hour * 60) + now()->minute : null;
         $positions = $itemsByMinute->keys();
@@ -137,10 +152,13 @@ class DayLogController extends Controller
             }
             $cursor = $position;
         }
+        if ($request->user()->is_guest) {
+            $timeline = $timeline->where('kind', 'block')->values();
+        }
 
-        $dayState = $this->dayState($request, $day, $log, $tasks, $counts, $slotCounts, $timeline, $showHidden, $nextStickyVisibility);
+        $dayState = $this->dayState($request, $day, $log, $tasks, $counts, $slotCounts, $timeline, $goalSnapshots, $showHidden, $nextStickyVisibility);
         $mainFragment = $request->header('X-Day-View') === 'main';
-        $viewData = compact('day', 'log', 'tasks', 'counts', 'slotCounts', 'timeline', 'showHidden', 'mainFragment', 'nextStickyVisibility', 'dayState');
+        $viewData = compact('day', 'log', 'tasks', 'counts', 'slotCounts', 'timeline', 'goalSnapshots', 'showHidden', 'mainFragment', 'nextStickyVisibility', 'dayState');
         $timing = sprintf('day-view;dur=%.1f', (hrtime(true) - $startedAt) / 1_000_000);
 
         if ($request->header('X-Day-State') === 'json') {
@@ -152,7 +170,7 @@ class DayLogController extends Controller
         return response()->view('logs.show', $viewData)->header('Server-Timing', $timing);
     }
 
-    private function dayState(Request $request, Carbon $day, DailyLog $log, $tasks, $counts, $slotCounts, $timeline, bool $showHidden, ?string $nextStickyVisibility): array
+    private function dayState(Request $request, Carbon $day, DailyLog $log, $tasks, $counts, $slotCounts, $timeline, $goalSnapshots, bool $showHidden, ?string $nextStickyVisibility): array
     {
         $taskData = $tasks->map(fn (TaskDefinition $task) => $this->taskState($log, $task, $counts, $slotCounts))->values();
 
@@ -176,6 +194,17 @@ class DayLogController extends Controller
                 'chat_url' => route('openrouter.chat', $log),
             ],
             'tasks' => $taskData->all(),
+            'goals' => $goalSnapshots->map(fn ($snapshot) => [
+                'id' => $snapshot['goal']->id,
+                'name' => $snapshot['goal']->name,
+                'emoji' => $snapshot['goal']->emoji,
+                'color' => $snapshot['goal']->color,
+                'text_color' => $snapshot['goal']->text_color,
+                'points' => $snapshot['points'],
+                'target' => $snapshot['target'],
+                'latest' => $snapshot['latest']?->occurred_at->diffForHumans(),
+                'url' => route('goals.show', ['goal' => $snapshot['goal'], 'date' => $day->toDateString()]),
+            ])->values()->all(),
             'timeline' => $timeline->map(function (array $item) use ($request, $log, $counts, $slotCounts) {
                 if ($item['kind'] === 'block') {
                     return ['kind' => 'block', 'time' => $item['time'], 'block' => $this->blockState($request, $item['block'])];

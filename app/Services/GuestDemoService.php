@@ -3,14 +3,15 @@
 namespace App\Services;
 
 use App\Models\Attachment;
+use App\Models\BrowsingActivity;
 use App\Models\DailyLog;
+use App\Models\DesktopActivity;
 use App\Models\LogBlock;
+use App\Models\MobileBrowsingVisit;
 use App\Models\TaskDefinition;
 use App\Models\TaskEvent;
 use App\Models\User;
 use Carbon\Carbon;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -18,36 +19,34 @@ use Illuminate\Support\Str;
 
 class GuestDemoService
 {
-    public const COOKIE = 'totallog_guest';
+    public const EMAIL = 'demo@totallog.invalid';
 
-    private const SEED_VERSION = 3;
+    private const SEED_VERSION = 4;
 
-    public function account(Request $request): User
+    public function account(): User
     {
-        if ($request->attributes->has('guest_demo_user')) {
-            return $request->attributes->get('guest_demo_user');
+        $user = User::where('email', self::EMAIL)->where('is_guest', true)->first();
+        if (! $user || $user->demo_seed_version !== self::SEED_VERSION) {
+            return $this->reset();
         }
-
-        $token = $request->cookie(self::COOKIE);
-        $validToken = is_string($token) && preg_match('/^[A-Za-z0-9]{64}$/', $token);
-        $user = $validToken ? User::where('guest_token_hash', hash('sha256', $token))->where('is_guest', true)->first() : null;
-
-        if (! $user) {
-            $token = Str::random(64);
-            $user = User::create([
-                'name' => 'Guest User',
-                'email' => 'guest-'.Str::lower(Str::random(24)).'@demo.invalid',
-                'password' => Hash::make(Str::random(64)),
-                'is_guest' => true,
-                'guest_token_hash' => hash('sha256', $token),
-            ]);
-            Cookie::queue(Cookie::make(self::COOKIE, $token, 60 * 24 * 365, '/', null, $request->isSecure(), true, false, 'lax'));
-        }
-
-        $this->seedRollingWeek($user);
-        $request->attributes->set('guest_demo_user', $user);
 
         return $user;
+    }
+
+    public function reset(): User
+    {
+        return DB::transaction(function () {
+            User::where('is_guest', true)->delete();
+            $user = User::create([
+                'name' => 'Total Log Demo',
+                'email' => self::EMAIL,
+                'password' => Hash::make(Str::random(64)),
+                'is_guest' => true,
+            ]);
+            $this->seedRollingWeek($user);
+
+            return $user->refresh();
+        });
     }
 
     private function seedRollingWeek(User $user): void
@@ -90,16 +89,23 @@ class GuestDemoService
         $log = DailyLog::create(['user_id' => $user->id, 'log_date' => $date]);
         foreach ($entries as $position => $entry) {
             $occurredAt = $date->copy()->setTimeFromTimeString($entry['time'] ?? sprintf('%02d:15', 7 + $position));
-            $log->blocks()->forceCreate([
+            $metadata = array_merge(['demo' => true], $entry['metadata'] ?? []);
+            if (($entry['type'] ?? null) === 'sensor_github') {
+                $metadata['commits'] = collect($entry['commits'] ?? [])->map(fn ($commit) => array_merge($commit, [
+                    'occurred_at' => $date->copy()->setTimeFromTimeString($commit['time'])->toIso8601String(),
+                ]))->all();
+            }
+            $block = $log->blocks()->forceCreate([
                 'type' => $entry['type'] ?? 'text',
                 'emoji' => $entry['emoji'] ?? LogBlock::defaultEmojiForType($entry['type'] ?? 'text'),
                 'content' => $entry['content'],
-                'metadata' => ['demo' => true],
+                'metadata' => $metadata,
                 'position' => $position + 1,
                 'occurred_at' => $occurredAt,
                 'created_at' => $occurredAt,
                 'updated_at' => $occurredAt,
             ]);
+            $this->seedSensorDetails($user, $log, $block, $occurredAt);
         }
 
         $medication = $log->blocks()->forceCreate(['type' => 'event', 'emoji' => $tasks['Medication']->emoji, 'metadata' => ['demo' => true], 'position' => 90, 'occurred_at' => $date->copy()->setTime(20, 5), 'created_at' => $date->copy()->setTime(20, 5), 'updated_at' => $date->copy()->setTime(20, 5)]);
@@ -111,6 +117,53 @@ class GuestDemoService
             'selected_value' => 'Evening dose',
             'occurred_at' => $date->copy()->setTime(20, 5),
         ]);
+    }
+
+    private function seedSensorDetails(User $user, DailyLog $log, LogBlock $block, Carbon $occurredAt): void
+    {
+        if (! in_array($block->type, ['sensor_browser', 'sensor_desktop', 'sensor_mobile_browser'], true)) {
+            return;
+        }
+
+        $detailLine = collect(explode("\n", (string) $block->content))->skip(1)->implode(' · ');
+        $parts = array_filter(array_map('trim', explode(' · ', $detailLine)));
+        foreach ($parts as $partIndex => $part) {
+            if ($block->type === 'sensor_mobile_browser' && preg_match('/^(.+?)\s+(\d+)$/', $part, $matches)) {
+                foreach (range(1, (int) $matches[2]) as $visitIndex) {
+                    MobileBrowsingVisit::create([
+                        'user_id' => $user->id,
+                        'daily_log_id' => $log->id,
+                        'log_block_id' => $block->id,
+                        'domain' => $matches[1],
+                        'visit_key' => hash('sha256', "demo-{$block->id}-{$partIndex}-{$visitIndex}"),
+                        'visited_at' => $occurredAt->copy()->addMinutes($partIndex)->addSeconds($visitIndex),
+                    ]);
+                }
+            } elseif (preg_match('/^(.+?)\s+(\d+)m$/', $part, $matches)) {
+                $seconds = (int) $matches[2] * 60;
+                $attributes = [
+                    'user_id' => $user->id,
+                    'daily_log_id' => $log->id,
+                    'log_block_id' => $block->id,
+                    'started_at' => $occurredAt->copy()->addMinutes($partIndex),
+                    'last_seen_at' => $occurredAt->copy()->addMinutes($partIndex)->addSeconds($seconds),
+                    'ended_at' => $occurredAt->copy()->addMinutes($partIndex)->addSeconds($seconds),
+                    'duration_seconds' => $seconds,
+                ];
+                if ($block->type === 'sensor_desktop') {
+                    DesktopActivity::create(array_merge($attributes, [
+                        'application' => $matches[1],
+                        'process_name' => Str::slug($matches[1]).'.exe',
+                        'client_id' => "demo-{$block->id}-{$partIndex}",
+                    ]));
+                } else {
+                    BrowsingActivity::create(array_merge($attributes, [
+                        'domain' => $matches[1],
+                        'client_id' => "demo-{$block->id}-{$partIndex}",
+                    ]));
+                }
+            }
+        }
     }
 
     private function upgradeDemo(User $user, array $tasks): void
@@ -162,8 +215,8 @@ class GuestDemoService
                 $block->delete();
             }
         });
-        $this->ensureDemoImage($user, today(), 'demo-dog-walk.png', 'media', '📷', 'Morning walk through the neighborhood park before starting work.', 20, '07:45');
-        $this->ensureDemoImage($user, today()->subDay(), 'demo-language-study.png', 'media', '📷', 'Thirty minutes of language study at the kitchen table.', 20, '18:40');
+        $this->ensureDemoImage($user, today(), 'demo-dog-walk.png', 'generated_image', '📷', 'Morning walk through the neighborhood park before starting work.', 20, '07:45');
+        $this->ensureDemoImage($user, today()->subDay(), 'demo-language-study.png', 'generated_image', '📷', 'Thirty minutes of language study at the kitchen table.', 20, '18:40');
         $user->forceFill(['demo_seed_version' => self::SEED_VERSION])->save();
     }
 
@@ -235,6 +288,10 @@ class GuestDemoService
                 ['time' => '11:00', 'type' => 'sensor_desktop', 'content' => "Desktop activity · 3 apps · 1 hr 25 min\nVisual Studio Code 48m · Chrome 25m · Notes 12m"],
                 ['time' => '12:30', 'type' => 'sensor_browser', 'content' => "Desktop browsing · 31 min\ndocs.example 14m · languagelearning.example 10m · email.example 7m"],
                 ['time' => '14:10', 'type' => 'sensor_mobile_browser', 'content' => "Mobile browsing · 9 visits\nmaps.example 4 · groceries.example 3 · weather.example 2"],
+                ['time' => '15:20', 'type' => 'sensor_github', 'content' => 'totallog', 'commits' => [
+                    ['time' => '15:20', 'sha' => '7ac42f0b8e91', 'message' => 'Add read-only demo calendar', 'url' => 'https://github.com/example/totallog/commit/7ac42f0b8e91'],
+                    ['time' => '15:42', 'sha' => '42df81a9bc02', 'message' => 'Show sensor details in the timeline', 'url' => 'https://github.com/example/totallog/commit/42df81a9bc02'],
+                ]],
                 ['time' => '16:20', 'type' => 'sensor_kindle', 'content' => 'Kindle reading · The Little Prince · Antoine de Saint-Exupéry'],
                 ['time' => '17:30', 'emoji' => '🛒', 'content' => 'Bought fruit, vegetables, milk, and dog treats.'],
                 ['time' => '18:15', 'type' => 'chat_assistant', 'content' => 'Today includes focused work, language study, reading, errands, and time outside.'],

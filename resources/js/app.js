@@ -3,6 +3,7 @@ import './bootstrap';
 if (document.querySelector('[data-note-rich-editor]')) import('./notes');
 
 const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+const demoReadOnly = document.body.dataset.demoReadonly === 'true';
 const cloneTemplate = id => document.getElementById(id)?.content.firstElementChild.cloneNode(true);
 const setButtonBusy = (button, busy) => {
     if (!button) return;
@@ -286,7 +287,8 @@ function updateDayNavigation(state) {
     const hiddenToggle = document.querySelector('[data-hidden-entries-toggle]');
     if (hiddenToggle) {
         hiddenToggle.href = state.show_hidden ? state.url.replace(/\?show_hidden=1$/, '') : `${state.url.split('?')[0]}?show_hidden=1`;
-        hiddenToggle.textContent = state.show_hidden ? 'Hide hidden entries' : 'Show hidden entries';
+        const hiddenLabel = hiddenToggle.querySelector('[data-hidden-entries-label]');
+        if (hiddenLabel) hiddenLabel.textContent = state.show_hidden ? 'Hide hidden entries' : 'Show hidden entries';
     }
     const menu = document.querySelector('#more-events-menu');
     if (menu) {
@@ -298,6 +300,24 @@ function updateDayNavigation(state) {
         menu.replaceWith(nextMenu);
         eventsMenu?.classList.toggle('hidden', state.tasks.length === 0);
     }
+}
+
+function updateDayGoals(state) {
+    const section = document.querySelector('#daily-log-goals');
+    if (!section) return;
+    const goals = state.goals || [];
+    section.replaceChildren();
+    section.classList.toggle('hidden', goals.length === 0);
+    section.classList.toggle('flex', goals.length > 0);
+    section.setAttribute('aria-label', `Goals for ${state.date}`);
+    goals.forEach(goal => {
+        const link = element('a', 'inline-flex min-w-48 items-center gap-2 rounded-full px-3 py-2 text-sm shadow-sm transition hover:-translate-y-0.5 hover:shadow-md');
+        link.href = goal.url; link.style.backgroundColor = goal.color; link.style.color = goal.text_color; link.dataset.dayGoal = goal.id;
+        const emoji = element('span', 'text-lg', goal.emoji); emoji.setAttribute('aria-hidden', 'true');
+        const copy = element('span', 'min-w-0');
+        copy.append(element('strong', 'block truncate', goal.name), element('span', 'block text-xs opacity-90', `${goal.points}/${goal.target} points · ${goal.latest || 'No activity'}`));
+        link.append(emoji, copy); section.append(link);
+    });
 }
 
 function updateDayControls(state) {
@@ -318,6 +338,7 @@ function updateDayControls(state) {
     const headingDate = document.querySelector('#log-composer-heading-copy > p'); if (headingDate) headingDate.textContent = state.title;
     const chat = document.querySelector('[data-smart-chat-form]'); if (chat) chat.action = state.log.chat_url;
     updateDayNavigation(state);
+    updateDayGoals(state);
 }
 
 function renderDayState(state, {scroll = null} = {}) {
@@ -588,6 +609,169 @@ function closeOverlay(root, immediate = false) {
     const finish = () => { if (immediate || root.dataset.open !== 'true') { root.classList.add('hidden'); root.classList.remove('grid'); } };
     if (immediate) finish(); else setTimeout(finish, 300);
 }
+
+function renderSearchResultDetails(details, card) {
+    if (!details) return card;
+
+    const content = element('div', 'space-y-4');
+    if (details.kind === 'browsing') {
+        const visitsMode = details.mode === 'visits';
+        const applicationsMode = details.mode === 'applications';
+        const source = applicationsMode ? 'Desktop sensor' : (visitsMode ? 'Synced Chrome history' : 'Chrome sensor');
+        const itemName = applicationsMode ? 'applications' : 'domains';
+        const total = Number(details.total || 0);
+        const summary = visitsMode ? `${total} ${total === 1 ? 'visit' : 'visits'}` : browsingDuration(total);
+        const introduction = element('div', 'rounded-2xl bg-white p-4 dark:bg-slate-900');
+        introduction.append(
+            element('p', 'text-xs font-bold uppercase tracking-wider text-sky-600', source),
+            element('p', 'mt-1 font-semibold', `${details.items.length} ${itemName} · ${summary}`),
+        );
+        content.append(introduction);
+        details.items.forEach(item => {
+            const row = cloneTemplate('browsing-domain-row-template');
+            row.querySelector('[data-browsing-domain-name]').textContent = item.domain;
+            const count = Number(item.visits || 0);
+            row.querySelector('[data-browsing-domain-time]').textContent = visitsMode ? `${count} ${count === 1 ? 'visit' : 'visits'}` : browsingDuration(item.seconds);
+            content.append(row);
+        });
+        content.append(element('p', 'text-xs leading-relaxed text-slate-500', applicationsMode
+            ? 'Only application names, process names, and time totals are stored. Window titles and executable paths stay on your computer.'
+            : visitsMode
+                ? 'Only domains, visit timestamps, and counts are stored. Individual page paths, titles, and query strings are not added to your log.'
+                : 'Only site domains and time totals are stored. Individual page paths, titles, and query strings are not added to your log.'));
+        return content;
+    }
+
+    if (details.kind === 'github') {
+        const count = details.events.length;
+        content.append(element('p', 'rounded-2xl bg-white p-4 text-sm font-semibold dark:bg-slate-900', `${count} ${count === 1 ? 'commit' : 'commits'}`));
+        details.events.forEach(event => {
+            const row = cloneTemplate('github-event-row-template');
+            row.querySelector('[data-github-event-time]').textContent = event.time || '';
+            row.querySelector('[data-github-event-sha]').textContent = String(event.sha || '').slice(0, 7);
+            row.querySelector('[data-github-event-message]').textContent = event.message || `Commit ${String(event.sha || '').slice(0, 7)}`;
+            const link = row.querySelector('[data-github-event-link]');
+            if (event.url) link.href = event.url; else link.classList.add('hidden');
+            content.append(row);
+        });
+        return content;
+    }
+
+    if (details.kind === 'calendar') {
+        if (details.location) {
+            const location = element('div', 'rounded-2xl bg-white p-4 dark:bg-slate-900');
+            location.append(element('p', 'text-xs font-bold uppercase tracking-wider text-slate-500', 'Location'), element('p', 'mt-1 whitespace-pre-wrap', details.location));
+            content.append(location);
+        }
+        if (details.description) {
+            const description = element('div', 'rounded-2xl bg-white p-4 dark:bg-slate-900');
+            description.append(element('p', 'text-xs font-bold uppercase tracking-wider text-slate-500', 'Description'), element('p', 'mt-1 whitespace-pre-wrap', details.description));
+            content.append(description);
+        }
+        if (details.url) {
+            const link = element('a', 'btn w-full justify-center', 'Open in Google Calendar');
+            link.href = details.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+            content.append(link);
+        }
+        return content;
+    }
+
+    return card;
+}
+
+function openSearchResult(result) {
+    const overlay = document.querySelector('[data-overlay="search-result"]');
+    const card = result.querySelector('article')?.cloneNode(true);
+    if (!overlay || !card) return;
+
+    card.removeAttribute('id');
+    let details = null;
+    try { details = JSON.parse(result.querySelector('[data-search-result-details]')?.textContent || 'null'); } catch {}
+    overlay.querySelector('[data-search-result-title]').textContent = details?.title || details?.project || result.dataset.resultTitle || 'Log entry';
+    overlay.querySelector('[data-search-result-date]').textContent = result.dataset.resultDate || '';
+    overlay.querySelector('[data-search-result-time]').textContent = result.dataset.resultTime || '';
+    overlay.querySelector('[data-search-result-content]').replaceChildren(renderSearchResultDetails(details, card));
+    overlay.querySelector('[data-search-result-date-link]').href = result.dataset.resultDateUrl;
+    openOverlay('search-result');
+}
+
+function initializeLogSearch() {
+    const form = document.querySelector('#log-search-form');
+    const input = document.querySelector('#log-search-input');
+    const results = document.querySelector('#log-search-results');
+    if (!form || !input || !results) return;
+
+    let debounceTimer = null;
+    let activeRequest = null;
+
+    const updateUrl = keyword => {
+        const url = new URL(form.action, window.location.href);
+        if (keyword) url.searchParams.set('q', keyword);
+        window.history.replaceState({}, '', url);
+    };
+
+    const showPrompt = keyword => {
+        const root = element('div', 'panel py-12 text-center');
+        root.id = keyword ? 'log-search-short-query' : 'log-search-prompt';
+        root.append(
+            element('span', 'text-4xl', keyword ? '⌨️' : '🔍'),
+            element('h2', 'mt-3 text-lg font-bold', keyword ? 'Type at least two letters' : 'Find anything you recorded'),
+            element('p', 'mt-1 text-sm text-slate-500', keyword ? 'Results will appear automatically.' : 'Searches entry text, events, GitHub details, calendar metadata, browsing domains, apps, and attachment names.'),
+        );
+        root.firstElementChild.setAttribute('aria-hidden', 'true');
+        results.replaceChildren(root);
+        results.setAttribute('aria-busy', 'false');
+        updateUrl(keyword);
+    };
+
+    const search = async () => {
+        const keyword = input.value.trim();
+        if (keyword.length < 2) { showPrompt(keyword); return; }
+
+        activeRequest?.abort();
+        activeRequest = new AbortController();
+        const url = new URL(form.action, window.location.href);
+        url.searchParams.set('q', keyword);
+        results.setAttribute('aria-busy', 'true');
+
+        try {
+            const body = await ajax(url, {signal: activeRequest.signal});
+            if (input.value.trim() !== keyword) return;
+            results.innerHTML = body.html;
+            window.history.replaceState({}, '', body.url);
+        } catch (error) {
+            if (error.name !== 'AbortError') toast(error.message, true);
+        } finally {
+            if (input.value.trim() === keyword) results.setAttribute('aria-busy', 'false');
+        }
+    };
+
+    results.addEventListener('click', event => {
+        const result = event.target.closest('[data-search-result-open]');
+        if (!result || event.target.closest('a, button, input, textarea, select')) return;
+        openSearchResult(result);
+    });
+    results.addEventListener('keydown', event => {
+        const result = event.target.closest('[data-search-result-open]');
+        if (!result || event.target !== result || !['Enter', ' '].includes(event.key)) return;
+        event.preventDefault();
+        openSearchResult(result);
+    });
+    input.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        activeRequest?.abort();
+        const keyword = input.value.trim();
+        if (keyword.length < 2) { showPrompt(keyword); return; }
+        debounceTimer = window.setTimeout(search, 500);
+    });
+    form.addEventListener('submit', event => {
+        event.preventDefault();
+        clearTimeout(debounceTimer);
+        search();
+    });
+}
+
+initializeLogSearch();
 
 const accountTimeFormat = document.body.dataset.timeFormat || '24';
 
@@ -930,6 +1114,66 @@ function configureEventDefinition(data = null) {
     openOverlay('event-definition');
     setTimeout(() => form.querySelector('[name="name"]')?.focus(), 320);
 }
+
+function configureGoal(data = null) {
+    const root = document.querySelector('[data-overlay="goal-definition"]');
+    const form = root?.querySelector('[data-goal-form]');
+    if (!root || !form) return;
+    const editing = Boolean(data?.update_url);
+    form.reset();
+    form.action = editing ? data.update_url : form.dataset.createAction;
+    let method = form.querySelector('input[name="_method"]');
+    if (editing) {
+        if (!method) { method = cloneTemplate('ajax-method-template'); form.append(method); }
+        method.value = 'PATCH';
+    } else method?.remove();
+    form.querySelector('[name="name"]').value = data?.name || '';
+    setEmojiPickerValue(form.querySelector('[data-emoji-picker]'), data?.emoji || '🎯');
+    const color = form.querySelector('[name="color"]');
+    color.value = data?.color || '#4f46e5';
+    const preview = document.getElementById(color.dataset.colorInput);
+    if (preview) preview.style.backgroundColor = color.value;
+    form.querySelector('[name="target_points"]').value = data?.target_points || 5;
+    form.querySelector('[name="period"]').value = data?.period || 'weekly';
+    form.querySelector('[name="start_date"]').value = data?.start_date || '';
+    form.querySelector('[name="end_date"]').value = data?.end_date || '';
+    form.querySelector('[name="task_definition_id"]').value = data?.task_definition_id || '';
+    form.querySelector('[data-goal-project-picker]')?.setProjects(data?.github_projects || []);
+    form.querySelector('[name="manual_enabled"]').checked = Boolean(data?.manual_enabled);
+    root.querySelector('[data-goal-title]').textContent = editing ? `Edit ${data.name}` : 'Add goal';
+    root.querySelector('[data-goal-submit]').textContent = editing ? 'Save changes' : 'Create goal';
+    root.querySelector('[data-goal-delete-section]')?.classList.toggle('hidden', !editing);
+    const deleteForm = root.querySelector('[data-goal-delete-form]');
+    if (deleteForm) deleteForm.action = data?.delete_url || '';
+    openOverlay('goal-definition');
+    setTimeout(() => form.querySelector('[name="name"]')?.focus(), 320);
+}
+
+function initGoalProjectPicker(root) {
+    const filter = root.querySelector('[data-goal-project-filter]');
+    const list = root.querySelector('[data-goal-project-list]');
+    const selectedRoot = root.querySelector('[data-goal-project-selected]');
+    const inputs = root.querySelector('[data-goal-project-inputs]');
+    let selected = [];
+    const render = () => {
+        selectedRoot.replaceChildren(); inputs.replaceChildren();
+        selected.forEach(name => {
+            const bubble = element('span', 'inline-flex items-center gap-1 rounded-full bg-indigo-100 py-1 pl-3 pr-1 text-sm font-semibold text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200');
+            const remove = element('button', 'grid h-6 w-6 place-items-center rounded-full hover:bg-indigo-200 dark:hover:bg-indigo-800', '×');
+            remove.type = 'button'; remove.dataset.goalProjectRemove = name; remove.setAttribute('aria-label', `Remove ${name}`);
+            bubble.append(document.createTextNode(name), remove); selectedRoot.append(bubble);
+            const input = element('input'); input.type = 'hidden'; input.name = 'github_projects[]'; input.value = name; inputs.append(input);
+        });
+        root.querySelectorAll('[data-goal-project-add]').forEach(button => { button.disabled = selected.some(name => name.toLowerCase() === button.dataset.goalProjectAdd.toLowerCase()); });
+    };
+    root.setProjects = values => { selected = [...new Set((values || []).map(value => String(value).split('/').pop()).filter(Boolean))]; if (filter) filter.value = ''; root.querySelectorAll('[data-goal-project-add]').forEach(button => button.classList.remove('hidden')); render(); };
+    list?.addEventListener('click', event => { const button = event.target.closest('[data-goal-project-add]'); if (!button || button.disabled) return; selected.push(button.dataset.goalProjectAdd); render(); });
+    selectedRoot?.addEventListener('click', event => { const button = event.target.closest('[data-goal-project-remove]'); if (!button) return; selected = selected.filter(name => name !== button.dataset.goalProjectRemove); render(); });
+    filter?.addEventListener('input', () => { const query = filter.value.trim().toLowerCase(); root.querySelectorAll('[data-goal-project-add]').forEach(button => button.classList.toggle('hidden', !button.dataset.goalProjectAdd.toLowerCase().includes(query))); });
+    root.setProjects([]);
+}
+
+document.querySelectorAll('[data-goal-project-picker]').forEach(initGoalProjectPicker);
 
 document.addEventListener('click', event => {
     document.querySelectorAll('[data-emoji-picker]').forEach(picker => {
@@ -1343,7 +1587,7 @@ document.addEventListener('submit', async event => {
     const form = event.target.closest('[data-confirm-demo-delete]');
     if (!form || form.dataset.confirmed === 'true') return;
     event.preventDefault();
-    const confirmed = await modal({title:'Delete all demo data?', message:'Every temporary demo user and all data belonging to those demo accounts will be permanently deleted. Shared demo assets will remain available.', confirmText:'Delete demo data'});
+    const confirmed = await modal({title:'Reset demo data?', message:'Rebuild the shared read-only demo around today. Existing demo records will be replaced; shared image assets remain available.', confirmText:'Reset demo data'});
     if (confirmed) { form.dataset.confirmed = 'true'; form.requestSubmit(); }
 });
 
@@ -1425,15 +1669,25 @@ document.addEventListener('click', async e => {
     const composerTrigger = e.target.closest('[data-composer-open]');
     const eventDefinitionCreate = e.target.closest('[data-event-definition-create]');
     const eventDefinitionOpen = e.target.closest('[data-event-definition-open]');
+    const goalCreate = e.target.closest('[data-goal-create]');
+    const goalOpen = e.target.closest('[data-goal-open]');
     const imagePreview = e.target.closest('[data-image-preview-open]');
     const overlayClose = e.target.closest('[data-overlay-close]');
     const composerCancel = e.target.closest('[data-composer-cancel]');
     if (overlayTrigger) { setMobileNavigation(false); openOverlay(overlayTrigger.dataset.panelOpen); }
-    if (composerTrigger) configureComposer({time: composerTrigger.dataset.currentTime || composerTrigger.dataset.defaultTime});
-    if (eventDefinitionCreate) configureEventDefinition();
+    if (composerTrigger) {
+        if (demoReadOnly) toast('The demo is read-only. Create an account to save your own entries.');
+        else configureComposer({time: composerTrigger.dataset.currentTime || composerTrigger.dataset.defaultTime});
+    }
+    if (eventDefinitionCreate && !demoReadOnly) configureEventDefinition();
     if (eventDefinitionOpen) {
         const source = document.getElementById(eventDefinitionOpen.dataset.eventDefinitionOpen);
         if (source) configureEventDefinition(JSON.parse(source.textContent));
+    }
+    if (goalCreate) configureGoal();
+    if (goalOpen) {
+        const source = document.getElementById(goalOpen.dataset.goalOpen);
+        if (source) configureGoal(JSON.parse(source.textContent));
     }
     if (imagePreview) openImagePreview(imagePreview);
     if (composerCancel) closeOverlay(composerCancel.closest('[data-overlay="composer"]'));
@@ -1453,6 +1707,7 @@ document.addEventListener('click', async e => {
         if (timelineItem.matches('[data-timeline-github]')) openGithubDetails(timelineItem);
         else if (timelineItem.matches('[data-timeline-browsing]')) openBrowsingDetails(timelineItem);
         else if (timelineItem.matches('[data-timeline-google-calendar]')) openGoogleCalendarDetails(timelineItem);
+        else if (demoReadOnly) toast('The demo is read-only. Create an account to save your own entries.');
         else if (timelineItem.matches('[data-timeline-edit]')) configureComposer({time: timelineItem.dataset.timelineTime, mode:'edit', kind:timelineItem.dataset.editKind, eventName:timelineItem.dataset.editEventName, action:timelineItem.dataset.editUrl, content:timelineItem.dataset.editContent, emoji:timelineItem.dataset.editEmoji, updated:timelineItem.dataset.editUpdated, hideUrl:timelineItem.dataset.hideUrl, deleteUrl:timelineItem.dataset.deleteUrl, isHidden:timelineItem.dataset.isHidden === 'true', location:JSON.parse(timelineItem.dataset.editLocation || 'null')});
         else if (timelineItem.matches('[data-time-gap]')) configureComposer({time:timelineItem.dataset.from});
         else configureComposer({time:timelineItem.dataset.timelineTime || timelineItem.dataset.currentTime});
@@ -1460,7 +1715,7 @@ document.addEventListener('click', async e => {
     const emptyLogSpace = e.target === document.querySelector('#timeline')
         || e.target === document.querySelector('#daily-log-page-container')
         || (e.target === document.querySelector('#page-content') && supportsDayStateNavigation());
-    if (emptyLogSpace && !timelineItem && !composerTrigger) configureComposer();
+    if (emptyLogSpace && !timelineItem && !composerTrigger && !demoReadOnly) configureComposer();
     const visibility = e.target.closest('[data-planner-visibility]');
     if (visibility) {
         visibility.disabled = true;
@@ -1509,6 +1764,7 @@ document.addEventListener('click', async e => {
     }
     const task = e.target.closest('[data-task-event]');
     if (task) {
+        if (demoReadOnly) { toast('The demo is read-only. Create an account to track your own events.'); return; }
         task.closest('[data-events-menu]')?.removeAttribute('open');
         let value = null; const options = JSON.parse(task.dataset.options || '[]');
         if (options.length) { value = await modal({title:task.dataset.name, message:'Choose a value before this event is tracked.', options, confirmText:'Track event'}); if (value === null) return; }

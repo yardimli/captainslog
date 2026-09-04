@@ -5,7 +5,8 @@
 @endsection
 
 @section('content')
-    <div id="settings-page-container" class="mx-auto max-w-3xl p-4 sm:p-6 lg:p-8">
+    <div id="settings-page-container" class="mx-auto max-w-3xl space-y-5 p-4 sm:p-6 lg:p-8">
+        @include('partials.account-tabs')
         <form method="POST" action="{{ route('settings.update') }}" class="space-y-5">
             @csrf @method('PATCH')
             <section class="panel">

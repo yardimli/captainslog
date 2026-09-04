@@ -6,13 +6,14 @@ use App\Models\DailyLog;
 use App\Models\LogBlock;
 use App\Models\TaskDefinition;
 use App\Models\TaskEvent;
+use App\Services\GoalProgressService;
 use App\Services\NominatimReverseGeocoder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class TaskEventController extends Controller
 {
-    public function __construct(private NominatimReverseGeocoder $geocoder) {}
+    public function __construct(private NominatimReverseGeocoder $geocoder, private GoalProgressService $goalProgress) {}
 
     public function store(Request $request, DailyLog $dailyLog, TaskDefinition $task)
     {
@@ -50,6 +51,7 @@ class TaskEventController extends Controller
 
             return TaskEvent::create(['daily_log_id' => $dailyLog->id, 'task_definition_id' => $task->id, 'log_block_id' => $block->id, 'task_name' => $task->name, 'selected_value' => $data['value'] ?? null, 'scheduled_time' => $scheduledTime, 'occurred_at' => $occurredAt]);
         });
+        $this->goalProgress->syncForUser($request->user());
 
         return response()->json(['message' => "$task->name logged.", 'event' => $event, 'count' => $count, 'slot_count' => $slotCount, 'edit_url' => route('events.update', $event), 'location_url' => route('events.location', $event), 'hide_url' => route('blocks.visibility', $event->log_block_id), 'delete_url' => route('blocks.destroy', $event->log_block_id), 'block_id' => $event->log_block_id, 'emoji' => $task->emoji, 'time' => $event->occurred_at->format('H:i')], 201)
             ->header('Server-Timing', sprintf('event-store;dur=%.1f', (hrtime(true) - $startedAt) / 1_000_000));

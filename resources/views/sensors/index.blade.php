@@ -6,6 +6,7 @@
 
 @section('content')
     <div id="sensors-page-container" class="mx-auto max-w-3xl space-y-5 p-4 sm:p-6 lg:p-8">
+        @include('partials.account-tabs')
         @if(session('error'))<div id="sensors-error-message" class="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200">{{ session('error') }}</div>@endif
         <section id="github-sensor-card" class="panel">
             <div id="github-sensor-heading" class="flex items-start gap-3">

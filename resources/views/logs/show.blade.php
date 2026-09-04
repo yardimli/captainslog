@@ -3,6 +3,12 @@
 @section('content')
     <div id="daily-log-page-container" class="mx-auto max-w-5xl space-y-5 p-4 sm:p-6 lg:p-8" data-day-view-fragment @if($nextStickyVisibility) data-next-sticky-visibility="{{ $nextStickyVisibility }}" @endif>
         <script id="day-log-state" type="application/json">@json($dayState)</script>
+        <section id="daily-log-goals" class="{{ $goalSnapshots->isEmpty() ? 'hidden' : 'flex' }} flex-wrap gap-2" aria-label="Goals for {{ $day->toDateString() }}">
+            @foreach($goalSnapshots as $snapshot)
+                @php $goal = $snapshot['goal']; @endphp
+                <a href="{{ route('goals.show', ['goal' => $goal, 'date' => $day->toDateString()]) }}" class="inline-flex min-w-48 items-center gap-2 rounded-full px-3 py-2 text-sm shadow-sm transition hover:-translate-y-0.5 hover:shadow-md" style="background-color:{{ $goal->color }};color:{{ $goal->text_color }}" data-day-goal="{{ $goal->id }}"><span class="text-lg" aria-hidden="true">{{ $goal->emoji }}</span><span class="min-w-0"><strong class="block truncate">{{ $goal->name }}</strong><span class="block text-xs opacity-90">{{ $snapshot['points'] }}/{{ $snapshot['target'] }} points{{ $snapshot['latest'] ? ' · '.$snapshot['latest']->occurred_at->diffForHumans() : ' · No activity' }}</span></span></a>
+            @endforeach
+        </section>
         <section id="timeline" class="space-y-2" data-log-date="{{ $day->toDateString() }}">
             @foreach($timeline as $item)
                 @if($item['kind'] === 'gap')

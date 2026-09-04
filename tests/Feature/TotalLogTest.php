@@ -14,7 +14,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class TotalLogTest extends TestCase
@@ -79,8 +78,32 @@ class TotalLogTest extends TestCase
             ->assertSee('data-calendar-view-current="week"', false);
         $calendarScript = file_get_contents(resource_path('js/app.js'));
         $this->assertStringContainsString("const validViews = ['week', 'month']", $calendarScript);
-        $this->assertStringContainsString("localStorage.setItem(storageKey, link.dataset.calendarView)", $calendarScript);
+        $this->assertStringContainsString('localStorage.setItem(storageKey, link.dataset.calendarView)', $calendarScript);
         $this->assertStringNotContainsString("requestedView === 'day'", $calendarScript);
+    }
+
+    public function test_calendar_today_opens_the_log_when_today_is_visible_and_otherwise_returns_to_its_period(): void
+    {
+        Carbon::setTestNow('2026-09-04 12:00:00');
+        try {
+            $user = User::factory()->create(['week_starts_on' => 1]);
+            $this->actingAs($user);
+
+            foreach ([
+                route('calendar', '2026-09-02').'?view=week',
+                route('calendar', '2026-09-15').'?view=month',
+            ] as $url) {
+                $this->get($url)->assertOk()
+                    ->assertSee('href="'.route('logs.show', '2026-09-04').'" data-calendar-today-action="open-log"', false);
+            }
+
+            foreach (['week', 'month'] as $view) {
+                $this->get(route('calendar', '2026-07-15').'?view='.$view)->assertOk()
+                    ->assertSee('href="'.route('calendar', '2026-09-04').'?view='.$view.'" data-calendar-today-action="show-period"', false);
+            }
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_daily_log_exposes_composer_and_chat_through_responsive_navigation(): void
@@ -103,11 +126,12 @@ class TotalLogTest extends TestCase
 
         $this->actingAs($user)->get('/logs/2026-08-16')->assertOk()
             ->assertSee('data-mobile-nav-toggle', false)
-            ->assertSee('API settings')
             ->assertSee('Event setup')
-            ->assertSee('Sensors')
-            ->assertSee('API usage')
-            ->assertSee('Account settings')
+            ->assertSee('Account setup')
+            ->assertDontSee('href="'.route('settings.edit').'"', false)
+            ->assertDontSee('href="'.route('sensors.index').'"', false)
+            ->assertDontSee('href="'.route('api-usage.index').'"', false)
+            ->assertSee('nav-link flex items-center gap-2', false)
             ->assertSee('Chat with log')
             ->assertDontSee('Generate image')
             ->assertSee('aria-label="Toggle theme"', false)
@@ -123,6 +147,22 @@ class TotalLogTest extends TestCase
         $this->get(route('tasks.index'))->assertOk()
             ->assertSee('aria-label="Open notes"', false)
             ->assertSee('aria-label="Open calendar"', false);
+    }
+
+    public function test_account_setup_pages_share_settings_tabs_without_exposing_admin_to_regular_users(): void
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        foreach ([route('profile.edit'), route('settings.edit'), route('sensors.index'), route('api-usage.index')] as $url) {
+            $this->get($url)->assertOk()
+                ->assertSee('id="account-setup-tabs"', false)
+                ->assertSee('href="'.route('profile.edit').'"', false)
+                ->assertSee('href="'.route('settings.edit').'"', false)
+                ->assertSee('href="'.route('sensors.index').'"', false)
+                ->assertSee('href="'.route('api-usage.index').'"', false)
+                ->assertDontSee('href="'.route('admin.users').'"', false);
+        }
     }
 
     public function test_account_display_and_chat_preferences_are_saved_and_applied(): void
@@ -248,8 +288,8 @@ class TotalLogTest extends TestCase
             ->assertDontSee('data-mobile-nav-toggle', false);
 
         $script = file_get_contents(resource_path('js/app.js'));
-        $this->assertStringContainsString("document.documentElement.dataset.theme = selected", $script);
-        $this->assertStringContainsString("icon.dataset.themeIcon !== selected", $script);
+        $this->assertStringContainsString('document.documentElement.dataset.theme = selected', $script);
+        $this->assertStringContainsString('icon.dataset.themeIcon !== selected', $script);
     }
 
     public function test_task_buttons_accept_custom_browser_colors_and_legacy_colors_still_render(): void
@@ -599,7 +639,7 @@ class TotalLogTest extends TestCase
         $this->assertStringContainsString("e.target === document.querySelector('#timeline')", $script);
         $this->assertStringContainsString("e.target === document.querySelector('#daily-log-page-container')", $script);
         $this->assertStringContainsString("e.target === document.querySelector('#page-content') && supportsDayStateNavigation()", $script);
-        $this->assertStringContainsString('if (emptyLogSpace && !timelineItem && !composerTrigger) configureComposer();', $script);
+        $this->assertStringContainsString('if (emptyLogSpace && !timelineItem && !composerTrigger && !demoReadOnly) configureComposer();', $script);
     }
 
     public function test_recorded_planner_entries_can_be_hidden_but_scheduled_controls_cannot(): void
@@ -711,7 +751,7 @@ class TotalLogTest extends TestCase
         $this->assertDatabaseHas('task_events', ['id' => $eventId, 'occurred_at' => '2026-08-15 16:10:00']);
         $script = file_get_contents(resource_path('js/app.js'));
         $this->assertStringContainsString('navigator.geolocation.getCurrentPosition', $script);
-        $this->assertStringContainsString("body.location_url", $script);
+        $this->assertStringContainsString('body.location_url', $script);
     }
 
     public function test_log_entry_media_long_text_and_recording_features_are_removed(): void
@@ -808,7 +848,9 @@ class TotalLogTest extends TestCase
             ->assertSee(route('logs.show', '2026-08-15'));
         $this->get(route('logs.show', '2026-08-15'))->assertOk()
             ->assertDontSee('API usage ·')
-            ->assertSee('href="'.route('api-usage.index').'"', false);
+            ->assertDontSee('href="'.route('api-usage.index').'"', false)
+            ->assertSee('href="'.route('profile.edit').'"', false)
+            ->assertSee('Account setup');
     }
 
     public function test_timeline_entries_expose_the_timestamp_aware_side_editor(): void
@@ -870,7 +912,7 @@ class TotalLogTest extends TestCase
         $this->assertStringContainsString("root.querySelector('[data-composer-time-now]')?.classList.toggle('hidden', mode !== 'edit')", $script);
         $this->assertStringContainsString('composerTimeInput.dispatchEvent', $script);
         $this->assertStringContainsString('textarea.value === form.dataset.originalContent', $script);
-        $this->assertStringContainsString("list.scrollTop = index * 48", $script);
+        $this->assertStringContainsString('list.scrollTop = index * 48', $script);
         $this->assertStringContainsString("behavior:smooth ? 'smooth' : 'auto'", $script);
         $this->assertStringContainsString('const adaptedDelta = notchedGesture', $script);
         $this->assertStringContainsString('requestAnimationFrame(frameTime =>', $script);

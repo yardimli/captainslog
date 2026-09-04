@@ -6,6 +6,7 @@
 
 @section('content')
     <div id="api-usage-page-container" class="mx-auto max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
+        @include('partials.account-tabs')
         <section class="grid gap-3 sm:grid-cols-3">
             <div class="api-usage-summary-card panel"><p class="text-xs font-bold uppercase text-slate-500">Calls</p><p class="mt-1 text-2xl font-black">{{ number_format($totals->calls) }}</p></div>
             <div class="api-usage-summary-card panel"><p class="text-xs font-bold uppercase text-slate-500">Tokens</p><p class="mt-1 text-2xl font-black">{{ number_format($totals->tokens) }}</p></div>

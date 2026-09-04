@@ -6,9 +6,12 @@ use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\DayLogController;
 use App\Http\Controllers\EmojiController;
+use App\Http\Controllers\GoalController;
+use App\Http\Controllers\GoalEntryController;
 use App\Http\Controllers\GoogleCalendarSensorController;
 use App\Http\Controllers\GuestDemoController;
 use App\Http\Controllers\LogBlockController;
+use App\Http\Controllers\LogSearchController;
 use App\Http\Controllers\NoteAiController;
 use App\Http\Controllers\NotebookController;
 use App\Http\Controllers\NoteController;
@@ -38,12 +41,9 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::get('/', [GuestDemoController::class, 'index'])->name('demo.index');
+Route::get('/demo', [GuestDemoController::class, 'enter'])->name('demo.enter');
+Route::post('/demo/leave', [GuestDemoController::class, 'leave'])->name('demo.leave');
 Route::get('/emojis', EmojiController::class)->name('emojis.index');
-Route::post('/demo/logs/{dailyLog}/blocks', [GuestDemoController::class, 'storeBlock'])->name('demo.blocks.store');
-Route::patch('/demo/blocks/{block}', [GuestDemoController::class, 'updateBlock'])->name('demo.blocks.update');
-Route::delete('/demo/blocks/{block}', [GuestDemoController::class, 'destroyBlock'])->name('demo.blocks.destroy');
-Route::get('/demo/attachments/{attachment}', [GuestDemoController::class, 'showAttachment'])->name('demo.attachments.show');
-Route::post('/demo/logs/{dailyLog}/tasks/{task}/events', [GuestDemoController::class, 'storeEvent'])->name('demo.events.store');
 
 Route::redirect('/dashboard', '/calendar')->middleware(['auth', 'verified'])->name('dashboard');
 
@@ -55,6 +55,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     Route::get('/calendar/{date?}', [CalendarController::class, 'index'])->where('date', '\\d{4}-\\d{2}-\\d{2}')->name('calendar');
+    Route::get('/search', LogSearchController::class)->name('search.index');
     Route::get('/notes', [NoteController::class, 'index'])->name('notes.index');
     Route::post('/notebooks', [NotebookController::class, 'store'])->name('notebooks.store');
     Route::post('/note-tags', [NoteTagController::class, 'store'])->name('note-tags.store');
@@ -83,6 +84,12 @@ Route::middleware('auth')->group(function () {
     Route::post('/tasks', [TaskController::class, 'store'])->name('tasks.store');
     Route::patch('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
     Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');
+    Route::get('/goals', [GoalController::class, 'index'])->name('goals.index');
+    Route::post('/goals', [GoalController::class, 'store'])->name('goals.store');
+    Route::get('/goals/{goal}', [GoalController::class, 'show'])->name('goals.show');
+    Route::patch('/goals/{goal}', [GoalController::class, 'update'])->name('goals.update');
+    Route::delete('/goals/{goal}', [GoalController::class, 'destroy'])->name('goals.destroy');
+    Route::post('/goals/{goal}/entries', [GoalEntryController::class, 'store'])->name('goals.entries.store');
     Route::post('/logs/{dailyLog}/tasks/{task}/events', [TaskEventController::class, 'store'])->name('events.store');
     Route::get('/events/{event}/edit', [TaskEventController::class, 'edit'])->name('events.edit');
     Route::patch('/events/{event}', [TaskEventController::class, 'update'])->name('events.update');
