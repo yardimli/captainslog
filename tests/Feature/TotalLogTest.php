@@ -77,7 +77,10 @@ class TotalLogTest extends TestCase
         $this->assertSame(32, substr_count($response->getContent(), 'data-calendar-activity-marker '));
         $this->get(route('calendar', '2026-08-19').'?view=day')->assertOk()
             ->assertSee('data-calendar-view-current="week"', false);
-        $this->assertStringNotContainsString('totallog.calendarView', file_get_contents(resource_path('js/app.js')));
+        $calendarScript = file_get_contents(resource_path('js/app.js'));
+        $this->assertStringContainsString("const validViews = ['week', 'month']", $calendarScript);
+        $this->assertStringContainsString("localStorage.setItem(storageKey, link.dataset.calendarView)", $calendarScript);
+        $this->assertStringNotContainsString("requestedView === 'day'", $calendarScript);
     }
 
     public function test_daily_log_exposes_composer_and_chat_through_responsive_navigation(): void

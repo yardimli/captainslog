@@ -1638,6 +1638,30 @@ document.addEventListener('keydown', async event => {
     }
 });
 
+const calendarPage = document.querySelector('[data-calendar-view-current]');
+if (calendarPage) {
+    const storageKey = 'totallog.calendarView';
+    const validViews = ['week', 'month'];
+    const params = new URLSearchParams(location.search);
+    const requestedView = params.get('view');
+    const savedView = localStorage.getItem(storageKey);
+
+    if (validViews.includes(requestedView)) {
+        localStorage.setItem(storageKey, requestedView);
+    } else if (validViews.includes(savedView) && savedView !== calendarPage.dataset.calendarViewCurrent) {
+        params.set('view', savedView);
+        location.replace(`${location.pathname}?${params}`);
+    } else if (savedView && !validViews.includes(savedView)) {
+        localStorage.removeItem(storageKey);
+    }
+
+    document.querySelectorAll('[data-calendar-view]').forEach(link => {
+        link.addEventListener('click', () => {
+            if (validViews.includes(link.dataset.calendarView)) localStorage.setItem(storageKey, link.dataset.calendarView);
+        });
+    });
+}
+
 document.querySelectorAll('[data-color-input]').forEach(input => {
     const preview = document.getElementById(input.dataset.colorInput);
     const update = () => { if (preview) { preview.style.backgroundColor = input.value; preview.title = input.value; } };

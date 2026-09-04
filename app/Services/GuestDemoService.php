@@ -20,7 +20,7 @@ class GuestDemoService
 {
     public const COOKIE = 'totallog_guest';
 
-    private const SEED_VERSION = 2;
+    private const SEED_VERSION = 3;
 
     public function account(Request $request): User
     {
@@ -70,11 +70,11 @@ class GuestDemoService
     private function tasks(User $user): array
     {
         $definitions = [
-            ['name' => 'Dog medication', 'emoji' => '💊', 'color' => '#e11d48', 'is_sticky' => true, 'recurrence_type' => 'daily', 'scheduled_times' => ['08:00', '20:00'], 'options' => ['Worf', "T'Paw", 'Both dogs']],
-            ['name' => 'Yoga class', 'emoji' => '🧘', 'color' => '#4f46e5', 'is_sticky' => true, 'recurrence_type' => 'weekly', 'recurrence_days' => [1, 3, 5, 6, 7], 'scheduled_times' => ['10:00'], 'options' => ['Gentle', 'Warp core', 'Hot nebula']],
-            ['name' => 'Anger check', 'emoji' => '😌', 'color' => '#d97706', 'is_sticky' => false, 'recurrence_type' => 'daily', 'scheduled_times' => ['16:30'], 'options' => ['Calm', 'Red alert', 'Klingon opera']],
-            ['name' => 'Pet care', 'emoji' => '🐾', 'color' => '#059669', 'is_sticky' => false, 'recurrence_type' => 'daily', 'scheduled_times' => ['07:30', '19:00'], 'options' => ['Fed', 'Walked', 'Negotiated']],
-            ['name' => 'Weigh-in', 'emoji' => '⚖️', 'color' => '#0284c7', 'is_sticky' => false, 'recurrence_type' => 'weekly', 'recurrence_days' => [1, 4], 'scheduled_times' => ['07:00'], 'options' => null],
+            ['name' => 'Medication', 'emoji' => '💊', 'color' => '#e11d48', 'is_sticky' => true, 'recurrence_type' => 'daily', 'scheduled_times' => ['08:00', '20:00'], 'options' => ['Morning dose', 'Evening dose']],
+            ['name' => 'Dog walk', 'emoji' => '🐕', 'color' => '#059669', 'is_sticky' => true, 'recurrence_type' => 'daily', 'scheduled_times' => ['07:30', '18:30'], 'options' => ['Short walk', 'Park loop', 'Long walk']],
+            ['name' => 'Language study', 'emoji' => '🗣️', 'color' => '#4f46e5', 'is_sticky' => false, 'recurrence_type' => 'daily', 'scheduled_times' => ['19:00'], 'options' => ['Vocabulary', 'Listening', 'Conversation']],
+            ['name' => 'Groceries', 'emoji' => '🛒', 'color' => '#d97706', 'is_sticky' => false, 'recurrence_type' => 'weekly', 'recurrence_days' => [6], 'scheduled_times' => ['11:00'], 'options' => null],
+            ['name' => 'Exercise', 'emoji' => '🚶', 'color' => '#0284c7', 'is_sticky' => false, 'recurrence_type' => 'weekly', 'recurrence_days' => [1, 3, 5], 'scheduled_times' => ['07:00'], 'options' => ['Walk', 'Stretching', 'Gym']],
         ];
 
         return collect($definitions)->mapWithKeys(function ($definition) use ($user) {
@@ -89,30 +89,36 @@ class GuestDemoService
         $entries = $this->entries()[$daysAgo];
         $log = DailyLog::create(['user_id' => $user->id, 'log_date' => $date]);
         foreach ($entries as $position => $entry) {
+            $occurredAt = $date->copy()->setTimeFromTimeString($entry['time'] ?? sprintf('%02d:15', 7 + $position));
             $log->blocks()->forceCreate([
                 'type' => $entry['type'] ?? 'text',
                 'emoji' => $entry['emoji'] ?? LogBlock::defaultEmojiForType($entry['type'] ?? 'text'),
                 'content' => $entry['content'],
                 'metadata' => ['demo' => true],
                 'position' => $position + 1,
-                'created_at' => $date->copy()->setTime(7 + ($position * 5), 15),
-                'updated_at' => $date->copy()->setTime(7 + ($position * 5), 15),
+                'occurred_at' => $occurredAt,
+                'created_at' => $occurredAt,
+                'updated_at' => $occurredAt,
             ]);
         }
 
-        $medication = $log->blocks()->forceCreate(['type' => 'event', 'emoji' => $tasks['Dog medication']->emoji, 'metadata' => ['demo' => true], 'position' => 10, 'created_at' => $date->copy()->setTime(20, 5), 'updated_at' => $date->copy()->setTime(20, 5)]);
+        $medication = $log->blocks()->forceCreate(['type' => 'event', 'emoji' => $tasks['Medication']->emoji, 'metadata' => ['demo' => true], 'position' => 90, 'occurred_at' => $date->copy()->setTime(20, 5), 'created_at' => $date->copy()->setTime(20, 5), 'updated_at' => $date->copy()->setTime(20, 5)]);
         TaskEvent::create([
             'daily_log_id' => $log->id,
-            'task_definition_id' => $tasks['Dog medication']->id,
+            'task_definition_id' => $tasks['Medication']->id,
             'log_block_id' => $medication->id,
-            'task_name' => 'Dog medication',
-            'selected_value' => 'Both dogs',
+            'task_name' => 'Medication',
+            'selected_value' => 'Evening dose',
             'occurred_at' => $date->copy()->setTime(20, 5),
         ]);
     }
 
     private function upgradeDemo(User $user, array $tasks): void
     {
+        TaskDefinition::where('user_id', $user->id)
+            ->whereIn('name', ['Dog medication', 'Yoga class', 'Anger check', 'Pet care', 'Weigh-in'])
+            ->update(['is_active' => false]);
+
         foreach (range(7, 0) as $daysAgo) {
             $date = today()->subDays($daysAgo);
             $log = DailyLog::where('user_id', $user->id)->whereDate('log_date', $date)->first();
@@ -121,15 +127,43 @@ class GuestDemoService
             }
             foreach ($this->entries()[$daysAgo] as $position => $entry) {
                 $block = $log->blocks()->where('position', $position + 1)->first();
+                $occurredAt = $date->copy()->setTimeFromTimeString($entry['time'] ?? sprintf('%02d:15', 7 + $position));
                 if ($block && data_get($block->metadata, 'demo')) {
-                    $block->update(['emoji' => $entry['emoji'] ?? LogBlock::defaultEmojiForType($entry['type'] ?? 'text')]);
+                    $block->forceFill([
+                        'type' => $entry['type'] ?? 'text',
+                        'emoji' => $entry['emoji'] ?? LogBlock::defaultEmojiForType($entry['type'] ?? 'text'),
+                        'content' => $entry['content'],
+                        'occurred_at' => $occurredAt,
+                    ])->save();
+                } elseif (! $block) {
+                    $log->blocks()->forceCreate([
+                        'type' => $entry['type'] ?? 'text',
+                        'emoji' => $entry['emoji'] ?? LogBlock::defaultEmojiForType($entry['type'] ?? 'text'),
+                        'content' => $entry['content'],
+                        'metadata' => ['demo' => true],
+                        'position' => $position + 1,
+                        'occurred_at' => $occurredAt,
+                        'created_at' => $occurredAt,
+                        'updated_at' => $occurredAt,
+                    ]);
                 }
             }
-            $log->blocks()->where('position', 10)->where('type', 'event')->update(['emoji' => $tasks['Dog medication']->emoji]);
+            $eventBlock = $log->blocks()->where('type', 'event')->first();
+            if ($eventBlock && data_get($eventBlock->metadata, 'demo')) {
+                $eventBlock->update(['emoji' => $tasks['Medication']->emoji, 'position' => 90]);
+                $eventBlock->taskEvent?->update(['task_definition_id' => $tasks['Medication']->id, 'task_name' => 'Medication', 'selected_value' => 'Evening dose']);
+            }
         }
 
-        $this->ensureDemoImage($user, today(), 'demo-yoga-observation-deck.png', 'generated_image', '🎨', 'Observation-deck yoga began peacefully. Worf interpreted downward dog as a direct order and occupied the mat.', 20, '10:15');
-        $this->ensureDemoImage($user, today()->subDay(), 'demo-pet-medication.png', 'media', '🖼️', 'Evening pet-care briefing: both dogs accepted their medication. Spot the cat supervised dosing protocol and demanded command credit.', 20, '19:20');
+        Attachment::where('user_id', $user->id)->whereIn('path', ['demo-yoga-observation-deck.png', 'demo-pet-medication.png'])->get()->each(function (Attachment $attachment) {
+            $block = $attachment->logBlock;
+            $attachment->delete();
+            if ($block && data_get($block->metadata, 'demo')) {
+                $block->delete();
+            }
+        });
+        $this->ensureDemoImage($user, today(), 'demo-dog-walk.png', 'media', '📷', 'Morning walk through the neighborhood park before starting work.', 20, '07:45');
+        $this->ensureDemoImage($user, today()->subDay(), 'demo-language-study.png', 'media', '📷', 'Thirty minutes of language study at the kitchen table.', 20, '18:40');
         $user->forceFill(['demo_seed_version' => self::SEED_VERSION])->save();
     }
 
@@ -161,44 +195,49 @@ class GuestDemoService
     {
         return [
             7 => [
-                ['emoji' => '🚀', 'content' => 'Total record: launched the USS Inner Peace at 06:00. Taught twelve cadets downward-facing targ while my beagle Worf stole a foam block.'],
-                ['emoji' => '😌', 'content' => "Anger-management session went well until a client described breathing exercises as 'suggestions.' I counted to ten in Klingon and called it professional development."],
-                ['type' => 'chat_assistant', 'content' => 'Computer: Meal plan recommends vegetables that have not been replicated in the shape of a starship.'],
+                ['time' => '07:20', 'emoji' => '🐕', 'content' => 'Took Milo around the park before breakfast.'],
+                ['time' => '10:00', 'type' => 'sensor_google_calendar', 'content' => 'Calendar · Dentist appointment · 10:00–10:45 AM'],
+                ['time' => '18:10', 'emoji' => '🛒', 'content' => 'Picked up vegetables, rice, coffee, and dog food.'],
             ],
             6 => [
-                ['content' => 'Morning weigh-in: the scale announced a temporal anomaly. I announced it needed recalibration. We have agreed to mediation.'],
-                ['content' => "Walked Worf and T'Paw. Spot the cat supervised from a windowsill like an admiral with extremely judgmental whiskers."],
-                ['content' => 'Hot-nebula yoga class achieved maximum warp perspiration. Nobody was assimilated, although Gary did join the class newsletter.'],
+                ['time' => '08:05', 'emoji' => '💊', 'content' => 'Took morning medication with breakfast.'],
+                ['time' => '12:00', 'type' => 'sensor_desktop', 'content' => "Desktop activity · 3 apps · 1 hr 18 min\nVisual Studio Code 46m · Excel 21m · Slack 11m"],
+                ['time' => '17:30', 'type' => 'sensor_browser', 'content' => "Desktop browsing · 34 min\nlanguagelearning.example 18m · recipes.example 9m · weather.example 7m"],
             ],
             5 => [
-                ['content' => "Counselor's log: helped a client replace 'engage rage engines' with 'I feel frustrated.' A diplomatic breakthrough."],
-                ['content' => 'Prepared a high-protein lunch. Quinoa remains the Tribble of the pantry: one cup somehow became seventeen.'],
-                ['content' => "T'Paw detected the pill hidden in cheese at six meters. Tried peanut butter. Resistance was futile, eventually."],
+                ['time' => '07:40', 'emoji' => '🐕', 'content' => 'Short dog walk because it started raining.'],
+                ['time' => '13:15', 'type' => 'sensor_kindle', 'content' => 'Kindle reading · The Little Prince · Antoine de Saint-Exupéry'],
+                ['time' => '19:00', 'emoji' => '🗣️', 'content' => 'Reviewed twenty Japanese vocabulary cards and practiced listening for fifteen minutes.'],
             ],
             4 => [
-                ['content' => 'Total log: sunrise yoga on the observation deck. Spot sat on the mat during savasana and claimed salvage rights.'],
-                ['content' => 'Red-alert moment: delivery arrived without the low-calorie dressing. Used the STOP technique and only drafted one strongly worded subspace message.'],
-                ['type' => 'chat_assistant', 'content' => 'Computer: Daily victory detected—stairs used instead of turbolift. Commendation pending.'],
+                ['time' => '09:00', 'type' => 'sensor_google_calendar', 'content' => 'Calendar · Weekly team meeting · 9:00–9:30 AM'],
+                ['time' => '11:30', 'emoji' => '🛒', 'content' => 'Grocery run and dropped off recycling on the way home.'],
+                ['time' => '16:00', 'type' => 'sensor_mobile_browser', 'content' => "Mobile browsing · 8 visits\nnews.example 3 · maps.example 3 · bank.example 2"],
             ],
             3 => [
-                ['content' => "Worf's medication administered on schedule. He performed the traditional beagle maneuver: swallowing the cheese and returning the tablet."],
-                ['content' => 'Led chair yoga for the senior officers. Total chair refused to participate but provided excellent lumbar support.'],
-                ['content' => 'Dinner: one sensible bowl of soup and a completely classified number of bread rolls. The logs have been sealed by Starfleet Wellness.'],
+                ['time' => '08:00', 'emoji' => '💊', 'content' => 'Morning medication taken. Refilled the weekly pill organizer.'],
+                ['time' => '14:00', 'type' => 'sensor_desktop', 'content' => "Desktop activity · 4 apps · 2 hr 6 min\nWord 52m · Chrome 44m · Spotify 18m · Files 12m"],
+                ['time' => '18:35', 'emoji' => '🐕', 'content' => 'Long dog walk by the river.'],
             ],
             2 => [
-                ['content' => 'Anger group practiced calm boundary setting. “Shields up” is apparently not an approved example, even when said gently.'],
-                ['content' => "Pet report: Worf walked, T'Paw medicated, Spot fed. Spot filed a grievance alleging the bowl was 4% below regulation capacity."],
-                ['content' => 'Warp-core flow class: 42 minutes. My leggings survived, morale is high, and the snack drawer remains under observation.'],
+                ['time' => '10:20', 'type' => 'sensor_browser', 'content' => "Desktop browsing · 27 min\ndocs.example 15m · email.example 8m · calendar.example 4m"],
+                ['time' => '15:45', 'type' => 'sensor_kindle', 'content' => 'Kindle reading · The Little Prince · Antoine de Saint-Exupéry'],
+                ['time' => '19:10', 'emoji' => '🗣️', 'content' => 'Language study: practiced ordering food and asking for directions.'],
             ],
             1 => [
-                ['content' => 'Total record: resisted a doughnut at staff briefing. It used advanced cloaking technology and reappeared beside my coffee.'],
-                ['content' => 'Therapy note: reframed “I will launch him out an airlock” as “I need space.” Concise, accurate, billing-friendly.'],
-                ['type' => 'chat_assistant', 'content' => 'Computer: Three pets accounted for. Two dogs medicated. One cat continues to reject the chain of command.'],
+                ['time' => '08:30', 'emoji' => '🍳', 'content' => 'Made oatmeal and prepared lunches for the next two days.'],
+                ['time' => '12:30', 'type' => 'sensor_mobile_browser', 'content' => "Mobile browsing · 11 visits\ntransit.example 5 · news.example 4 · weather.example 2"],
+                ['time' => '18:30', 'type' => 'chat_assistant', 'content' => 'You completed your planned walk, language practice, and grocery trip this week.'],
             ],
             0 => [
-                ['emoji' => '🧘', 'content' => 'Total record, present day: began with sun salutations while Worf treated my spine as a docking platform.'],
-                ['emoji' => '📅', 'content' => "Today's mission: teach yoga at 10:00, counsel anger without developing any, walk Worf and T'Paw, negotiate with Spot, and lose weight at impulse speed."],
-                ['type' => 'chat_assistant', 'content' => 'Computer: Course plotted for a calmer day. Tea is hot, dog medication is scheduled, and emergency biscuits remain within treaty limits.'],
+                ['time' => '07:30', 'emoji' => '🐕', 'content' => 'Took Milo for a twenty-minute walk around the neighborhood.'],
+                ['time' => '09:00', 'type' => 'sensor_google_calendar', 'content' => 'Calendar · Japanese lesson · 9:00–10:00 AM'],
+                ['time' => '11:00', 'type' => 'sensor_desktop', 'content' => "Desktop activity · 3 apps · 1 hr 25 min\nVisual Studio Code 48m · Chrome 25m · Notes 12m"],
+                ['time' => '12:30', 'type' => 'sensor_browser', 'content' => "Desktop browsing · 31 min\ndocs.example 14m · languagelearning.example 10m · email.example 7m"],
+                ['time' => '14:10', 'type' => 'sensor_mobile_browser', 'content' => "Mobile browsing · 9 visits\nmaps.example 4 · groceries.example 3 · weather.example 2"],
+                ['time' => '16:20', 'type' => 'sensor_kindle', 'content' => 'Kindle reading · The Little Prince · Antoine de Saint-Exupéry'],
+                ['time' => '17:30', 'emoji' => '🛒', 'content' => 'Bought fruit, vegetables, milk, and dog treats.'],
+                ['time' => '18:15', 'type' => 'chat_assistant', 'content' => 'Today includes focused work, language study, reading, errands, and time outside.'],
             ],
         ];
     }
